@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% set active = "pppoe_users" %}
+{% block title %}Pelanggan PPPoE — {{ app_name }}{% endblock %}
+{% block topbar_title %}Pelanggan PPPoE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Pelanggan PPPoE</h1>
+    <p class="page-sub">{{ users|length }} pelanggan terdaftar</p>
+  </div>
+  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+    class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Tambah Pelanggan
+  </button>
+</div>
+
+<!-- Filter -->
+<form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
+  <select name="server_id" class="form-select !w-auto min-w-[180px]">
+    <option value="">Semua Server</option>
+    {% for s in servers %}
+    <option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+    Filter
+  </button>
+</form>
+
+<!-- Table -->
+<div class="card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead class="bg-slate-50 border-b border-slate-100">
+        <tr>
+          <th>Pelanggan</th>
+          <th>Username / Password</th>
+          <th>Paket</th>
+          <th>Server</th>
+          <th>Tgl Bayar</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td>
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+              <span class="text-blue-600 text-xs font-bold">{{ u.nama_pelanggan[0]|upper }}</span>
+            </div>
+            <div>
+              <p class="font-medium text-slate-800 text-sm">{{ u.nama_pelanggan }}</p>
+              <p class="text-xs text-slate-400">{{ u.telepon or '—' }}</p>
+            </div>
+          </div>
+        </td>
+        <td>
+          <p class="font-mono text-sm text-slate-700 font-medium">{{ u.username }}</p>
+          <p class="font-mono text-xs text-slate-400">{{ u.password }}</p>
+        </td>
+        <td>
+          {% if u.paket_nama %}
+          <p class="text-sm font-medium text-slate-700">{{ u.paket_nama }}</p>
+          <p class="text-xs text-slate-400">{{ u.kecepatan or '' }}</p>
+          {% else %}
+          <span class="text-slate-300">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="text-xs text-slate-500">{{ u.server_nama or u.server_id[:8] }}</span>
+        </td>
+        <td>
+          <span class="text-xs font-medium text-slate-600">Tgl {{ u.tgl_bayar }}</span>
+        </td>
+        <td>
+          {% if u.status=='aktif' %}
+          <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
+          {% else %}
+          <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="flex items-center gap-1.5">
+            <form method="post" action="/pppoe/users/status/{{ u.id }}">
+              {% if u.status=='aktif' %}
+              <input type="hidden" name="status" value="nonaktif">
+              <button class="text-xs px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium transition-colors">Nonaktifkan</button>
+              {% else %}
+              <input type="hidden" name="status" value="aktif">
+              <button class="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium transition-colors">Aktifkan</button>
+              {% endif %}
+            </form>
+            <form method="post" action="/pppoe/users/hapus/{{ u.id }}" onsubmit="return confirm('Hapus pelanggan {{ u.nama_pelanggan }}?')">
+              <button class="btn-danger px-2.5 py-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="py-16 text-center">
+          <div class="flex flex-col items-center gap-2 text-slate-400">
+            <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <p class="text-sm">Belum ada pelanggan PPPoE</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Tambah -->
+<div id="modal-tambah" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-lg max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tambah Pelanggan PPPoE</h3>
+      <button onclick="document.getElementById('modal-tambah').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/pppoe/users/tambah">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Server MikroTik</label>
+          <select name="server_id" required class="form-input">
+            <option value="">Pilih Server</option>
+            {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Nama Pelanggan</label>
+          <input name="nama_pelanggan" required placeholder="Nama lengkap" class="form-input">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Username PPPoE</label>
+            <input name="username" required placeholder="username" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Password</label>
+            <input name="password" required placeholder="password" class="form-input">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Paket</label>
+          <select name="paket_id" required class="form-input">
+            <option value="">Pilih Paket</option>
+            {% for p in pakets %}<option value="{{ p.id }}">{{ p.nama }} — {{ p.harga | rp }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">No. Telepon</label>
+            <input name="telepon" placeholder="08xx" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Tanggal Bayar</label>
+            <input name="tgl_bayar" type="number" value="1" min="1" max="28" class="form-input">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Alamat</label>
+          <input name="alamat" placeholder="Alamat pelanggan" class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-tambah').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Simpan & Push ke Router
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

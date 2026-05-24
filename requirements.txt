@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+jinja2
+itsdangerous
+pyyaml
+requests
+python-multipart
+routeros-api==0.21.0

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% set active = "servers" %}
+{% block title %}Server MikroTik — {{ app_name }}{% endblock %}
+{% block topbar_title %}Server MikroTik{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Server MikroTik</h1>
+    <p class="page-sub">Router yang terhubung melalui VPN tunnel</p>
+  </div>
+  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+    class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Tambah Server
+  </button>
+</div>
+
+{% if not servers %}
+<div class="card p-16 text-center">
+  <div class="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
+  </div>
+  <p class="text-slate-500 font-medium">Belum ada server</p>
+  <p class="text-slate-400 text-sm mt-1">Tambahkan server MikroTik pertama Anda yang terhubung via VPN</p>
+  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+    class="btn-primary px-4 py-2 mt-4 mx-auto">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Tambah Sekarang
+  </button>
+</div>
+{% else %}
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+{% for s in servers %}
+<div class="card p-5 hover:shadow-md transition-shadow">
+  <div class="flex items-start justify-between mb-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl flex items-center justify-center flex-shrink-0 shadow shadow-purple-200">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
+      </div>
+      <div>
+        <p class="font-semibold text-slate-800">{{ s.nama }}</p>
+        <p class="text-xs text-slate-400">{{ s.lokasi or 'Lokasi belum diset' }}</p>
+      </div>
+    </div>
+    <span id="status-{{ s.id }}" class="badge-green text-xs">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+    </span>
+  </div>
+
+  <div class="space-y-2 text-sm mb-4">
+    <div class="flex items-center justify-between py-1.5 border-b border-slate-50">
+      <span class="text-slate-400 text-xs">VPN IP</span>
+      <span class="font-mono text-slate-700 text-xs font-medium">{{ s.vpn_ip }}</span>
+    </div>
+    <div class="flex items-center justify-between py-1.5 border-b border-slate-50">
+      <span class="text-slate-400 text-xs">API Port</span>
+      <span class="font-mono text-slate-700 text-xs font-medium">{{ s.api_port }}</span>
+    </div>
+    <div class="flex items-center justify-between py-1.5 border-b border-slate-50">
+      <span class="text-slate-400 text-xs">API User</span>
+      <span class="font-mono text-slate-700 text-xs font-medium">{{ s.api_user }}</span>
+    </div>
+    {% if s.get('user_nama') %}
+    <div class="flex items-center justify-between py-1.5">
+      <span class="text-slate-400 text-xs">Agen</span>
+      <span class="text-blue-600 text-xs font-medium">{{ s.user_nama }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="flex gap-2 pt-3 border-t border-slate-50">
+    <button onclick="pingServer('{{ s.id }}')" id="ping-{{ s.id }}"
+      class="flex-1 btn-secondary px-3 py-2 text-xs justify-center">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Cek Koneksi
+    </button>
+    <form method="post" action="/servers/hapus/{{ s.id }}" onsubmit="return confirm('Hapus server {{ s.nama }}?')">
+      <button class="btn-danger px-3 py-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        Hapus
+      </button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<!-- Modal Tambah -->
+<div id="modal-tambah" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-md">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tambah Server MikroTik</h3>
+      <button onclick="document.getElementById('modal-tambah').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/servers/tambah">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Nama Server</label>
+          <input name="nama" required placeholder="Contoh: Cabang Utama" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">VPN IP (dari vpntunel.my.id)</label>
+          <input name="vpn_ip" required placeholder="10.8.0.x" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">IP yang diberikan saat membuat koneksi VPN</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">API Port</label>
+            <input name="api_port" type="number" value="8728" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">API Username</label>
+            <input name="api_user" value="admin" class="form-input">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">API Password</label>
+          <input name="api_password" type="password" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Lokasi (opsional)</label>
+          <input name="lokasi" placeholder="Contoh: Jl. Sudirman No. 1" class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-tambah').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Simpan Server
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function pingServer(sid) {
+  const btn = document.getElementById('ping-'+sid);
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Mengecek...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/servers/ping/'+sid);
+    const d = await r.json();
+    if (d.ok) {
+      btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> ' + (d.identity||'Online');
+      btn.className = 'flex-1 px-3 py-2 text-xs justify-center flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 font-medium';
+      showToast('Server online: ' + (d.identity||'OK'));
+    } else {
+      btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Offline';
+      btn.className = 'flex-1 px-3 py-2 text-xs justify-center flex items-center gap-1.5 rounded-xl bg-red-50 text-red-600 font-medium';
+      showToast('Server tidak dapat dihubungi', false);
+    }
+  } catch(e) {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

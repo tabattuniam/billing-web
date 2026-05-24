@@ -1,0 +1,19 @@
+app:
+  name: "BillingVPN"
+  domain: "billing.yourdomain.com"
+  secret_key: "ganti-dengan-secret-key-anda"
+  port: 8094
+
+db_path: "/home/ubuntu/projects/billing-web/data/billing.db"
+
+vpntunel:
+  db_path: "/path/to/vpntunel-panel/data/panel.db"
+  domain: "yourdomain.com"
+
+wuzapi:
+  url: "http://127.0.0.1:8080"
+  token: "your-wuzapi-token"
+
+admin:
+  username: "admin"
+  password: "ganti-password-anda"

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cetak Voucher — {{ app_name }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #fff; }
+.header { padding: 12px 20px; border-bottom: 2px solid #333; display: flex; justify-content: space-between; align-items: center; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; }
+.voucher { border: 2px dashed #999; border-radius: 8px; padding: 10px; text-align: center; page-break-inside: avoid; }
+.voucher .kode { font-size: 22px; font-weight: bold; font-family: monospace; letter-spacing: 4px; color: #1d4ed8; margin: 6px 0; }
+.voucher .nama { font-size: 11px; color: #555; font-weight: bold; text-transform: uppercase; }
+.voucher .info { font-size: 10px; color: #777; margin-top: 4px; }
+.voucher .ssid { font-size: 10px; color: #333; margin-top: 2px; font-style: italic; }
+.no-print { background: #2563eb; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+@media print {
+  .header .no-print { display: none; }
+  body { margin: 0; }
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <strong>{{ app_name }}</strong> — Voucher Hotspot
+    <span style="font-size:12px;color:#666;margin-left:8px;">{{ vouchers|length }} voucher</span>
+  </div>
+  <button class="no-print" onclick="window.print()">🖨️ Cetak</button>
+</div>
+
+<div class="grid">
+{% for v in vouchers %}
+<div class="voucher">
+  <div class="nama">{{ v.paket_nama or 'Hotspot' }}</div>
+  <div class="kode">{{ v.kode }}</div>
+  <div class="info">Durasi: {{ v.durasi or '—' }}{% if v.kecepatan %} | {{ v.kecepatan }}{% endif %}</div>
+  <div class="ssid">{{ app_name }}</div>
+</div>
+{% endfor %}
+</div>
+</body>
+</html>

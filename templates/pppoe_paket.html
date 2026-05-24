@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set active = "pppoe_paket" %}
+{% block title %}Paket PPPoE — {{ app_name }}{% endblock %}
+{% block topbar_title %}Paket PPPoE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Paket PPPoE</h1>
+    <p class="page-sub">{{ pakets|length }} paket aktif</p>
+  </div>
+  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+    class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Tambah Paket
+  </button>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+{% for p in pakets %}
+<div class="card p-5 hover:shadow-md transition-shadow">
+  <div class="flex items-start justify-between mb-4">
+    <div class="w-11 h-11 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow shadow-blue-200">
+      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    </div>
+    <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{{ p.status }}</span>
+  </div>
+  <p class="font-bold text-slate-800 text-lg mb-1">{{ p.nama }}</p>
+  <p class="text-xs text-slate-400 mb-4">Profile MikroTik: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{{ p.kecepatan }}</code></p>
+  <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+    <span class="text-xs text-slate-400">Harga / bulan</span>
+    <span class="font-bold text-blue-600 text-lg">{{ p.harga | rp }}</span>
+  </div>
+</div>
+{% else %}
+<div class="col-span-3 card p-16 text-center">
+  <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+    <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+  </div>
+  <p class="text-slate-500 font-medium">Belum ada paket</p>
+  <p class="text-slate-400 text-sm mt-1">Tambahkan paket PPPoE sesuai layanan Anda</p>
+</div>
+{% endfor %}
+</div>
+
+<!-- Modal Tambah -->
+<div id="modal-tambah" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tambah Paket PPPoE</h3>
+      <button onclick="document.getElementById('modal-tambah').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/pppoe/paket/tambah">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Nama Paket</label>
+          <input name="nama" required placeholder="Contoh: Paket 10Mbps" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Nama Profile MikroTik</label>
+          <input name="kecepatan" required placeholder="Contoh: 10Mbps atau paket-10m" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">Harus sama dengan nama profile di MikroTik</p>
+        </div>
+        <div>
+          <label class="form-label">Harga per Bulan (Rp)</label>
+          <input name="harga" type="number" required placeholder="150000" class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-tambah').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Simpan Paket
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Database & data
+data/
+*.db
+*.sqlite3
+
+# Config dengan kredensial
+configs/billing.yaml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
