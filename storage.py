@@ -123,6 +123,20 @@ class Storage:
             keterangan  TEXT DEFAULT '',
             created_at  INTEGER
         );
+
+        -- Registrasi tenant ISP dari vpntunel.my.id/daftar
+        CREATE TABLE IF NOT EXISTS tenant_registrasi (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama_isp            TEXT NOT NULL,
+            nama_pemilik        TEXT NOT NULL,
+            nomor_wa            TEXT NOT NULL,
+            kota                TEXT DEFAULT '',
+            paket               TEXT DEFAULT 'Starter',
+            estimasi_pelanggan  TEXT DEFAULT '',
+            catatan             TEXT DEFAULT '',
+            status              TEXT DEFAULT 'pending',  -- pending | aktif | ditolak
+            created_at          INTEGER
+        );
         """)
         con.commit()
         self._seed_admin(con)
@@ -421,6 +435,49 @@ class Storage:
         ).fetchall()
         con.close()
         return [dict(r) for r in rows]
+
+    # ── Tenant Registrasi ─────────────────────────────────────────────────────
+
+    def create_registrasi(self, nama_isp, nama_pemilik, nomor_wa, kota, paket, estimasi_pelanggan, catatan) -> int:
+        con = self._conn()
+        cur = con.execute(
+            "INSERT INTO tenant_registrasi (nama_isp,nama_pemilik,nomor_wa,kota,paket,estimasi_pelanggan,catatan,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (nama_isp, nama_pemilik, nomor_wa, kota, paket, estimasi_pelanggan, catatan, int(time.time()))
+        )
+        con.commit()
+        rid = cur.lastrowid
+        con.close()
+        return rid
+
+    def list_registrasi(self, status: str = None) -> list[dict]:
+        con = self._conn()
+        if status:
+            rows = con.execute("SELECT * FROM tenant_registrasi WHERE status=? ORDER BY created_at DESC", (status,)).fetchall()
+        else:
+            rows = con.execute("SELECT * FROM tenant_registrasi ORDER BY created_at DESC").fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_registrasi(self, rid: int) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM tenant_registrasi WHERE id=?", (rid,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def update_registrasi_status(self, rid: int, status: str):
+        con = self._conn()
+        con.execute("UPDATE tenant_registrasi SET status=? WHERE id=?", (status, rid))
+        con.commit()
+        con.close()
+
+    def count_registrasi(self) -> dict:
+        con = self._conn()
+        total   = con.execute("SELECT COUNT(*) FROM tenant_registrasi").fetchone()[0]
+        pending = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='pending'").fetchone()[0]
+        aktif   = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='aktif'").fetchone()[0]
+        ditolak = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='ditolak'").fetchone()[0]
+        con.close()
+        return {"total": total, "pending": pending, "aktif": aktif, "ditolak": ditolak}
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 

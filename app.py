@@ -35,7 +35,16 @@ def rp(n: int) -> str:
     return f"Rp {n:,}".replace(",", ".")
 
 
+def ts_date(ts) -> str:
+    from datetime import datetime
+    try:
+        return datetime.fromtimestamp(int(ts)).strftime("%-d %b %Y %H:%M")
+    except Exception:
+        return str(ts)
+
+
 tpl.env.filters["rp"] = rp
+tpl.env.filters["ts_date"] = ts_date
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
@@ -370,6 +379,57 @@ async def transaksi_page(request: Request):
     user = require_login(request)
     txs = db.list_transaksi(user["id"])
     return tpl.TemplateResponse(request, "transaksi.html", _ctx(request, user=user, txs=txs))
+
+
+# ── Registrasi ISP Tenant ─────────────────────────────────────────────────────
+
+def _pending_count() -> int:
+    try:
+        return db.count_registrasi()["pending"]
+    except Exception:
+        return 0
+
+
+@app.get("/registrasi", response_class=HTMLResponse)
+async def registrasi_page(request: Request, status: str = ""):
+    user = require_login(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    regs  = db.list_registrasi(status if status else None)
+    stats = db.count_registrasi()
+    return tpl.TemplateResponse(request, "registrasi.html", _ctx(
+        request, user=user, registrasi=regs, stats=stats,
+        filter_status=status, pending_count=stats["pending"]
+    ))
+
+
+@app.post("/registrasi/{rid}/approve")
+async def registrasi_approve(request: Request, rid: int):
+    user = require_login(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    r = db.get_registrasi(rid)
+    if r:
+        db.update_registrasi_status(rid, "aktif")
+        send_wa(r["nomor_wa"],
+            f"✅ *Akun ISP Anda Sudah Aktif!*\n\n"
+            f"Halo {r['nama_pemilik']}, pendaftaran *{r['nama_isp']}* telah disetujui.\n\n"
+            f"Silakan login ke dashboard:\n"
+            f"🔗 https://billing.vpntunel.my.id\n\n"
+            f"Tim kami akan menghubungi untuk setup awal. Ada pertanyaan? Balas pesan ini."
+        )
+    return RedirectResponse("/registrasi", status_code=303)
+
+
+@app.post("/registrasi/{rid}/tolak")
+async def registrasi_tolak(request: Request, rid: int):
+    user = require_login(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403)
+    r = db.get_registrasi(rid)
+    if r:
+        db.update_registrasi_status(rid, "ditolak")
+    return RedirectResponse("/registrasi", status_code=303)
 
 
 if __name__ == "__main__":
