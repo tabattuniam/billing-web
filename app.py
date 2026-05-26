@@ -1,6 +1,6 @@
 """BillingVPN — FastAPI billing web for PPPoE & Hotspot management."""
 from __future__ import annotations
-import time, yaml, requests, random
+import time, yaml, requests, random, hashlib, json
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException
@@ -16,12 +16,17 @@ from mikrotik import MikroTik
 _cfg_path = Path(__file__).parent / "configs" / "billing.yaml"
 CFG = yaml.safe_load(_cfg_path.read_text())
 
-APP_NAME   = CFG["app"]["name"]
-SECRET_KEY = CFG["app"]["secret_key"]
-PORT       = CFG["app"].get("port", 8094)
-DB_PATH    = CFG["db_path"]
-WA_URL     = CFG.get("wuzapi", {}).get("url", "")
-WA_TOKEN   = CFG.get("wuzapi", {}).get("token", "")
+APP_NAME    = CFG["app"]["name"]
+APP_DOMAIN  = CFG["app"].get("domain", "billing.vpntunel.my.id")
+SECRET_KEY  = CFG["app"]["secret_key"]
+PORT        = CFG["app"].get("port", 8094)
+DB_PATH     = CFG["db_path"]
+WA_URL      = CFG.get("wuzapi", {}).get("url", "")
+WA_TOKEN    = CFG.get("wuzapi", {}).get("token", "")
+MT_SERVER   = CFG.get("midtrans", {}).get("server_key", "")
+MT_CLIENT   = CFG.get("midtrans", {}).get("client_key", "")
+MT_PROD     = CFG.get("midtrans", {}).get("is_production", False)
+MT_BASE     = "https://app.midtrans.com" if MT_PROD else "https://app.sandbox.midtrans.com"
 
 db  = Storage(DB_PATH)
 app = FastAPI()
@@ -445,6 +450,170 @@ async def transaksi_page(request: Request):
     txs = db.list_transaksi(user["id"])
     return tpl.TemplateResponse(request, "transaksi.html", _ctx(request, user=user, txs=txs))
 
+
+
+# ── Toko Hotspot Online (Publik) ─────────────────────────────────────────────
+
+def _mt_snap_token(order_id: str, amount: int, nama: str, nomor_hp: str) -> str | None:
+    """Buat Midtrans Snap token untuk pembayaran."""
+    if not MT_SERVER:
+        return None
+    import base64
+    auth = base64.b64encode(f"{MT_SERVER}:".encode()).decode()
+    payload = {
+        "transaction_details": {"order_id": order_id, "gross_amount": amount},
+        "customer_details": {"first_name": nama, "phone": nomor_hp},
+        "callbacks": {
+            "finish": f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
+        }
+    }
+    try:
+        r = requests.post(
+            f"{MT_BASE}/snap/v1/transactions",
+            json=payload,
+            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+            timeout=10
+        )
+        data = r.json()
+        return data.get("token")
+    except Exception:
+        return None
+
+
+def _mt_verify(order_id: str) -> bool:
+    """Verifikasi status pembayaran Midtrans."""
+    if not MT_SERVER:
+        return False
+    import base64
+    auth = base64.b64encode(f"{MT_SERVER}:".encode()).decode()
+    try:
+        r = requests.get(
+            f"{MT_BASE}/v2/{order_id}/status",
+            headers={"Authorization": f"Basic {auth}"},
+            timeout=10
+        )
+        data = r.json()
+        status = data.get("transaction_status", "")
+        return status in ("capture", "settlement")
+    except Exception:
+        return False
+
+
+def _mt_sig(order_id: str, status_code: str, gross_amount: str) -> str:
+    raw = f"{order_id}{status_code}{gross_amount}{MT_SERVER}"
+    return hashlib.sha512(raw.encode()).hexdigest()
+
+
+@app.get("/beli/{slug}", response_class=HTMLResponse)
+async def toko_page(request: Request, slug: str):
+    isp = db.get_isp_by_slug(slug)
+    if not isp:
+        return HTMLResponse("<h2>Toko tidak ditemukan</h2>", status_code=404)
+    pakets = db.list_paket_hotspot_publik(isp["id"])
+    servers = db.list_servers(isp["id"])
+    return tpl.TemplateResponse(request, "store.html", _ctx(
+        request, isp=isp, pakets=pakets, servers=servers,
+        slug=slug, mt_client=MT_CLIENT, mt_prod=MT_PROD
+    ))
+
+
+@app.post("/beli/{slug}/order", response_class=JSONResponse)
+async def toko_order(
+    request: Request, slug: str,
+    paket_id: int = Form(...),
+    server_id: str = Form(...),
+    nomor_hp: str = Form(...),
+):
+    isp = db.get_isp_by_slug(slug)
+    if not isp:
+        return JSONResponse({"ok": False, "msg": "ISP tidak ditemukan"})
+    paket = db.get_paket_hotspot(paket_id)
+    if not paket or paket["user_id"] != isp["id"]:
+        return JSONResponse({"ok": False, "msg": "Paket tidak valid"})
+    # Cek stok
+    pakets_publik = db.list_paket_hotspot_publik(isp["id"])
+    stok = next((p["stok"] for p in pakets_publik if p["id"] == paket_id), 0)
+    if stok < 1:
+        return JSONResponse({"ok": False, "msg": "Stok voucher habis, hubungi ISP."})
+
+    nomor_hp = nomor_hp.strip().replace("-", "").replace(" ", "")
+    order_id = db.create_order(isp["id"], paket_id, server_id, nomor_hp, paket["harga"])
+    snap_token = _mt_snap_token(order_id, paket["harga"], isp["nama"], nomor_hp)
+    if snap_token:
+        db.set_order_snap_token(order_id, snap_token)
+        return JSONResponse({"ok": True, "snap_token": snap_token, "order_id": order_id})
+    else:
+        # Fallback tanpa Midtrans — langsung konfirmasi (development/testing)
+        voucher = db.confirm_order(order_id)
+        if voucher:
+            return JSONResponse({"ok": True, "order_id": order_id,
+                                 "snap_token": None, "kode": voucher["kode"]})
+        return JSONResponse({"ok": False, "msg": "Gagal memproses order"})
+
+
+@app.post("/beli/notif")
+async def toko_notif(request: Request):
+    """Webhook Midtrans payment notification."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False})
+
+    order_id      = body.get("order_id", "")
+    status_code   = body.get("status_code", "")
+    gross_amount  = body.get("gross_amount", "")
+    sig_key       = body.get("signature_key", "")
+
+    if sig_key != _mt_sig(order_id, status_code, gross_amount):
+        return JSONResponse({"ok": False, "msg": "Invalid signature"})
+
+    tx_status = body.get("transaction_status", "")
+    if tx_status in ("capture", "settlement"):
+        voucher = db.confirm_order(order_id)
+        if voucher:
+            order = db.get_order(order_id)
+            if order and order.get("nomor_hp"):
+                paket = db.get_paket_hotspot(order["paket_id"])
+                isp = db.get_user(order["user_id"])
+                send_wa(
+                    order["nomor_hp"],
+                    f"✅ *Pembayaran Berhasil!*\n\n"
+                    f"Terima kasih sudah berlangganan *{isp['nama'] if isp else ''}*\n\n"
+                    f"📦 Paket: {paket['nama'] if paket else ''}\n"
+                    f"⏱ Durasi: {paket['durasi'] if paket else ''}\n\n"
+                    f"🎟 *Kode Voucher Kamu:*\n\n"
+                    f"  `{voucher['kode']}`\n\n"
+                    f"Masukkan kode ini di halaman login hotspot WiFi."
+                )
+    return JSONResponse({"ok": True})
+
+
+@app.get("/beli/sukses/{order_id}", response_class=HTMLResponse)
+async def toko_sukses(request: Request, order_id: str):
+    order = db.get_order(order_id)
+    if not order:
+        return HTMLResponse("<h2>Order tidak ditemukan</h2>", status_code=404)
+    voucher = None
+    paket = None
+    isp = None
+    if order["status"] == "paid" and order.get("voucher_id"):
+        from storage import Storage as _S
+        con = db._conn()
+        v = con.execute("SELECT * FROM voucher_hotspot WHERE id=?", (order["voucher_id"],)).fetchone()
+        con.close()
+        voucher = dict(v) if v else None
+    if order.get("paket_id"):
+        paket = db.get_paket_hotspot(order["paket_id"])
+    if order.get("user_id"):
+        isp = db.get_user(order["user_id"])
+    # Coba konfirmasi via Midtrans jika belum paid
+    if order["status"] == "pending" and _mt_verify(order_id):
+        voucher_raw = db.confirm_order(order_id)
+        order = db.get_order(order_id)
+        voucher = voucher_raw
+    return tpl.TemplateResponse(request, "store_sukses.html", _ctx(
+        request, order=order, voucher=voucher, paket=paket, isp=isp
+    ))
 
 
 if __name__ == "__main__":

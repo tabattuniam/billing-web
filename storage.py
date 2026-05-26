@@ -133,6 +133,22 @@ class Storage:
             used        INTEGER DEFAULT 0
         );
 
+        -- Order toko hotspot online (publik)
+        CREATE TABLE IF NOT EXISTS hotspot_orders (
+            id          TEXT PRIMARY KEY,    -- order_id unik
+            user_id     TEXT NOT NULL,       -- tenant ISP pemilik
+            paket_id    INTEGER NOT NULL,
+            server_id   TEXT NOT NULL,
+            voucher_id  INTEGER,             -- voucher yang di-assign setelah bayar
+            nomor_hp    TEXT DEFAULT '',
+            jumlah      INTEGER DEFAULT 1,
+            amount      INTEGER NOT NULL,
+            status      TEXT DEFAULT 'pending',  -- pending | paid | expired | failed
+            snap_token  TEXT DEFAULT '',
+            paid_at     INTEGER,
+            created_at  INTEGER
+        );
+
         -- Registrasi tenant ISP dari vpntunel.my.id/daftar
         CREATE TABLE IF NOT EXISTS tenant_registrasi (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -528,6 +544,84 @@ class Storage:
         ditolak = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='ditolak'").fetchone()[0]
         con.close()
         return {"total": total, "pending": pending, "aktif": aktif, "ditolak": ditolak}
+
+    # ── Toko Hotspot Online ───────────────────────────────────────────────────
+
+    def get_isp_by_slug(self, slug: str) -> dict | None:
+        """Cari ISP (admin) berdasarkan username sebagai slug toko."""
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM users WHERE username=? AND role='admin' AND status='aktif'", (slug,)
+        ).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def list_paket_hotspot_publik(self, user_id: str) -> list[dict]:
+        """Paket hotspot aktif + stok voucher tersedia untuk toko publik."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT p.*,
+                   (SELECT COUNT(*) FROM voucher_hotspot v
+                    WHERE v.paket_id=p.id AND v.user_id=p.user_id AND v.status='tersedia') as stok
+            FROM paket_hotspot p
+            WHERE p.user_id=? AND p.status='aktif'
+            ORDER BY p.harga
+        """, (user_id,)).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def create_order(self, user_id: str, paket_id: int, server_id: str,
+                     nomor_hp: str, amount: int) -> str:
+        import uuid as _uuid
+        order_id = "ORD-" + _uuid.uuid4().hex[:10].upper()
+        con = self._conn()
+        con.execute(
+            "INSERT INTO hotspot_orders (id,user_id,paket_id,server_id,nomor_hp,amount,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (order_id, user_id, paket_id, server_id, nomor_hp, amount, int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return order_id
+
+    def get_order(self, order_id: str) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM hotspot_orders WHERE id=?", (order_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def set_order_snap_token(self, order_id: str, snap_token: str):
+        con = self._conn()
+        con.execute("UPDATE hotspot_orders SET snap_token=? WHERE id=?", (snap_token, order_id))
+        con.commit()
+        con.close()
+
+    def confirm_order(self, order_id: str) -> dict | None:
+        """Tandai order paid, ambil satu voucher dari stok, return voucher."""
+        con = self._conn()
+        order = con.execute("SELECT * FROM hotspot_orders WHERE id=? AND status='pending'",
+                            (order_id,)).fetchone()
+        if not order:
+            con.close()
+            return None
+        order = dict(order)
+        # Ambil voucher tersedia dari paket yang sama
+        voucher = con.execute(
+            "SELECT * FROM voucher_hotspot WHERE user_id=? AND paket_id=? AND status='tersedia' LIMIT 1",
+            (order["user_id"], order["paket_id"])
+        ).fetchone()
+        if not voucher:
+            con.close()
+            return None
+        voucher = dict(voucher)
+        now = int(time.time())
+        con.execute("UPDATE voucher_hotspot SET status='dipakai', dipakai_at=? WHERE id=?",
+                    (now, voucher["id"]))
+        con.execute("UPDATE hotspot_orders SET status='paid', voucher_id=?, paid_at=? WHERE id=?",
+                    (voucher["id"], now, order_id))
+        con.commit()
+        con.close()
+        return voucher
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 
