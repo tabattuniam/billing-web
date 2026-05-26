@@ -1,6 +1,6 @@
 """BillingVPN — FastAPI billing web for PPPoE & Hotspot management."""
 from __future__ import annotations
-import time, yaml, requests
+import time, yaml, requests, random
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException
@@ -128,6 +128,43 @@ async def login_post(request: Request, username: str = Form(...), password: str 
     return resp
 
 
+# ── Login via WhatsApp PIN ────────────────────────────────────────────────────
+
+@app.post("/login/wa/kirim", response_class=JSONResponse)
+async def login_wa_kirim(request: Request, nomor_wa: str = Form(...)):
+    nomor = nomor_wa.strip().replace("-", "").replace(" ", "")
+    if nomor.startswith("0"):
+        nomor = "62" + nomor[1:]
+    user = db.get_user_by_wa(nomor)
+    if not user:
+        return JSONResponse({"ok": False, "msg": "Nomor WhatsApp tidak terdaftar."})
+    otp = str(random.randint(100000, 999999))
+    db.create_otp(user["id"], otp, ttl=300)
+    send_wa(nomor,
+        f"🔐 *Kode Login VPNTunel Billing*\n\n"
+        f"Halo {user['nama']},\n\n"
+        f"Kode PIN login kamu:\n\n"
+        f"  *{otp}*\n\n"
+        f"Berlaku 5 menit. Jangan berikan ke siapapun."
+    )
+    return JSONResponse({"ok": True, "msg": "PIN dikirim ke WhatsApp kamu."})
+
+
+@app.post("/login/wa/verifikasi")
+async def login_wa_verifikasi(request: Request, nomor_wa: str = Form(...), otp: str = Form(...)):
+    nomor = nomor_wa.strip().replace("-", "").replace(" ", "")
+    if nomor.startswith("0"):
+        nomor = "62" + nomor[1:]
+    user = db.get_user_by_wa(nomor)
+    if not user:
+        return tpl.TemplateResponse(request, "login.html", _ctx(request, error="Nomor tidak terdaftar.", tab="wa"))
+    if not db.verify_otp(user["id"], otp.strip()):
+        return tpl.TemplateResponse(request, "login.html", _ctx(request, error="PIN salah atau sudah kedaluwarsa.", tab="wa", nomor_wa=nomor_wa))
+    resp = RedirectResponse("/dashboard", status_code=303)
+    resp.set_cookie("session", make_session(user["id"]), httponly=True, max_age=86400 * 7)
+    return resp
+
+
 @app.get("/logout")
 async def logout():
     resp = RedirectResponse("/login", status_code=302)
@@ -147,7 +184,7 @@ async def dashboard(request: Request):
 @app.get("/servers", response_class=HTMLResponse)
 async def servers_page(request: Request):
     user = require_login(request)
-    servers = db.list_servers_all() if user["role"] == "admin" else db.list_servers(user["id"])
+    servers = db.list_servers(user["id"])
     return tpl.TemplateResponse(request, "servers.html", _ctx(request, user=user, servers=servers))
 
 
@@ -380,56 +417,6 @@ async def transaksi_page(request: Request):
     txs = db.list_transaksi(user["id"])
     return tpl.TemplateResponse(request, "transaksi.html", _ctx(request, user=user, txs=txs))
 
-
-# ── Registrasi ISP Tenant ─────────────────────────────────────────────────────
-
-def _pending_count() -> int:
-    try:
-        return db.count_registrasi()["pending"]
-    except Exception:
-        return 0
-
-
-@app.get("/registrasi", response_class=HTMLResponse)
-async def registrasi_page(request: Request, status: str = ""):
-    user = require_login(request)
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    regs  = db.list_registrasi(status if status else None)
-    stats = db.count_registrasi()
-    return tpl.TemplateResponse(request, "registrasi.html", _ctx(
-        request, user=user, registrasi=regs, stats=stats,
-        filter_status=status, pending_count=stats["pending"]
-    ))
-
-
-@app.post("/registrasi/{rid}/approve")
-async def registrasi_approve(request: Request, rid: int):
-    user = require_login(request)
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    r = db.get_registrasi(rid)
-    if r:
-        db.update_registrasi_status(rid, "aktif")
-        send_wa(r["nomor_wa"],
-            f"✅ *Akun ISP Anda Sudah Aktif!*\n\n"
-            f"Halo {r['nama_pemilik']}, pendaftaran *{r['nama_isp']}* telah disetujui.\n\n"
-            f"Silakan login ke dashboard:\n"
-            f"🔗 https://billing.vpntunel.my.id\n\n"
-            f"Tim kami akan menghubungi untuk setup awal. Ada pertanyaan? Balas pesan ini."
-        )
-    return RedirectResponse("/registrasi", status_code=303)
-
-
-@app.post("/registrasi/{rid}/tolak")
-async def registrasi_tolak(request: Request, rid: int):
-    user = require_login(request)
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403)
-    r = db.get_registrasi(rid)
-    if r:
-        db.update_registrasi_status(rid, "ditolak")
-    return RedirectResponse("/registrasi", status_code=303)
 
 
 if __name__ == "__main__":

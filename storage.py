@@ -124,6 +124,15 @@ class Storage:
             created_at  INTEGER
         );
 
+        -- OTP login via WhatsApp
+        CREATE TABLE IF NOT EXISTS wa_otp (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     TEXT NOT NULL,
+            otp         TEXT NOT NULL,
+            expires_at  INTEGER NOT NULL,
+            used        INTEGER DEFAULT 0
+        );
+
         -- Registrasi tenant ISP dari vpntunel.my.id/daftar
         CREATE TABLE IF NOT EXISTS tenant_registrasi (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -436,6 +445,38 @@ class Storage:
         con.close()
         return [dict(r) for r in rows]
 
+    # ── WA OTP Login ──────────────────────────────────────────────────────────
+
+    def get_user_by_wa(self, nomor_wa: str) -> dict | None:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM users WHERE nomor_wa=? AND status='aktif'", (nomor_wa,)
+        ).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def create_otp(self, user_id: str, otp: str, ttl: int = 300):
+        con = self._conn()
+        con.execute("DELETE FROM wa_otp WHERE user_id=?", (user_id,))
+        con.execute(
+            "INSERT INTO wa_otp (user_id,otp,expires_at) VALUES (?,?,?)",
+            (user_id, otp, int(time.time()) + ttl)
+        )
+        con.commit()
+        con.close()
+
+    def verify_otp(self, user_id: str, otp: str) -> bool:
+        con = self._conn()
+        row = con.execute(
+            "SELECT id FROM wa_otp WHERE user_id=? AND otp=? AND used=0 AND expires_at>?",
+            (user_id, otp, int(time.time()))
+        ).fetchone()
+        if row:
+            con.execute("UPDATE wa_otp SET used=1 WHERE id=?", (row[0],))
+            con.commit()
+        con.close()
+        return row is not None
+
     # ── Tenant Registrasi ─────────────────────────────────────────────────────
 
     def create_registrasi(self, nama_isp, nama_pemilik, nomor_wa, kota, paket, estimasi_pelanggan, catatan) -> int:
@@ -483,15 +524,9 @@ class Storage:
 
     def stats(self, user_id: str, role: str) -> dict:
         con = self._conn()
-        if role == "admin":
-            agen    = con.execute("SELECT COUNT(*) FROM users WHERE role='agen'").fetchone()[0]
-            servers = con.execute("SELECT COUNT(*) FROM mikrotik_servers").fetchone()[0]
-            pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE status='aktif'").fetchone()[0]
-            voucher = con.execute("SELECT COUNT(*) FROM voucher_hotspot WHERE status='tersedia'").fetchone()[0]
-        else:
-            agen    = con.execute("SELECT COUNT(*) FROM users WHERE parent_id=?", (user_id,)).fetchone()[0]
-            servers = con.execute("SELECT COUNT(*) FROM mikrotik_servers WHERE user_id=?", (user_id,)).fetchone()[0]
-            pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (user_id,)).fetchone()[0]
-            voucher = con.execute("SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='tersedia'", (user_id,)).fetchone()[0]
+        agen    = con.execute("SELECT COUNT(*) FROM users WHERE parent_id=?", (user_id,)).fetchone()[0]
+        servers = con.execute("SELECT COUNT(*) FROM mikrotik_servers WHERE user_id=?", (user_id,)).fetchone()[0]
+        pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (user_id,)).fetchone()[0]
+        voucher = con.execute("SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='tersedia'", (user_id,)).fetchone()[0]
         con.close()
         return {"agen": agen, "servers": servers, "pppoe": pppoe, "voucher": voucher}
