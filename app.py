@@ -326,6 +326,87 @@ async def pppoe_user_status(request: Request, pid: int, status: str = Form(...))
         db.update_pppoe_status(pid, status)
     return RedirectResponse("/pppoe/users", status_code=302)
 
+# ── Tagihan PPPoE ────────────────────────────────────────────────────────────
+
+def _bulan_sekarang() -> str:
+    from datetime import date
+    return date.today().strftime("%Y-%m")
+
+def _bulan_list() -> list[str]:
+    """12 bulan terakhir untuk dropdown filter."""
+    from datetime import date, timedelta
+    months = []
+    d = date.today()
+    for _ in range(12):
+        months.append(d.strftime("%Y-%m"))
+        d = (d.replace(day=1) - timedelta(days=1))
+    return months
+
+def _label_bulan(b: str) -> str:
+    from datetime import datetime
+    try:
+        return datetime.strptime(b, "%Y-%m").strftime("%B %Y")
+    except Exception:
+        return b
+
+tpl.env.filters["label_bulan"] = _label_bulan
+
+
+@app.get("/pppoe/tagihan", response_class=HTMLResponse)
+async def tagihan_page(request: Request, bulan: str = "", status: str = ""):
+    user = require_login(request)
+    if not bulan:
+        bulan = _bulan_sekarang()
+    tagihan = db.list_tagihan(user["id"], bulan, status if status else None)
+    stats   = db.stats_tagihan(user["id"], bulan)
+    bulans  = _bulan_list()
+    return tpl.TemplateResponse(request, "pppoe_tagihan.html", _ctx(
+        request, user=user, tagihan=tagihan, stats=stats,
+        bulan=bulan, bulans=bulans, sel_status=status, active="pppoe_tagihan"
+    ))
+
+
+@app.post("/pppoe/tagihan/generate", response_class=JSONResponse)
+async def tagihan_generate(request: Request, bulan: str = Form("")):
+    user = require_login(request)
+    if not bulan:
+        bulan = _bulan_sekarang()
+    n = db.generate_tagihan(user["id"], bulan)
+    return JSONResponse({"ok": True, "dibuat": n, "bulan": bulan})
+
+
+@app.post("/pppoe/tagihan/{tid}/lunas", response_class=JSONResponse)
+async def tagihan_lunas(request: Request, tid: int):
+    user = require_login(request)
+    ok = db.bayar_tagihan(tid, user["id"])
+    return JSONResponse({"ok": ok})
+
+
+@app.post("/pppoe/tagihan/reminder", response_class=JSONResponse)
+async def tagihan_reminder(request: Request, bulan: str = Form("")):
+    user = require_login(request)
+    if not bulan:
+        bulan = _bulan_sekarang()
+    tagihan = db.list_tagihan(user["id"], bulan, "unpaid")
+    tagihan += db.list_tagihan(user["id"], bulan, "overdue")
+    terkirim = 0
+    for t in tagihan:
+        if not t.get("telepon"):
+            continue
+        label = _label_bulan(bulan)
+        pesan = (
+            f"📋 *Tagihan Internet {t['paket_nama'] or ''}*\n\n"
+            f"Halo *{t['nama_pelanggan']}*,\n\n"
+            f"Tagihan bulan *{label}* sebesar *Rp {t['amount']:,}* "
+            f"belum kami terima.\n\n"
+            f"Mohon segera lakukan pembayaran.\n\n"
+            f"Terima kasih 🙏"
+        ).replace(",", ".")
+        send_wa(t["telepon"], pesan)
+        terkirim += 1
+    return JSONResponse({"ok": True, "terkirim": terkirim})
+
+
 # ── Hotspot Paket ─────────────────────────────────────────────────────────────
 
 @app.get("/hotspot/paket", response_class=HTMLResponse)

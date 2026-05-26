@@ -149,6 +149,19 @@ class Storage:
             created_at  INTEGER
         );
 
+        -- Tagihan PPPoE bulanan
+        CREATE TABLE IF NOT EXISTS tagihan_pppoe (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     TEXT NOT NULL,
+            pppoe_id    INTEGER NOT NULL,
+            bulan       TEXT NOT NULL,      -- format: "2026-05"
+            amount      INTEGER NOT NULL,
+            status      TEXT DEFAULT 'unpaid',  -- unpaid | paid | overdue
+            paid_at     INTEGER,
+            created_at  INTEGER,
+            UNIQUE(pppoe_id, bulan)
+        );
+
         -- Registrasi tenant ISP dari vpntunel.my.id/daftar
         CREATE TABLE IF NOT EXISTS tenant_registrasi (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -544,6 +557,96 @@ class Storage:
         ditolak = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='ditolak'").fetchone()[0]
         con.close()
         return {"total": total, "pending": pending, "aktif": aktif, "ditolak": ditolak}
+
+    # ── Tagihan PPPoE ─────────────────────────────────────────────────────────
+
+    def generate_tagihan(self, user_id: str, bulan: str) -> int:
+        """Buat tagihan untuk semua pelanggan aktif bulan tertentu. Return jumlah dibuat."""
+        con = self._conn()
+        pelanggan = con.execute(
+            "SELECT p.id, p.paket_id, pk.harga FROM pppoe_users p "
+            "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+            "WHERE p.user_id=? AND p.status='aktif'", (user_id,)
+        ).fetchall()
+        now = int(time.time())
+        dibuat = 0
+        for p in pelanggan:
+            harga = p["harga"] or 0
+            try:
+                con.execute(
+                    "INSERT OR IGNORE INTO tagihan_pppoe (user_id,pppoe_id,bulan,amount,created_at) VALUES (?,?,?,?,?)",
+                    (user_id, p["id"], bulan, harga, now)
+                )
+                if con.execute("SELECT changes()").fetchone()[0]:
+                    dibuat += 1
+            except Exception:
+                pass
+        con.commit()
+        con.close()
+        return dibuat
+
+    def list_tagihan(self, user_id: str, bulan: str = None, status: str = None) -> list[dict]:
+        con = self._conn()
+        q = """SELECT t.*, p.nama_pelanggan, p.telepon, p.username as pppoe_username,
+                      pk.nama as paket_nama, pk.kecepatan, s.nama as server_nama
+               FROM tagihan_pppoe t
+               LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
+               LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id
+               LEFT JOIN mikrotik_servers s ON s.id=p.server_id
+               WHERE t.user_id=?"""
+        args = [user_id]
+        if bulan:
+            q += " AND t.bulan=?"
+            args.append(bulan)
+        if status:
+            q += " AND t.status=?"
+            args.append(status)
+        q += " ORDER BY p.nama_pelanggan"
+        rows = con.execute(q, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def bayar_tagihan(self, tid: int, user_id: str) -> bool:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM tagihan_pppoe WHERE id=? AND user_id=? AND status!='paid'",
+            (tid, user_id)
+        ).fetchone()
+        if not row:
+            con.close()
+            return False
+        now = int(time.time())
+        con.execute("UPDATE tagihan_pppoe SET status='paid', paid_at=? WHERE id=?", (now, tid))
+        con.commit()
+        con.close()
+        return True
+
+    def tagihan_overdue(self, user_id: str, bulan: str, hari_ini: int) -> int:
+        """Tandai tagihan unpaid yang sudah lewat jatuh tempo sebagai overdue. Return jumlah."""
+        con = self._conn()
+        # Cari tagihan unpaid bulan ini yang tgl_bayar sudah lewat
+        rows = con.execute("""
+            SELECT t.id FROM tagihan_pppoe t
+            LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
+            WHERE t.user_id=? AND t.bulan=? AND t.status='unpaid' AND p.tgl_bayar < ?
+        """, (user_id, bulan, hari_ini)).fetchall()
+        n = 0
+        for r in rows:
+            con.execute("UPDATE tagihan_pppoe SET status='overdue' WHERE id=?", (r[0],))
+            n += 1
+        con.commit()
+        con.close()
+        return n
+
+    def stats_tagihan(self, user_id: str, bulan: str) -> dict:
+        con = self._conn()
+        total   = con.execute("SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=?", (user_id, bulan)).fetchone()[0]
+        paid    = con.execute("SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='paid'", (user_id, bulan)).fetchone()[0]
+        unpaid  = con.execute("SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='unpaid'", (user_id, bulan)).fetchone()[0]
+        overdue = con.execute("SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='overdue'", (user_id, bulan)).fetchone()[0]
+        omzet   = con.execute("SELECT COALESCE(SUM(amount),0) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='paid'", (user_id, bulan)).fetchone()[0]
+        con.close()
+        return {"total": total, "paid": paid, "unpaid": unpaid, "overdue": overdue, "omzet": omzet}
 
     # ── Toko Hotspot Online ───────────────────────────────────────────────────
 

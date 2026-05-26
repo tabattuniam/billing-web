@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Tagihan PPPoE — {{ app_name }}{% endblock %}
+{% block topbar_title %}Tagihan PPPoE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tagihan PPPoE</h1>
+    <p class="page-sub">Invoice bulanan & WA reminder pelanggan</p>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    <button onclick="openGenerate()" class="btn-primary px-4 py-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 4v16m8-8H4"/>
+      </svg>
+      Generate Tagihan
+    </button>
+    <button onclick="kirimReminder()" class="btn-warning px-4 py-2" id="btn-reminder">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+      </svg>
+      WA Reminder
+    </button>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4">
+    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Total</p>
+    <p class="text-2xl font-black text-gray-900 mt-1">{{ stats.total }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">pelanggan</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Lunas</p>
+    <p class="text-2xl font-black text-emerald-600 mt-1">{{ stats.paid }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">Rp {{ "{:,}".format(stats.omzet).replace(",",".") }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-amber-500 font-medium uppercase tracking-wide">Belum Bayar</p>
+    <p class="text-2xl font-black text-amber-600 mt-1">{{ stats.unpaid }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-red-500 font-medium uppercase tracking-wide">Terlambat</p>
+    <p class="text-2xl font-black text-red-600 mt-1">{{ stats.overdue }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="card p-4 mb-5">
+  <form method="get" action="/pppoe/tagihan" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="form-label">Bulan</label>
+      <select name="bulan" class="form-select w-44" onchange="this.form.submit()">
+        {% for b in bulans %}
+        <option value="{{ b }}" {% if b==bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select w-36" onchange="this.form.submit()">
+        <option value="">Semua</option>
+        <option value="unpaid"  {% if sel_status=='unpaid'  %}selected{% endif %}>Belum Bayar</option>
+        <option value="paid"    {% if sel_status=='paid'    %}selected{% endif %}>Lunas</option>
+        <option value="overdue" {% if sel_status=='overdue' %}selected{% endif %}>Terlambat</option>
+      </select>
+    </div>
+    <div class="flex-1"></div>
+    <a href="/pppoe/tagihan" class="btn-ghost px-3 py-2.5 text-xs">Reset</a>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card overflow-hidden">
+  {% if tagihan %}
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="th">Pelanggan</th>
+          <th class="th">Paket</th>
+          <th class="th">Jatuh Tempo</th>
+          <th class="th">Tagihan</th>
+          <th class="th">Status</th>
+          <th class="th">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tagihan %}
+        <tr id="row-{{ t.id }}" class="hover:bg-gray-50 transition-colors">
+          <td class="td">
+            <p class="font-semibold text-gray-900 text-sm">{{ t.nama_pelanggan }}</p>
+            <p class="text-xs text-gray-400">{{ t.pppoe_username }} · {{ t.telepon or '—' }}</p>
+          </td>
+          <td class="td">
+            <p class="text-sm text-gray-700 font-medium">{{ t.paket_nama or '—' }}</p>
+            <p class="text-xs text-gray-400">{{ t.kecepatan or '' }}</p>
+          </td>
+          <td class="td">
+            <span class="text-sm text-gray-700">Tgl {{ t.tgl_bayar if t.tgl_bayar else '?' }} setiap bulan</span>
+          </td>
+          <td class="td">
+            <span class="font-bold text-gray-900">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
+          </td>
+          <td class="td" id="status-{{ t.id }}">
+            {% if t.status == 'paid' %}
+            <span class="badge badge-green">
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+              Lunas
+            </span>
+            {% elif t.status == 'overdue' %}
+            <span class="badge badge-red">
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+              Terlambat
+            </span>
+            {% else %}
+            <span class="badge badge-orange">
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg>
+              Belum Bayar
+            </span>
+            {% endif %}
+          </td>
+          <td class="td">
+            <div class="flex items-center gap-2">
+              {% if t.status != 'paid' %}
+              <button onclick="tandaiLunas({{ t.id }})"
+                class="btn-success text-xs px-3 py-1.5" title="Tandai Lunas">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Lunas
+              </button>
+              {% endif %}
+              {% if t.telepon %}
+              <a href="https://wa.me/{{ t.telepon.lstrip('0') if not t.telepon.startswith('62') else t.telepon }}?text={{ ('Tagihan ' ~ bulan ~ ' Rp ' ~ t.amount) | urlencode }}"
+                target="_blank"
+                class="btn-ghost text-xs px-3 py-1.5" title="Kirim WA manual">
+                <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                WA
+              </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="py-16 text-center">
+    <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <p class="text-gray-500 font-medium">Belum ada tagihan bulan ini</p>
+    <p class="text-xs text-gray-400 mt-1 mb-4">Klik "Generate Tagihan" untuk membuat tagihan semua pelanggan aktif.</p>
+    <button onclick="openGenerate()" class="btn-primary px-5 py-2">Generate Sekarang</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Modal Generate ── -->
+<div id="modal-generate" class="modal-overlay hidden" style="background:rgba(0,0,0,0.4)">
+  <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+    <h3 class="font-bold text-gray-900 mb-4">Generate Tagihan</h3>
+    <div class="mb-4">
+      <label class="form-label">Bulan</label>
+      <select id="gen-bulan" class="form-select">
+        {% for b in bulans %}
+        <option value="{{ b }}" {% if b==bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-5 text-sm text-blue-700">
+      Tagihan akan dibuat untuk semua pelanggan PPPoE aktif. Pelanggan yang sudah punya tagihan bulan ini tidak akan digandakan.
+    </div>
+    <div class="flex gap-3">
+      <button onclick="document.getElementById('modal-generate').classList.add('hidden')"
+        class="btn-ghost flex-1 py-2.5">Batal</button>
+      <button onclick="doGenerate()" id="btn-gen" class="btn-primary flex-1 py-2.5">Generate</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BULAN = "{{ bulan }}";
+
+function openGenerate() {
+  document.getElementById('modal-generate').classList.remove('hidden');
+}
+
+async function doGenerate() {
+  const bulan = document.getElementById('gen-bulan').value;
+  const btn = document.getElementById('btn-gen');
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+  const fd = new FormData();
+  fd.append('bulan', bulan);
+  const res = await fetch('/pppoe/tagihan/generate', { method: 'POST', body: fd });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.textContent = 'Generate';
+  document.getElementById('modal-generate').classList.add('hidden');
+  if (data.ok) {
+    showToast(`${data.dibuat} tagihan baru dibuat untuk ${bulan}`, 'success');
+    setTimeout(() => window.location.href = '/pppoe/tagihan?bulan=' + bulan, 1200);
+  } else {
+    showToast('Gagal generate tagihan', 'error');
+  }
+}
+
+async function tandaiLunas(tid) {
+  const res = await fetch(`/pppoe/tagihan/${tid}/lunas`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById(`status-${tid}`).innerHTML = `
+      <span class="badge badge-green">
+        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        Lunas
+      </span>`;
+    // hapus tombol aksi lunas
+    const row = document.getElementById(`row-${tid}`);
+    const btnLunas = row?.querySelector('button[onclick^="tandaiLunas"]');
+    if (btnLunas) btnLunas.remove();
+    showToast('Tagihan ditandai lunas', 'success');
+  } else {
+    showToast('Gagal memperbarui status', 'error');
+  }
+}
+
+async function kirimReminder() {
+  const btn = document.getElementById('btn-reminder');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...`;
+  const fd = new FormData();
+  fd.append('bulan', BULAN);
+  const res = await fetch('/pppoe/tagihan/reminder', { method: 'POST', body: fd });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg> WA Reminder`;
+  if (data.ok) {
+    showToast(`${data.terkirim} WA reminder terkirim`, data.terkirim > 0 ? 'success' : 'warning');
+  } else {
+    showToast('Gagal mengirim reminder', 'error');
+  }
+}
+</script>
+{% endblock %}
