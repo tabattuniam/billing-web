@@ -82,13 +82,19 @@ def _ctx(request: Request, **kw) -> dict:
 
 # ── WuzAPI ────────────────────────────────────────────────────────────────────
 
+def _normalize_wa(nomor: str) -> str:
+    n = nomor.strip().replace("-", "").replace(" ", "")
+    if n.startswith("0"):
+        n = "62" + n[1:]
+    return n
+
 def send_wa(nomor: str, pesan: str):
     if not WA_URL or not nomor:
         return
     try:
         requests.post(
             f"{WA_URL}/chat/send/text",
-            json={"phone": nomor.strip().lstrip("0"), "body": pesan},
+            json={"phone": _normalize_wa(nomor), "body": pesan},
             headers={"Token": WA_TOKEN},
             timeout=5
         )
@@ -239,13 +245,22 @@ async def pppoe_paket_tambah(
 # ── PPPoE Users ───────────────────────────────────────────────────────────────
 
 @app.get("/pppoe/users", response_class=HTMLResponse)
-async def pppoe_users(request: Request, server_id: str = ""):
+async def pppoe_users(request: Request, server_id: str = "", status: str = "", q: str = ""):
     user = require_login(request)
     servers = db.list_servers(user["id"])
     users = db.list_pppoe_users(user["id"], server_id if server_id else None)
+    if status:
+        users = [u for u in users if u["status"] == status]
+    if q:
+        q_lower = q.lower()
+        users = [u for u in users if
+                 q_lower in u["nama_pelanggan"].lower() or
+                 q_lower in u["username"].lower() or
+                 q_lower in (u["telepon"] or "").lower()]
     pakets = db.list_paket_pppoe(user["id"])
     return tpl.TemplateResponse(request, "pppoe_users.html", _ctx(
-        request, user=user, users=users, servers=servers, pakets=pakets, sel_server=server_id
+        request, user=user, users=users, servers=servers, pakets=pakets,
+        sel_server=server_id, sel_status=status, q=q
     ))
 
 
@@ -276,6 +291,19 @@ async def pppoe_user_hapus(request: Request, pid: int):
         if mt:
             mt.remove_pppoe_secret(pu["username"])
         db.delete_pppoe_user(pid)
+    return RedirectResponse("/pppoe/users", status_code=302)
+
+
+@app.post("/pppoe/users/edit/{pid}")
+async def pppoe_user_edit(
+    request: Request, pid: int,
+    nama_pelanggan: str = Form(...), telepon: str = Form(""),
+    alamat: str = Form(""), tgl_bayar: int = Form(1)
+):
+    user = require_login(request)
+    pu = db.get_pppoe_user(pid)
+    if pu and pu["user_id"] == user["id"]:
+        db.update_pppoe_user(pid, nama_pelanggan, telepon, alamat, tgl_bayar)
     return RedirectResponse("/pppoe/users", status_code=302)
 
 

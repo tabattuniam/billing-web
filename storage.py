@@ -305,6 +305,15 @@ class Storage:
         con.close()
         return dict(row) if row else None
 
+    def update_pppoe_user(self, pid: int, nama_pelanggan: str, telepon: str, alamat: str, tgl_bayar: int):
+        con = self._conn()
+        con.execute(
+            "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=? WHERE id=?",
+            (nama_pelanggan, telepon, alamat, tgl_bayar, pid)
+        )
+        con.commit()
+        con.close()
+
     def update_pppoe_status(self, pid: int, status: str):
         con = self._conn()
         con.execute("UPDATE pppoe_users SET status=? WHERE id=?", (status, pid))
