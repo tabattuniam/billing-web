@@ -126,10 +126,12 @@ def send_wa(nomor: str, pesan: str, token: str = ""):
 
 
 def _isp_wa_token(user_id: str) -> str:
-    """Ambil WA token ISP. Fallback ke sistem jika belum setup."""
+    """Ambil WA token ISP. Fallback ke token sistem jika belum setup/connected."""
     gw = db.get_wa_gateway(user_id)
-    if gw and gw.get("wa_token") and gw.get("status") == "connected":
-        return gw["wa_token"]
+    if gw and gw.get("wa_token"):
+        s = _wa_session_status(gw["wa_token"])
+        if _wa_is_logged_in(s):
+            return gw["wa_token"]
     return WA_TOKEN
 
 
@@ -160,19 +162,27 @@ def _wa_session_status(token: str) -> dict:
         return {}
 
 
+def _wa_is_logged_in(status: dict) -> bool:
+    """Cek apakah WA benar-benar login (bukan sekadar session running)."""
+    return bool(status.get("loggedIn") and status.get("jid"))
+
+
 def _wa_get_qr(token: str) -> str:
-    """Ambil QR code base64. Trigger connect dulu jika belum."""
+    """Start session dan ambil QR code. Return QR base64 atau '' jika sudah login."""
     try:
-        r = requests.post(f"{WA_URL}/session/connect",
-                          json={}, headers={"Token": token}, timeout=10)
-        data = r.json()
-        if data.get("success"):
-            status = _wa_session_status(token)
-            if status.get("connected"):
-                return ""  # sudah connect
-        # ambil QR
-        r2 = requests.get(f"{WA_URL}/session/qr", headers={"Token": token}, timeout=5)
-        return r2.json().get("data", {}).get("QRCode", "")
+        # Start/resume session
+        requests.post(f"{WA_URL}/session/connect",
+                      json={}, headers={"Token": token}, timeout=10)
+        # QR ada di status response langsung
+        status = _wa_session_status(token)
+        if _wa_is_logged_in(status):
+            return ""  # sudah login, tidak perlu QR
+        # Ambil dari field qrcode di status, atau fallback ke endpoint /session/qr
+        qr = status.get("qrcode", "")
+        if not qr:
+            r2 = requests.get(f"{WA_URL}/session/qr", headers={"Token": token}, timeout=5)
+            qr = r2.json().get("data", {}).get("QRCode", "")
+        return qr
     except Exception:
         return ""
 
@@ -486,7 +496,7 @@ async def wa_gateway_page(request: Request):
     status_data = {}
     if gw and gw.get("wa_token"):
         status_data = _wa_session_status(gw["wa_token"])
-        connected = status_data.get("connected", False)
+        connected = _wa_is_logged_in(status_data)
         nomor = status_data.get("jid", "").split(":")[0] if connected else ""
         db.update_wa_gateway_status(user["id"],
                                     "connected" if connected else "disconnected", nomor)
@@ -508,7 +518,7 @@ async def wa_gateway_setup(request: Request):
     # Trigger connect + ambil QR
     qr = _wa_get_qr(token)
     status = _wa_session_status(token)
-    if status.get("connected"):
+    if _wa_is_logged_in(status):
         nomor = status.get("jid", "").split(":")[0]
         db.update_wa_gateway_status(user["id"], "connected", nomor)
         return JSONResponse({"ok": True, "connected": True, "nomor": nomor})
@@ -522,7 +532,7 @@ async def wa_gateway_status(request: Request):
     if not gw or not gw.get("wa_token"):
         return JSONResponse({"connected": False})
     s = _wa_session_status(gw["wa_token"])
-    connected = s.get("connected", False)
+    connected = _wa_is_logged_in(s)
     nomor = s.get("jid", "").split(":")[0] if connected else ""
     if connected:
         db.update_wa_gateway_status(user["id"], "connected", nomor)
