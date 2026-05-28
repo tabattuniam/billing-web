@@ -382,6 +382,43 @@ async def tagihan_lunas(request: Request, tid: int):
     return JSONResponse({"ok": ok})
 
 
+@app.post("/pppoe/tagihan/{tid}/kirim-link", response_class=JSONResponse)
+async def tagihan_kirim_link(request: Request, tid: int):
+    """Generate Midtrans snap token untuk tagihan, kirim link bayar via WA."""
+    user = require_login(request)
+    t = db.get_tagihan(tid)
+    if not t or t["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    if t["status"] == "paid":
+        return JSONResponse({"ok": False, "msg": "Tagihan sudah lunas"})
+    if not t.get("telepon"):
+        return JSONResponse({"ok": False, "msg": "Nomor WA pelanggan belum diisi"})
+
+    label = _label_bulan(t["bulan"])
+    order_id = f"TGH-{tid}-{int(time.time())}"
+    snap_token = _mt_snap_token(
+        order_id, t["amount"],
+        t["nama_pelanggan"], t["telepon"],
+        finish_url=f"https://{APP_DOMAIN}/bayar/tagihan/{tid}/sukses"
+    )
+    if not snap_token:
+        return JSONResponse({"ok": False, "msg": "Gagal membuat link pembayaran Midtrans"})
+
+    db.set_tagihan_snap_token(tid, snap_token, order_id)
+    link = f"https://{APP_DOMAIN}/bayar/tagihan/{tid}"
+    send_wa(
+        t["telepon"],
+        f"💳 *Tagihan Internet {label}*\n\n"
+        f"Halo *{t['nama_pelanggan']}*,\n\n"
+        f"Tagihan bulan *{label}* sebesar:\n"
+        f"*Rp {t['amount']:,}*\n\n"
+        f"Bayar sekarang via link berikut:\n"
+        f"{link}\n\n"
+        f"_Pembayaran akan dikonfirmasi otomatis._"
+    )
+    return JSONResponse({"ok": True, "link": link})
+
+
 @app.post("/pppoe/tagihan/reminder", response_class=JSONResponse)
 async def tagihan_reminder(request: Request, bulan: str = Form("")):
     user = require_login(request)
@@ -533,9 +570,72 @@ async def transaksi_page(request: Request):
 
 
 
+# ── Bayar Tagihan PPPoE (Publik) ─────────────────────────────────────────────
+
+@app.get("/bayar/tagihan/{tid}", response_class=HTMLResponse)
+async def bayar_tagihan_page(request: Request, tid: int):
+    t = db.get_tagihan(tid)
+    if not t:
+        return HTMLResponse("<h2>Tagihan tidak ditemukan</h2>", status_code=404)
+    return tpl.TemplateResponse(request, "bayar_tagihan.html", _ctx(
+        request, t=t, mt_client=MT_CLIENT, mt_prod=MT_PROD
+    ))
+
+
+@app.get("/bayar/tagihan/{tid}/sukses", response_class=HTMLResponse)
+async def bayar_tagihan_sukses(request: Request, tid: int):
+    t = db.get_tagihan(tid)
+    if not t:
+        return HTMLResponse("<h2>Tagihan tidak ditemukan</h2>", status_code=404)
+    # Coba konfirmasi via Midtrans jika belum paid
+    if t["status"] != "paid" and t.get("order_id"):
+        if _mt_verify(t["order_id"]):
+            result = db.bayar_tagihan_by_order(t["order_id"])
+            if result:
+                t = result
+    return tpl.TemplateResponse(request, "bayar_tagihan.html", _ctx(
+        request, t=t, mt_client=MT_CLIENT, mt_prod=MT_PROD, sukses=(t["status"] == "paid")
+    ))
+
+
+@app.post("/bayar/tagihan/notif")
+async def bayar_tagihan_notif(request: Request):
+    """Webhook Midtrans untuk tagihan PPPoE."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False})
+
+    order_id    = body.get("order_id", "")
+    status_code = body.get("status_code", "")
+    gross_amount = body.get("gross_amount", "")
+    sig_key     = body.get("signature_key", "")
+
+    if not order_id.startswith("TGH-"):
+        return JSONResponse({"ok": False})  # bukan tagihan PPPoE
+    if sig_key != _mt_sig(order_id, status_code, gross_amount):
+        return JSONResponse({"ok": False, "msg": "Invalid signature"})
+
+    tx_status = body.get("transaction_status", "")
+    if tx_status in ("capture", "settlement"):
+        t = db.bayar_tagihan_by_order(order_id)
+        if t and t.get("telepon"):
+            label = _label_bulan(t["bulan"])
+            send_wa(
+                t["telepon"],
+                f"✅ *Pembayaran Diterima!*\n\n"
+                f"Halo *{t['nama_pelanggan']}*,\n\n"
+                f"Tagihan internet bulan *{label}* sebesar "
+                f"*Rp {t['amount']:,}* telah kami terima.\n\n"
+                f"Terima kasih sudah membayar tepat waktu 🙏"
+            )
+    return JSONResponse({"ok": True})
+
+
 # ── Toko Hotspot Online (Publik) ─────────────────────────────────────────────
 
-def _mt_snap_token(order_id: str, amount: int, nama: str, nomor_hp: str) -> str | None:
+def _mt_snap_token(order_id: str, amount: int, nama: str, nomor_hp: str,
+                   finish_url: str = "") -> str | None:
     """Buat Midtrans Snap token untuk pembayaran."""
     if not MT_SERVER:
         return None
@@ -545,7 +645,7 @@ def _mt_snap_token(order_id: str, amount: int, nama: str, nomor_hp: str) -> str 
         "transaction_details": {"order_id": order_id, "gross_amount": amount},
         "customer_details": {"first_name": nama, "phone": nomor_hp},
         "callbacks": {
-            "finish": f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
+            "finish": finish_url or f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
         }
     }
     try:

@@ -157,6 +157,8 @@ class Storage:
             bulan       TEXT NOT NULL,      -- format: "2026-05"
             amount      INTEGER NOT NULL,
             status      TEXT DEFAULT 'unpaid',  -- unpaid | paid | overdue
+            snap_token  TEXT DEFAULT '',
+            order_id    TEXT DEFAULT '',
             paid_at     INTEGER,
             created_at  INTEGER,
             UNIQUE(pppoe_id, bulan)
@@ -605,6 +607,52 @@ class Storage:
         rows = con.execute(q, args).fetchall()
         con.close()
         return [dict(r) for r in rows]
+
+    def get_tagihan(self, tid: int) -> dict | None:
+        con = self._conn()
+        row = con.execute("""
+            SELECT t.*, p.nama_pelanggan, p.telepon, p.username as pppoe_username,
+                   pk.nama as paket_nama, pk.kecepatan, s.nama as server_nama, u.nama as isp_nama
+            FROM tagihan_pppoe t
+            LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
+            LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id
+            LEFT JOIN mikrotik_servers s ON s.id=p.server_id
+            LEFT JOIN users u ON u.id=t.user_id
+            WHERE t.id=?
+        """, (tid,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def set_tagihan_snap_token(self, tid: int, snap_token: str, order_id: str):
+        con = self._conn()
+        con.execute("UPDATE tagihan_pppoe SET snap_token=?, order_id=? WHERE id=?",
+                    (snap_token, order_id, tid))
+        con.commit()
+        con.close()
+
+    def bayar_tagihan_by_order(self, order_id: str) -> dict | None:
+        """Tandai tagihan paid berdasarkan order_id Midtrans. Return tagihan dict."""
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM tagihan_pppoe WHERE order_id=? AND status!='paid'", (order_id,)
+        ).fetchone()
+        if not row:
+            con.close()
+            return None
+        now = int(time.time())
+        con.execute("UPDATE tagihan_pppoe SET status='paid', paid_at=? WHERE id=?", (now, row["id"]))
+        con.commit()
+        # kembalikan lengkap dengan nama pelanggan
+        full = con.execute("""
+            SELECT t.*, p.nama_pelanggan, p.telepon, pk.nama as paket_nama, u.nama as isp_nama
+            FROM tagihan_pppoe t
+            LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
+            LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id
+            LEFT JOIN users u ON u.id=t.user_id
+            WHERE t.id=?
+        """, (row["id"],)).fetchone()
+        con.close()
+        return dict(full) if full else None
 
     def bayar_tagihan(self, tid: int, user_id: str) -> bool:
         con = self._conn()
