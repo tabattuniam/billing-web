@@ -164,6 +164,16 @@ class Storage:
             UNIQUE(pppoe_id, bulan)
         );
 
+        -- WA Gateway per ISP
+        CREATE TABLE IF NOT EXISTS wa_gateway (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     TEXT NOT NULL UNIQUE,
+            wa_token    TEXT DEFAULT '',
+            nomor       TEXT DEFAULT '',
+            status      TEXT DEFAULT 'disconnected',
+            updated_at  INTEGER
+        );
+
         -- Registrasi tenant ISP dari vpntunel.my.id/daftar
         CREATE TABLE IF NOT EXISTS tenant_registrasi (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -559,6 +569,44 @@ class Storage:
         ditolak = con.execute("SELECT COUNT(*) FROM tenant_registrasi WHERE status='ditolak'").fetchone()[0]
         con.close()
         return {"total": total, "pending": pending, "aktif": aktif, "ditolak": ditolak}
+
+    # ── WA Gateway ────────────────────────────────────────────────────────────
+
+    def get_wa_gateway(self, user_id: str) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM wa_gateway WHERE user_id=?", (user_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def upsert_wa_gateway(self, user_id: str, wa_token: str):
+        con = self._conn()
+        con.execute("""
+            INSERT INTO wa_gateway (user_id, wa_token, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET wa_token=excluded.wa_token, updated_at=excluded.updated_at
+        """, (user_id, wa_token, int(time.time())))
+        con.commit()
+        con.close()
+
+    def update_wa_gateway_status(self, user_id: str, status: str, nomor: str = ""):
+        con = self._conn()
+        con.execute(
+            "UPDATE wa_gateway SET status=?, nomor=?, updated_at=? WHERE user_id=?",
+            (status, nomor, int(time.time()), user_id)
+        )
+        con.commit()
+        con.close()
+
+    def list_wa_gateways_aktif(self) -> list[dict]:
+        """Semua ISP yang WA gateway-nya terhubung (untuk scheduler reminder)."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT g.*, u.nama as isp_nama FROM wa_gateway g "
+            "LEFT JOIN users u ON u.id=g.user_id "
+            "WHERE g.status='connected'"
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
 
     # ── Tagihan PPPoE ─────────────────────────────────────────────────────────
 

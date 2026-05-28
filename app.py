@@ -1,9 +1,12 @@
 """BillingVPN — FastAPI billing web for PPPoE & Hotspot management."""
 from __future__ import annotations
-import time, yaml, requests, random, hashlib, json
+import time, yaml, requests, random, hashlib, json, uuid, sqlite3
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException
+from contextlib import asynccontextmanager
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -23,13 +26,24 @@ PORT        = CFG["app"].get("port", 8094)
 DB_PATH     = CFG["db_path"]
 WA_URL      = CFG.get("wuzapi", {}).get("url", "")
 WA_TOKEN    = CFG.get("wuzapi", {}).get("token", "")
+WA_ADMIN_TOKEN = CFG.get("wuzapi", {}).get("admin_token", "")
+WA_USERS_DB    = CFG.get("wuzapi", {}).get("users_db", "")
 MT_SERVER   = CFG.get("midtrans", {}).get("server_key", "")
 MT_CLIENT   = CFG.get("midtrans", {}).get("client_key", "")
 MT_PROD     = CFG.get("midtrans", {}).get("is_production", False)
 MT_BASE     = "https://app.midtrans.com" if MT_PROD else "https://app.sandbox.midtrans.com"
 
 db  = Storage(DB_PATH)
-app = FastAPI()
+
+scheduler = AsyncIOScheduler(timezone="Asia/Jakarta")
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    scheduler.start()
+    yield
+    scheduler.shutdown()
+
+app = FastAPI(lifespan=lifespan)
 tpl = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
@@ -93,18 +107,155 @@ def _normalize_wa(nomor: str) -> str:
         n = "62" + n[1:]
     return n
 
-def send_wa(nomor: str, pesan: str):
+def send_wa(nomor: str, pesan: str, token: str = ""):
+    """Kirim WA. Jika token diisi, gunakan token ISP sendiri; fallback ke sistem."""
     if not WA_URL or not nomor:
+        return
+    tok = token or WA_TOKEN
+    if not tok:
         return
     try:
         requests.post(
             f"{WA_URL}/chat/send/text",
             json={"phone": _normalize_wa(nomor), "body": pesan},
-            headers={"Token": WA_TOKEN},
+            headers={"Token": tok},
             timeout=5
         )
     except Exception:
         pass
+
+
+def _isp_wa_token(user_id: str) -> str:
+    """Ambil WA token ISP. Fallback ke sistem jika belum setup."""
+    gw = db.get_wa_gateway(user_id)
+    if gw and gw.get("wa_token") and gw.get("status") == "connected":
+        return gw["wa_token"]
+    return WA_TOKEN
+
+
+def _wa_create_user(user_id: str, nama: str) -> str:
+    """Daftarkan user baru di WuzAPI DB. Return token."""
+    token = f"billing_{user_id.lower()}"
+    if not WA_USERS_DB or not Path(WA_USERS_DB).exists():
+        return token
+    uid = uuid.uuid4().hex
+    try:
+        con = sqlite3.connect(WA_USERS_DB)
+        con.execute(
+            "INSERT OR IGNORE INTO users (id,name,token,webhook,events,connected) VALUES (?,?,?,?,?,?)",
+            (uid, nama[:50], token, "", "All", 0)
+        )
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+    return token
+
+
+def _wa_session_status(token: str) -> dict:
+    try:
+        r = requests.get(f"{WA_URL}/session/status", headers={"Token": token}, timeout=5)
+        return r.json().get("data", {})
+    except Exception:
+        return {}
+
+
+def _wa_get_qr(token: str) -> str:
+    """Ambil QR code base64. Trigger connect dulu jika belum."""
+    try:
+        r = requests.post(f"{WA_URL}/session/connect",
+                          json={}, headers={"Token": token}, timeout=10)
+        data = r.json()
+        if data.get("success"):
+            status = _wa_session_status(token)
+            if status.get("connected"):
+                return ""  # sudah connect
+        # ambil QR
+        r2 = requests.get(f"{WA_URL}/session/qr", headers={"Token": token}, timeout=5)
+        return r2.json().get("data", {}).get("QRCode", "")
+    except Exception:
+        return ""
+
+
+def _wa_disconnect(token: str):
+    try:
+        requests.post(f"{WA_URL}/session/disconnect", json={},
+                      headers={"Token": token}, timeout=5)
+    except Exception:
+        pass
+
+# ── Auto Reminder Scheduler ──────────────────────────────────────────────────
+
+def _run_auto_reminder():
+    """Jalan tiap hari jam 08:00 WIB — kirim WA reminder + link bayar otomatis."""
+    from datetime import date, timedelta
+    today = date.today()
+    bulan = today.strftime("%Y-%m")
+    hari  = today.day
+
+    # Reminder H-3, H-1, H+1 (setelah jatuh tempo)
+    tgl_targets = {today.day, (today + timedelta(days=2)).day,
+                   (today + timedelta(days=1)).day, (today - timedelta(days=1)).day}
+
+    # Ambil semua ISP yang punya pelanggan PPPoE aktif
+    con = db._conn()
+    isps = con.execute(
+        "SELECT DISTINCT user_id FROM pppoe_users WHERE status='aktif'"
+    ).fetchall()
+    con.close()
+
+    for isp_row in isps:
+        user_id = isp_row[0]
+        tok = _isp_wa_token(user_id)
+        isp = db.get_user(user_id)
+        if not isp:
+            continue
+
+        # Generate tagihan bulan ini jika belum ada
+        db.generate_tagihan(user_id, bulan)
+
+        # Ambil tagihan unpaid/overdue yang jatuh temponya hari ini atau target
+        tagihan_list = db.list_tagihan(user_id, bulan)
+        for t in tagihan_list:
+            if t["status"] == "paid":
+                continue
+            if not t.get("telepon"):
+                continue
+            tgl = t.get("tgl_bayar") or 1
+            if tgl not in tgl_targets:
+                continue
+
+            label = _label_bulan(bulan)
+            link  = f"https://{APP_DOMAIN}/bayar/tagihan/{t['id']}"
+
+            # Tentukan pesan berdasarkan posisi hari
+            if tgl == (today + timedelta(days=2)).day:
+                emoji = "🔔"
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *3 hari lagi* (tgl {tgl})."
+            elif tgl == (today + timedelta(days=1)).day:
+                emoji = "⚠️"
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *besok* (tgl {tgl})."
+            elif tgl == today.day:
+                emoji = "🚨"
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *hari ini* (tgl {tgl})."
+            else:
+                emoji = "❗"
+                keterangan = f"Tagihan bulan *{label}* sudah *melewati jatuh tempo*."
+
+            pesan = (
+                f"{emoji} *Reminder Tagihan Internet*\n\n"
+                f"Halo *{t['nama_pelanggan']}*,\n\n"
+                f"{keterangan}\n\n"
+                f"Jumlah: *Rp {t['amount']:,}*\n\n"
+                f"Bayar sekarang:\n{link}\n\n"
+                f"_Abaikan jika sudah membayar._"
+            ).replace(",", ".")
+            send_wa(t["telepon"], pesan, token=tok)
+
+
+scheduler.add_job(_run_auto_reminder, CronTrigger(hour=8, minute=0, timezone="Asia/Jakarta"),
+                  id="auto_reminder", replace_existing=True)
+
 
 # ── MikroTik helper ───────────────────────────────────────────────────────────
 
@@ -326,6 +477,69 @@ async def pppoe_user_status(request: Request, pid: int, status: str = Form(...))
         db.update_pppoe_status(pid, status)
     return RedirectResponse("/pppoe/users", status_code=302)
 
+# ── WA Gateway ───────────────────────────────────────────────────────────────
+
+@app.get("/wa-gateway", response_class=HTMLResponse)
+async def wa_gateway_page(request: Request):
+    user = require_login(request)
+    gw = db.get_wa_gateway(user["id"])
+    status_data = {}
+    if gw and gw.get("wa_token"):
+        status_data = _wa_session_status(gw["wa_token"])
+        connected = status_data.get("connected", False)
+        nomor = status_data.get("jid", "").split(":")[0] if connected else ""
+        db.update_wa_gateway_status(user["id"],
+                                    "connected" if connected else "disconnected", nomor)
+        gw = db.get_wa_gateway(user["id"])
+    return tpl.TemplateResponse(request, "wa_gateway.html", _ctx(
+        request, user=user, gw=gw, status_data=status_data, active="wa_gateway"
+    ))
+
+
+@app.post("/wa-gateway/setup", response_class=JSONResponse)
+async def wa_gateway_setup(request: Request):
+    user = require_login(request)
+    gw = db.get_wa_gateway(user["id"])
+    if gw and gw.get("wa_token"):
+        token = gw["wa_token"]
+    else:
+        token = _wa_create_user(user["id"], user["nama"])
+        db.upsert_wa_gateway(user["id"], token)
+    # Trigger connect + ambil QR
+    qr = _wa_get_qr(token)
+    status = _wa_session_status(token)
+    if status.get("connected"):
+        nomor = status.get("jid", "").split(":")[0]
+        db.update_wa_gateway_status(user["id"], "connected", nomor)
+        return JSONResponse({"ok": True, "connected": True, "nomor": nomor})
+    return JSONResponse({"ok": True, "connected": False, "qr": qr})
+
+
+@app.get("/wa-gateway/status", response_class=JSONResponse)
+async def wa_gateway_status(request: Request):
+    user = require_login(request)
+    gw = db.get_wa_gateway(user["id"])
+    if not gw or not gw.get("wa_token"):
+        return JSONResponse({"connected": False})
+    s = _wa_session_status(gw["wa_token"])
+    connected = s.get("connected", False)
+    nomor = s.get("jid", "").split(":")[0] if connected else ""
+    if connected:
+        db.update_wa_gateway_status(user["id"], "connected", nomor)
+    return JSONResponse({"connected": connected, "nomor": nomor,
+                         "name": s.get("name", "")})
+
+
+@app.post("/wa-gateway/disconnect", response_class=JSONResponse)
+async def wa_gateway_disconnect(request: Request):
+    user = require_login(request)
+    gw = db.get_wa_gateway(user["id"])
+    if gw and gw.get("wa_token"):
+        _wa_disconnect(gw["wa_token"])
+        db.update_wa_gateway_status(user["id"], "disconnected", "")
+    return JSONResponse({"ok": True})
+
+
 # ── Tagihan PPPoE ────────────────────────────────────────────────────────────
 
 def _bulan_sekarang() -> str:
@@ -414,7 +628,8 @@ async def tagihan_kirim_link(request: Request, tid: int):
         f"*Rp {t['amount']:,}*\n\n"
         f"Bayar sekarang via link berikut:\n"
         f"{link}\n\n"
-        f"_Pembayaran akan dikonfirmasi otomatis._"
+        f"_Pembayaran akan dikonfirmasi otomatis._",
+        token=_isp_wa_token(user["id"])
     )
     return JSONResponse({"ok": True, "link": link})
 
@@ -439,7 +654,7 @@ async def tagihan_reminder(request: Request, bulan: str = Form("")):
             f"Mohon segera lakukan pembayaran.\n\n"
             f"Terima kasih 🙏"
         ).replace(",", ".")
-        send_wa(t["telepon"], pesan)
+        send_wa(t["telepon"], pesan, token=_isp_wa_token(user["id"]))
         terkirim += 1
     return JSONResponse({"ok": True, "terkirim": terkirim})
 

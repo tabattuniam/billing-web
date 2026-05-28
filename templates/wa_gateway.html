@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}WA Gateway — {{ app_name }}{% endblock %}
+{% block topbar_title %}WA Gateway{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">WA Gateway</h1>
+    <p class="page-sub">Hubungkan nomor WhatsApp pribadi untuk kirim notifikasi & reminder ke pelanggan</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- ── Status Card ── -->
+  <div class="card p-6">
+    <h3 class="font-bold text-gray-900 mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      </svg>
+      Status Koneksi
+    </h3>
+
+    {% if gw and gw.status == 'connected' %}
+    <div class="flex items-center gap-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl mb-4">
+      <div class="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-emerald-800">Terhubung</p>
+        <p class="text-sm text-emerald-600">+{{ gw.nomor }}</p>
+      </div>
+    </div>
+
+    <div class="space-y-2 text-sm mb-5">
+      <div class="flex justify-between py-2 border-b border-gray-50">
+        <span class="text-gray-500">Nomor WA</span>
+        <span class="font-semibold text-gray-900">+{{ gw.nomor }}</span>
+      </div>
+      <div class="flex justify-between py-2 border-b border-gray-50">
+        <span class="text-gray-500">Token</span>
+        <code class="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700">{{ gw.wa_token }}</code>
+      </div>
+      <div class="flex justify-between py-2">
+        <span class="text-gray-500">Auto reminder</span>
+        <span class="badge-green text-xs px-2 py-1 rounded-full">Aktif jam 08:00 WIB</span>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="cekStatus()" class="btn-ghost flex-1 py-2 text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Cek Status
+      </button>
+      <button onclick="disconnect()" class="btn-danger flex-1 py-2 text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        Putuskan
+      </button>
+    </div>
+
+    {% else %}
+    <div class="flex items-center gap-4 p-4 bg-gray-50 border border-gray-200 rounded-xl mb-5">
+      <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M18.364 5.636a9 9 0 010 12.728M15.536 8.464a5 5 0 010 7.072M6.343 6.343a9 9 0 000 12.728M9.172 9.172a5 5 0 000 7.072"/>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-gray-700">Belum Terhubung</p>
+        <p class="text-sm text-gray-500">Klik "Hubungkan WA" dan scan QR code</p>
+      </div>
+    </div>
+
+    <button onclick="hubungkan()" id="btn-hubungkan" class="btn-primary w-full py-3 text-sm font-bold">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 4v16m8-8H4"/>
+      </svg>
+      Hubungkan WA
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- ── QR / Info Card ── -->
+  <div class="card p-6">
+    {% if gw and gw.status == 'connected' %}
+    <h3 class="font-bold text-gray-900 mb-4">Fitur Aktif</h3>
+    <div class="space-y-3">
+      <div class="flex items-start gap-3 p-3 bg-blue-50 rounded-xl">
+        <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+        <div>
+          <p class="font-semibold text-blue-900 text-sm">Auto Reminder</p>
+          <p class="text-xs text-blue-600 mt-0.5">H-3, H-1, hari-H, H+1 jatuh tempo — otomatis jam 08:00 WIB</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 p-3 bg-emerald-50 rounded-xl">
+        <svg class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+        <div>
+          <p class="font-semibold text-emerald-900 text-sm">Kirim Link Bayar</p>
+          <p class="text-xs text-emerald-600 mt-0.5">Link Midtrans QRIS dikirim dari nomor WA kamu sendiri</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 p-3 bg-purple-50 rounded-xl">
+        <svg class="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div>
+          <p class="font-semibold text-purple-900 text-sm">Konfirmasi Pembayaran</p>
+          <p class="text-xs text-purple-600 mt-0.5">WA otomatis terkirim saat tagihan lunas via Midtrans</p>
+        </div>
+      </div>
+    </div>
+
+    {% else %}
+    <h3 class="font-bold text-gray-900 mb-1">Scan QR Code</h3>
+    <p class="text-sm text-gray-500 mb-4">QR akan muncul setelah klik "Hubungkan WA"</p>
+
+    <div id="qr-container" class="flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl min-h-64">
+      <div id="qr-placeholder" class="text-center">
+        <svg class="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+        </svg>
+        <p class="text-sm text-gray-400">QR Code akan tampil di sini</p>
+      </div>
+      <img id="qr-img" class="hidden rounded-xl max-w-48" src="" alt="QR Code WA">
+    </div>
+
+    <div id="qr-hint" class="hidden mt-3 bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
+      <strong>Cara scan:</strong> Buka WhatsApp di HP → Titik tiga → Perangkat tertaut → Tautkan perangkat → Scan QR ini
+    </div>
+
+    <div id="polling-status" class="hidden mt-3 text-center text-xs text-gray-400">
+      <svg class="w-4 h-4 animate-spin inline mr-1" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      Menunggu scan QR...
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Toast -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _pollInterval = null;
+
+async function hubungkan() {
+  const btn = document.getElementById('btn-hubungkan');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Memproses...';
+
+  const res = await fetch('/wa-gateway/setup', { method: 'POST' });
+  const data = await res.json();
+
+  if (data.connected) {
+    showToast('WA berhasil terhubung! Nomor: +' + data.nomor, 'success');
+    setTimeout(() => window.location.reload(), 1500);
+    return;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = 'Hubungkan WA';
+
+  if (data.qr) {
+    document.getElementById('qr-img').src = data.qr;
+    document.getElementById('qr-img').classList.remove('hidden');
+    document.getElementById('qr-placeholder').classList.add('hidden');
+    document.getElementById('qr-hint').classList.remove('hidden');
+    document.getElementById('polling-status').classList.remove('hidden');
+    startPolling();
+  } else {
+    showToast('Gagal mendapatkan QR code', 'error');
+  }
+}
+
+function startPolling() {
+  if (_pollInterval) clearInterval(_pollInterval);
+  _pollInterval = setInterval(async () => {
+    const res = await fetch('/wa-gateway/status');
+    const data = await res.json();
+    if (data.connected) {
+      clearInterval(_pollInterval);
+      showToast('WA berhasil terhubung! Nomor: +' + data.nomor, 'success');
+      setTimeout(() => window.location.reload(), 1500);
+    }
+  }, 3000);
+  // Stop polling after 3 menit
+  setTimeout(() => { if (_pollInterval) clearInterval(_pollInterval); }, 180000);
+}
+
+async function cekStatus() {
+  const res = await fetch('/wa-gateway/status');
+  const data = await res.json();
+  if (data.connected) {
+    showToast('Terhubung — +' + data.nomor, 'success');
+  } else {
+    showToast('Tidak terhubung', 'warning');
+    setTimeout(() => window.location.reload(), 1500);
+  }
+}
+
+async function disconnect() {
+  if (!confirm('Putuskan koneksi WA Gateway?')) return;
+  await fetch('/wa-gateway/disconnect', { method: 'POST' });
+  showToast('WA Gateway diputus', 'info');
+  setTimeout(() => window.location.reload(), 1200);
+}
+</script>
+{% endblock %}
