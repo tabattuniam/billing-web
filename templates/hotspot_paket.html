@@ -9,11 +9,17 @@
     <h1 class="page-title">Paket Hotspot</h1>
     <p class="page-sub">{{ pakets|length }} paket aktif</p>
   </div>
-  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
-    class="btn-primary px-4 py-2.5">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-    Tambah Paket
-  </button>
+  <div class="flex gap-2">
+    <button onclick="openImport()" class="btn-secondary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      Import dari MikroTik
+    </button>
+    <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+      class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah Paket
+    </button>
+  </div>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -33,14 +39,32 @@
     </div>
     {% if p.kecepatan %}
     <div class="flex items-center justify-between text-sm">
-      <span class="text-slate-400">Kecepatan</span>
-      <span class="font-semibold text-slate-700">{{ p.kecepatan }}</span>
+      <span class="text-slate-400">Kecepatan / Profile</span>
+      <span class="font-semibold text-slate-700 font-mono text-xs">{{ p.kecepatan }}</span>
     </div>
     {% endif %}
   </div>
   <div class="flex items-center justify-between pt-3 border-t border-slate-100">
     <span class="text-xs text-slate-400">Harga voucher</span>
     <span class="font-bold text-orange-600 text-xl">{{ p.harga | rp }}</span>
+  </div>
+  <div class="flex gap-2 mt-3 pt-3 border-t border-slate-50">
+    <button onclick="openEdit(this)"
+      data-id="{{ p.id }}"
+      data-nama="{{ p.nama | e }}"
+      data-durasi="{{ p.durasi | e }}"
+      data-kecepatan="{{ p.kecepatan | e }}"
+      data-harga="{{ p.harga }}"
+      class="flex-1 btn-secondary px-3 py-2 text-xs justify-center">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      Edit
+    </button>
+    <form method="post" action="/hotspot/paket/hapus/{{ p.id }}"
+      onsubmit="return confirm('Hapus paket {{ p.nama | e }}?')">
+      <button class="btn-danger px-3 py-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+    </form>
   </div>
 </div>
 {% else %}
@@ -67,16 +91,36 @@
       <div class="space-y-4">
         <div>
           <label class="form-label">Nama Paket</label>
-          <input name="nama" required placeholder="Contoh: 1 Hari 5Mbps" class="form-input">
+          <input name="nama" id="nama-tambah" required placeholder="Contoh: 1 Hari 5Mbps" class="form-input">
         </div>
+
+        <!-- Profile dari router -->
+        <div>
+          <label class="form-label">Profile MikroTik</label>
+          <div class="flex gap-2 mb-2">
+            <select id="srv-tambah" class="form-select flex-1 text-xs">
+              <option value="">Pilih server</option>
+              {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+            </select>
+            <button type="button" onclick="muatProfile('tambah')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Muat
+            </button>
+          </div>
+          <select name="kecepatan" id="profile-tambah" class="form-select">
+            <option value="">— muat dari router —</option>
+          </select>
+          <p id="hint-tambah" class="text-xs text-slate-400 mt-1">Klik <strong>Muat</strong> untuk ambil profil dari router. Durasi & kecepatan otomatis terisi.</p>
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="form-label">Durasi</label>
-            <input name="durasi" required placeholder="1d / 1h30m" class="form-input">
+            <input name="durasi" id="durasi-tambah" required placeholder="1d / 8h / 1h30m" class="form-input">
           </div>
           <div>
-            <label class="form-label">Kecepatan</label>
-            <input name="kecepatan" placeholder="5M/5M" class="form-input">
+            <label class="form-label">Rate Limit</label>
+            <input name="rate_limit" id="rate-tambah" placeholder="5M/5M" class="form-input">
           </div>
         </div>
         <div>
@@ -95,4 +139,255 @@
     </form>
   </div>
 </div>
+
+<!-- Modal Edit -->
+<div id="modal-edit" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Paket Hotspot</h3>
+      <button onclick="document.getElementById('modal-edit').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit" method="post">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Nama Paket</label>
+          <input name="nama" id="edit-nama" required class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Profile MikroTik</label>
+          <div class="flex gap-2 mb-2">
+            <select id="srv-edit" class="form-select flex-1 text-xs">
+              <option value="">Pilih server (opsional)</option>
+              {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+            </select>
+            <button type="button" onclick="muatProfile('edit')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Muat
+            </button>
+          </div>
+          <select name="kecepatan" id="profile-edit" class="form-select">
+            <option value="">— muat dari router —</option>
+          </select>
+          <input id="edit-kecepatan-current" class="form-input mt-2 text-xs text-slate-500" disabled>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Durasi</label>
+            <input name="durasi" id="edit-durasi" required class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Rate Limit</label>
+            <input name="rate_limit" id="edit-rate" class="form-input">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Harga (Rp)</label>
+          <input name="harga" id="edit-harga" type="number" required class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-edit').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Simpan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Modal Import -->
+<div id="modal-import" class="hidden modal-overlay" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h3 class="font-bold text-slate-900 text-lg">Import Paket dari MikroTik</h3>
+      <button onclick="document.getElementById('modal-import').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Step 1: Pilih Server -->
+    <div class="px-6 py-4 border-b border-gray-50">
+      <div class="flex gap-2">
+        <select id="imp-server" class="form-select flex-1">
+          <option value="">Pilih server MikroTik</option>
+          {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+        </select>
+        <button onclick="loadImportProfiles()" id="btn-load-imp"
+          class="btn-secondary px-4 py-2 text-sm whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Muat Profile
+        </button>
+      </div>
+      <p id="imp-status" class="text-xs text-gray-400 mt-2">Pilih server lalu klik Muat Profile</p>
+    </div>
+
+    <!-- Profile List -->
+    <div class="flex-1 overflow-y-auto px-6 py-3" id="imp-list-wrap">
+      <p class="text-sm text-gray-400 text-center py-8">Belum ada profil dimuat</p>
+    </div>
+
+    <!-- Harga default + Aksi -->
+    <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex items-center gap-3">
+      <div class="flex-1">
+        <label class="text-xs text-gray-500 font-medium">Harga default semua (Rp)</label>
+        <input id="imp-harga-default" type="number" placeholder="0" min="0"
+          class="form-input mt-1 text-sm" oninput="applyDefaultHarga(this.value)">
+      </div>
+      <button onclick="doImport()" id="btn-do-import"
+        class="btn-primary px-5 py-2.5 text-sm self-end">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Import
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function muatProfile(mode) {
+  const sid = document.getElementById('srv-' + mode).value;
+  if (!sid) { alert('Pilih server terlebih dahulu'); return; }
+  const hint = document.getElementById('hint-' + mode);
+  try {
+    const res = await fetch('/hotspot/paket/profiles?server_id=' + sid);
+    const data = await res.json();
+    if (data.error) {
+      if (hint) hint.textContent = 'Gagal: ' + data.error;
+      return;
+    }
+    const sel = document.getElementById('profile-' + mode);
+    sel.innerHTML = '<option value="">Pilih profile</option>' +
+      data.profiles.map(p => `<option value="${p.name}" data-timeout="${p.session_timeout}" data-rate="${p.rate_limit}">${p.name}${p.session_timeout ? ' — ' + p.session_timeout : ''}${p.rate_limit ? ' | ' + p.rate_limit : ''}</option>`).join('');
+    sel.onchange = () => {
+      const opt = sel.options[sel.selectedIndex];
+      const timeout = opt.dataset.timeout || '';
+      const rate    = opt.dataset.rate || '';
+      if (mode === 'tambah') {
+        if (!document.getElementById('nama-tambah').value) document.getElementById('nama-tambah').value = sel.value;
+        if (timeout) document.getElementById('durasi-tambah').value = timeout;
+        if (rate)    document.getElementById('rate-tambah').value = rate;
+      } else {
+        if (timeout) document.getElementById('edit-durasi').value = timeout;
+        if (rate)    document.getElementById('edit-rate').value = rate;
+      }
+    };
+    if (hint) hint.textContent = data.profiles.length + ' profil ditemukan';
+  } catch(e) {
+    if (hint) hint.textContent = 'Gagal terhubung ke router';
+  }
+}
+
+function openImport() {
+  document.getElementById('modal-import').classList.remove('hidden');
+}
+
+async function loadImportProfiles() {
+  const sid = document.getElementById('imp-server').value;
+  if (!sid) { alert('Pilih server terlebih dahulu'); return; }
+  const btn = document.getElementById('btn-load-imp');
+  const status = document.getElementById('imp-status');
+  btn.disabled = true;
+  status.textContent = 'Memuat profil dari router...';
+  try {
+    const res = await fetch('/hotspot/paket/profiles?server_id=' + sid);
+    const data = await res.json();
+    if (data.error) { status.textContent = 'Gagal: ' + data.error; btn.disabled=false; return; }
+    renderImportList(data.profiles);
+    status.textContent = data.profiles.length + ' profil ditemukan — centang yang ingin diimport';
+  } catch(e) {
+    status.textContent = 'Gagal terhubung ke router';
+  }
+  btn.disabled = false;
+}
+
+function renderImportList(profiles) {
+  const wrap = document.getElementById('imp-list-wrap');
+  if (!profiles.length) { wrap.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Tidak ada profil di router ini</p>'; return; }
+  wrap.innerHTML = `
+    <div class="flex items-center gap-2 mb-3">
+      <input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)" class="w-4 h-4 rounded">
+      <label for="chk-all" class="text-xs font-semibold text-gray-600 cursor-pointer">Pilih semua</label>
+    </div>
+    <div class="space-y-2">
+    ${profiles.map((p, i) => `
+      <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
+        <input type="checkbox" id="imp-chk-${i}" class="imp-chk w-4 h-4 rounded flex-shrink-0" checked>
+        <div class="flex-1 min-w-0">
+          <input type="text" id="imp-nama-${i}" value="${p.name}"
+            class="w-full text-sm font-semibold text-gray-800 bg-transparent border-b border-gray-200 focus:outline-none focus:border-blue-400 pb-0.5">
+          <p class="text-xs text-gray-400 mt-0.5">
+            ${p.session_timeout ? '⏱ ' + p.session_timeout : ''}
+            ${p.rate_limit ? ' · ⚡ ' + p.rate_limit : ''}
+          </p>
+        </div>
+        <input type="number" id="imp-harga-${i}" placeholder="Harga" min="0"
+          class="w-24 text-sm text-right border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 flex-shrink-0"
+          data-durasi="${p.session_timeout || '1d'}"
+          data-kecepatan="${p.rate_limit || ''}">
+      </div>
+    `).join('')}
+    </div>`;
+  _profileCount = profiles.length;
+}
+
+let _profileCount = 0;
+function toggleAll(checked) {
+  document.querySelectorAll('.imp-chk').forEach(c => c.checked = checked);
+}
+function applyDefaultHarga(val) {
+  for (let i = 0; i < _profileCount; i++) {
+    const el = document.getElementById('imp-harga-' + i);
+    if (el) el.value = val;
+  }
+}
+
+async function doImport() {
+  const pakets = [];
+  for (let i = 0; i < _profileCount; i++) {
+    if (!document.getElementById('imp-chk-' + i)?.checked) continue;
+    const hargaEl = document.getElementById('imp-harga-' + i);
+    pakets.push({
+      nama:      document.getElementById('imp-nama-' + i)?.value.trim() || '',
+      durasi:    hargaEl?.dataset.durasi || '1d',
+      kecepatan: hargaEl?.dataset.kecepatan || '',
+      harga:     parseInt(hargaEl?.value || 0),
+    });
+  }
+  if (!pakets.length) { showToast('Tidak ada paket yang dipilih', 'warning'); return; }
+  const btn = document.getElementById('btn-do-import');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengimport...';
+  const res = await fetch('/hotspot/paket/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pakets })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Import';
+  if (data.ok) {
+    showToast(data.dibuat + ' paket berhasil diimport' + (data.dibuat < pakets.length ? ` (${pakets.length - data.dibuat} sudah ada)` : ''), 'success');
+    document.getElementById('modal-import').classList.add('hidden');
+    setTimeout(() => window.location.reload(), 1200);
+  } else {
+    showToast('Gagal import', 'error');
+  }
+}
+
+function openEdit(btn) {
+  const d = btn.dataset;
+  document.getElementById('form-edit').action = '/hotspot/paket/edit/' + d.id;
+  document.getElementById('edit-nama').value = d.nama;
+  document.getElementById('edit-durasi').value = d.durasi;
+  document.getElementById('edit-rate').value = '';
+  document.getElementById('edit-harga').value = d.harga;
+  document.getElementById('edit-kecepatan-current').value = 'Profile saat ini: ' + (d.kecepatan || '—');
+  document.getElementById('profile-edit').innerHTML = `<option value="${d.kecepatan}" selected>${d.kecepatan || '— muat dari router —'}</option>`;
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+</script>
 {% endblock %}

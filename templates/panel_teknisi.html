@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Teknisi — {{ isp.nama }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style type="text/tailwindcss">
+  @layer base { * { font-family: 'Inter', sans-serif; } }
+  @layer components {
+    .card { @apply bg-white rounded-2xl border border-gray-100 shadow-sm; }
+    .btn-primary { @apply inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-sm transition-all px-4 py-2.5 cursor-pointer; }
+    .btn-ghost  { @apply inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-all px-4 py-2.5 cursor-pointer; }
+    .btn-red    { @apply inline-flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl text-sm transition-all px-3 py-1.5 cursor-pointer; }
+    .btn-green  { @apply inline-flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-xl text-sm transition-all px-3 py-1.5 cursor-pointer; }
+    .form-input { @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all; }
+    .form-select { @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white transition-all; }
+    .badge-green { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100; }
+    .badge-red   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-100; }
+    .tab-btn    { @apply px-4 py-2 text-sm font-semibold rounded-xl transition-all cursor-pointer; }
+    .tab-active { @apply bg-white text-teal-700 shadow-sm; }
+    .tab-idle   { @apply text-gray-500 hover:text-gray-700; }
+  }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
+  <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-gray-900 text-sm leading-tight">{{ user.nama }}</p>
+        <p class="text-xs text-gray-400">Teknisi · {{ isp.nama }}</p>
+      </div>
+    </div>
+    <a href="/teknisi/{{ slug }}/logout"
+      class="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium flex items-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      Keluar
+    </a>
+  </div>
+</header>
+
+<div class="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+  <!-- Notif -->
+  {% if ok_msg == 'pppoe_ok' %}
+  <div class="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-sm text-emerald-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Pelanggan berhasil didaftarkan dan sudah dipush ke MikroTik!
+  </div>
+  {% elif ok_msg == 'pppoe_db' %}
+  <div class="px-4 py-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2 text-sm text-amber-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    Pelanggan tersimpan di database, tapi gagal push ke MikroTik. Cek koneksi router.
+  </div>
+  {% elif ok_msg == 'edit_ok' %}
+  <div class="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-sm text-emerald-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Data pelanggan berhasil diperbarui.
+  </div>
+  {% elif ok_msg == 'hapus_ok' %}
+  <div class="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-sm text-emerald-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Pelanggan berhasil dihapus dari database dan MikroTik.
+  </div>
+  {% endif %}
+
+  {% if err_msg %}
+  <div class="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm text-red-700">{{ err_msg }}</div>
+  {% endif %}
+
+  <!-- Filter Server -->
+  {% if servers|length > 1 %}
+  <div class="flex gap-2 overflow-x-auto pb-1">
+    {% for s in servers %}
+    <a href="/teknisi/{{ slug }}/panel?server_id={{ s.id }}"
+      class="flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors
+        {% if server_id == s.id %}bg-teal-600 text-white{% else %}bg-white border border-gray-200 text-gray-600 hover:border-teal-300{% endif %}">
+      {{ s.nama }}
+    </a>
+    {% endfor %}
+  </div>
+  {% elif servers %}
+  <input type="hidden" id="server_id_val" value="{{ servers[0].id }}">
+  {% endif %}
+
+  <!-- Tab -->
+  <div class="bg-gray-100 rounded-2xl p-1 flex gap-1">
+    <button class="tab-btn tab-active flex-1" id="tab-btn-pelanggan" onclick="showTab('pelanggan')">
+      Daftar Pelanggan
+    </button>
+    <button class="tab-btn tab-idle flex-1" id="tab-btn-tambah" onclick="showTab('tambah')">
+      + Daftar Baru
+    </button>
+  </div>
+
+  <!-- Tab: Daftar Pelanggan -->
+  <div id="tab-pelanggan">
+    <!-- Search -->
+    <form method="get" action="/teknisi/{{ slug }}/panel" class="mb-3 flex gap-2">
+      <input type="hidden" name="server_id" value="{{ server_id }}">
+      <input type="text" name="q" value="{{ search }}" placeholder="Cari nama / username / telepon..."
+        class="form-input flex-1 text-sm py-2.5">
+      <button type="submit" class="btn-primary px-4 py-2.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+      </button>
+    </form>
+
+    {% if pelanggan %}
+    <div class="space-y-2">
+      {% for p in pelanggan %}
+      <div class="card p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="font-semibold text-gray-900 text-sm">{{ p.nama_pelanggan }}</p>
+              {% if p.status == 'aktif' %}
+              <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
+              {% else %}
+              <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-gray-500 mt-0.5 font-mono">{{ p.username }}</p>
+            <div class="flex gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+              {% if p.paket_nama %}<span>📦 {{ p.paket_nama }}</span>{% endif %}
+              {% if p.telepon %}<span>📱 {{ p.telepon }}</span>{% endif %}
+              {% if p.server_nama %}<span>🖥 {{ p.server_nama }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5 flex-shrink-0">
+            {% if p.status == 'aktif' %}
+            <form method="post" action="/teknisi/{{ slug }}/panel/toggle/{{ p.id }}">
+              <input type="hidden" name="aksi" value="disable">
+              <button type="submit" class="btn-red text-xs py-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>
+                </svg>
+                Suspend
+              </button>
+            </form>
+            {% else %}
+            <form method="post" action="/teknisi/{{ slug }}/panel/toggle/{{ p.id }}">
+              <input type="hidden" name="aksi" value="enable">
+              <button type="submit" class="btn-green text-xs py-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Aktifkan
+              </button>
+            </form>
+            {% endif %}
+            <button type="button"
+              onclick="openEdit({{ p.id }}, '{{ p.nama_pelanggan|replace("'","\\'")|e }}', '{{ p.telepon or '' }}', '{{ p.alamat or '' }}', {{ p.tgl_bayar or 1 }})"
+              class="inline-flex items-center justify-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-semibold rounded-xl text-xs transition-all px-3 py-1.5 cursor-pointer">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              Edit
+            </button>
+            <button type="button"
+              onclick="konfirmasiHapus({{ p.id }}, '{{ p.nama_pelanggan|replace("'","\\'")|e }}')"
+              class="inline-flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl text-xs transition-all px-3 py-1.5 cursor-pointer">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Hapus
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-10 text-center text-gray-400">
+      <svg class="w-10 h-10 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/>
+      </svg>
+      <p class="text-sm">
+        {% if search %}Tidak ada pelanggan dengan kata kunci "{{ search }}"{% else %}Belum ada pelanggan{% endif %}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Tab: Daftar Baru -->
+  <div id="tab-tambah" class="hidden">
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-800 mb-4">Pendaftaran Pelanggan PPPoE</h3>
+      <form method="post" action="/teknisi/{{ slug }}/panel/tambah" class="space-y-4">
+        <input type="hidden" name="server_id" value="{{ server_id or (servers[0].id if servers else '') }}">
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Pelanggan</label>
+          <input type="text" name="nama_pelanggan" class="form-input" placeholder="Nama lengkap" required>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Username PPPoE</label>
+            <input type="text" name="username" class="form-input" placeholder="username" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Password PPPoE</label>
+            <input type="text" name="password" class="form-input" placeholder="password" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Paket</label>
+          <select name="paket_id" class="form-select">
+            <option value="0">-- Pilih Paket --</option>
+            {% for pk in pakets %}
+            <option value="{{ pk.id }}">{{ pk.nama }} — {{ pk.kecepatan }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nomor HP / WhatsApp</label>
+          <input type="tel" name="telepon" class="form-input" placeholder="08xxxxxxxxxx">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Alamat</label>
+          <input type="text" name="alamat" class="form-input" placeholder="Alamat pemasangan">
+        </div>
+
+        {% if not servers %}
+        <div class="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+          Tidak ada server aktif. Data tersimpan ke database tapi tidak bisa push ke MikroTik.
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn-primary w-full py-3">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 4v16m8-8H4"/>
+          </svg>
+          Daftarkan & Push ke MikroTik
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Edit Pelanggan -->
+<div id="modal-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('modal-edit')"></div>
+  <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900">Edit Pelanggan</h3>
+      <button onclick="closeModal('modal-edit')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <form id="form-edit" method="post" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Pelanggan</label>
+        <input type="text" name="nama_pelanggan" id="edit-nama" class="form-input" required>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nomor HP / WhatsApp</label>
+        <input type="tel" name="telepon" id="edit-telepon" class="form-input" placeholder="08xxxxxxxxxx">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Alamat</label>
+        <input type="text" name="alamat" id="edit-alamat" class="form-input" placeholder="Alamat pemasangan">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Tanggal Bayar (tgl setiap bulan)</label>
+        <input type="number" name="tgl_bayar" id="edit-tgl" class="form-input" min="1" max="28" placeholder="1–28">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeModal('modal-edit')"
+          class="btn-ghost flex-1 py-3">Batal</button>
+        <button type="submit"
+          class="btn-primary flex-1 py-3">Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Konfirmasi Hapus -->
+<div id="modal-hapus" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeModal('modal-hapus')"></div>
+  <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+    <div class="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+      <svg class="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+      </svg>
+    </div>
+    <h3 class="font-bold text-gray-900 text-lg mb-1">Hapus Pelanggan?</h3>
+    <p class="text-sm text-gray-500 mb-1">Anda akan menghapus:</p>
+    <p class="font-semibold text-gray-900 mb-2" id="hapus-nama-label">—</p>
+    <p class="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2 mb-5">
+      Pelanggan akan dihapus dari database <strong>dan</strong> dari MikroTik. Tindakan ini tidak dapat dibatalkan.
+    </p>
+    <div class="flex gap-3">
+      <button type="button" onclick="closeModal('modal-hapus')"
+        class="btn-ghost flex-1 py-3">Batal</button>
+      <form id="form-hapus" method="post" class="flex-1">
+        <button type="submit"
+          class="w-full inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-sm transition-all px-4 py-3 cursor-pointer">
+          Ya, Hapus
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  ['pelanggan','tambah'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-active', t === name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-idle',   t !== name);
+  });
+}
+
+// Auto buka tab tambah jika ada notif sukses
+{% if ok_msg %}
+// tetap di tab pelanggan setelah tambah berhasil
+{% endif %}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function openEdit(pid, nama, telepon, alamat, tglBayar) {
+  document.getElementById('form-edit').action = '/teknisi/{{ slug }}/panel/edit/' + pid;
+  document.getElementById('edit-nama').value = nama;
+  document.getElementById('edit-telepon').value = telepon;
+  document.getElementById('edit-alamat').value = alamat;
+  document.getElementById('edit-tgl').value = tglBayar;
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+function konfirmasiHapus(pid, nama) {
+  document.getElementById('hapus-nama-label').textContent = nama;
+  document.getElementById('form-hapus').action = '/teknisi/{{ slug }}/panel/hapus/' + pid;
+  document.getElementById('modal-hapus').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

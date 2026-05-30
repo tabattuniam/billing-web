@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% set active = "profil" %}
+{% block title %}Profil Saya — {{ app_name }}{% endblock %}
+{% block topbar_title %}Profil Saya{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Profil Saya</h1>
+    <p class="page-sub">Kelola data akun dan keamanan login</p>
+  </div>
+</div>
+
+<div class="grid gap-5 max-w-2xl">
+
+  <!-- Info Akun -->
+  <div class="card p-6">
+    <div class="flex items-center gap-4 mb-6">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl">
+        {{ user.nama[0]|upper }}
+      </div>
+      <div>
+        <p class="font-bold text-slate-800 text-lg">{{ user.nama }}</p>
+        <p class="text-sm text-slate-400">@{{ user.username }} · {{ user.role.replace('_',' ')|title }}</p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="form-label">Nama Lengkap</label>
+        <input id="p-nama" type="text" value="{{ user.nama }}" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Nomor WhatsApp</label>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">+</span>
+          <input id="p-wa" type="text" value="{{ user.nomor_wa or '' }}" placeholder="628xxxxxxxxxx" class="form-input pl-6">
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Format internasional tanpa + (contoh: 628123456789)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ganti Password -->
+  <div class="card p-6">
+    <h3 class="font-semibold text-slate-700 mb-4">Ganti Password</h3>
+    <div class="space-y-4">
+      <div>
+        <label class="form-label">Password Baru</label>
+        <div class="relative">
+          <input id="p-pw" type="password" placeholder="Kosongkan jika tidak ingin ganti" class="form-input pr-10">
+          <button type="button" onclick="togglePw('p-pw','eye1')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <svg id="eye1" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Konfirmasi Password Baru</label>
+        <div class="relative">
+          <input id="p-pw2" type="password" placeholder="Ulangi password baru" class="form-input pr-10">
+          <button type="button" onclick="togglePw('p-pw2','eye2')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <svg id="eye2" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rekening Tarik Saldo (admin only) -->
+  {% if user.role == 'admin' %}
+  <div class="card p-6">
+    <h3 class="font-semibold text-slate-700 mb-1">Rekening Tarik Saldo</h3>
+    <p class="text-xs text-slate-400 mb-4">Digunakan otomatis saat mengajukan tarik saldo</p>
+    <div class="space-y-3">
+      <div>
+        <label class="form-label">Bank / E-Wallet</label>
+        <select id="p-rek-bank" class="form-select">
+          <option value="">Pilih bank/e-wallet</option>
+          {% for b in ['BCA','BRI','BNI','Mandiri','BSI','Danamon','GoPay','OVO','Dana','ShopeePay'] %}
+          <option {% if user.rek_bank == b %}selected{% endif %}>{{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Nomor Rekening / Akun</label>
+        <input id="p-rek-no" type="text" value="{{ user.rek_no or '' }}" placeholder="1234567890" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Atas Nama</label>
+        <input id="p-rek-nama" type="text" value="{{ user.rek_nama or '' }}" placeholder="Nama pemilik rekening" class="form-input">
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="flex justify-end">
+    <button onclick="simpanProfil()" id="btn-simpan"
+      class="btn-primary px-6 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      Simpan Perubahan
+    </button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw(id, eyeId) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function simpanProfil() {
+  const nama     = document.getElementById('p-nama').value.trim();
+  const nomor_wa = document.getElementById('p-wa').value.trim();
+  const password  = document.getElementById('p-pw').value;
+  const password2 = document.getElementById('p-pw2').value;
+  const rek_bank  = document.getElementById('p-rek-bank')?.value || '';
+  const rek_no    = document.getElementById('p-rek-no')?.value.trim() || '';
+  const rek_nama  = document.getElementById('p-rek-nama')?.value.trim() || '';
+
+  if (!nama) { showToast('Nama tidak boleh kosong', 'warning'); return; }
+
+  const btn = document.getElementById('btn-simpan');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Menyimpan...';
+
+  const res = await fetch('/profil/update', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ nama, nomor_wa, password, password2, rek_bank, rek_no, rek_nama })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Simpan Perubahan';
+
+  if (data.ok) {
+    showToast('Profil berhasil disimpan', 'success');
+    if (document.getElementById('p-pw').value) {
+      document.getElementById('p-pw').value = '';
+      document.getElementById('p-pw2').value = '';
+    }
+  } else {
+    showToast(data.detail || 'Gagal menyimpan', 'error');
+  }
+}
+</script>
+{% endblock %}

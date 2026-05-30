@@ -19,11 +19,12 @@
     .nav-link.active { @apply bg-blue-600 text-white shadow-lg; }
     .card { @apply bg-white rounded-2xl border border-gray-100 shadow-sm; }
     .btn { @apply inline-flex items-center gap-2 font-semibold rounded-xl text-sm transition-all duration-150 cursor-pointer; }
-    .btn-primary { @apply btn bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm shadow-blue-200; }
-    .btn-ghost { @apply btn bg-gray-100 hover:bg-gray-200 text-gray-700; }
-    .btn-danger { @apply btn bg-red-50 hover:bg-red-100 text-red-600; }
-    .btn-success { @apply btn bg-emerald-50 hover:bg-emerald-100 text-emerald-700; }
-    .btn-warning { @apply btn bg-amber-50 hover:bg-amber-100 text-amber-700; }
+    .btn-primary   { @apply btn bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm shadow-blue-200; }
+    .btn-secondary { @apply btn bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200; }
+    .btn-ghost     { @apply btn bg-gray-100 hover:bg-gray-200 text-gray-700; }
+    .btn-danger    { @apply btn bg-red-50 hover:bg-red-100 text-red-600; }
+    .btn-success   { @apply btn bg-emerald-50 hover:bg-emerald-100 text-emerald-700; }
+    .btn-warning   { @apply btn bg-amber-50 hover:bg-amber-100 text-amber-700; }
     .form-input {
       @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400
              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all;
@@ -57,15 +58,11 @@
     style="background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);border-right:1px solid rgba(255,255,255,0.06)">
 
     <!-- Brand -->
-    <div class="flex items-center gap-3 px-5 py-5 border-b" style="border-color:rgba(255,255,255,0.06)">
-      <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-900/50">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
-        </svg>
-      </div>
+    <div class="flex items-center gap-3 px-4 py-4 border-b" style="border-color:rgba(255,255,255,0.06)">
+      <img src="/static/logo.jpg" alt="{{ app_name }}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-lg">
       <div>
         <p class="text-white font-bold text-sm leading-none">{{ app_name }}</p>
-        <p class="text-gray-500 text-xs mt-0.5">Billing System</p>
+        <p class="text-gray-500 text-xs mt-0.5">Jasa Billing ISP</p>
       </div>
     </div>
 
@@ -80,31 +77,50 @@
           <p class="text-gray-500 text-xs capitalize">{{ user.role.replace('_',' ') }}</p>
         </div>
       </div>
+      {% if user.role != 'teknisi' %}
       <div class="mt-2 pt-2 flex items-center justify-between" style="border-top:1px solid rgba(255,255,255,0.05)">
         <span class="text-gray-500 text-xs">Saldo</span>
         <span class="text-emerald-400 text-xs font-bold">{{ user.saldo | rp }}</span>
       </div>
+      {% endif %}
     </div>
 
     <!-- Nav -->
     <nav class="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
 
+      {% if user.role == 'teknisi' %}
+      <!-- Menu terbatas Teknisi -->
+      <p class="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">PPPoE</p>
+      <a href="/pppoe/users" class="nav-link {% if active=='pppoe_users' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Pelanggan PPPoE
+      </a>
+
+      {% else %}
       <a href="/dashboard" class="nav-link {% if active=='dashboard' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         Dashboard
       </a>
 
+      {% if user.role != 'sub_agen' %}
       <a href="/servers" class="nav-link {% if active=='servers' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
         Server MikroTik
       </a>
+      <a href="/wa-gateway" class="nav-link {% if active=='wa_gateway' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        WA Gateway
+      </a>
+      {% endif %}
 
       <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">PPPoE</p>
 
+      {% if user.role != 'sub_agen' %}
       <a href="/pppoe/paket" class="nav-link {% if active=='pppoe_paket' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
         Paket PPPoE
       </a>
+      {% endif %}
 
       <a href="/pppoe/users" class="nav-link {% if active=='pppoe_users' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -116,33 +132,49 @@
         Tagihan PPPoE
       </a>
 
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Pengaturan</p>
-
-      <a href="/wa-gateway" class="nav-link {% if active=='wa_gateway' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        WA Gateway
+      <a href="/laporan" class="nav-link {% if active=='laporan' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Laporan
       </a>
 
       <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Hotspot</p>
 
+      {% if user.role != 'sub_agen' %}
       <a href="/hotspot/paket" class="nav-link {% if active=='hotspot_paket' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/></svg>
         Paket Hotspot
       </a>
+      {% endif %}
 
       <a href="/hotspot/voucher" class="nav-link {% if active=='voucher' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
         Voucher Hotspot
       </a>
 
+      <!-- Link Toko Online (untuk agen & sub_agen) -->
+      {% if user.role in ('agen','sub_agen') %}
+      <a href="/beli/{{ user.slug or user.username }}" target="_blank"
+        class="nav-link mt-1" style="background:rgba(251,146,60,0.12);color:#fb923c;">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Toko Online
+      </a>
+      {% endif %}
+
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Akun</p>
+
       {% if user.role in ('admin','agen') %}
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Manajemen</p>
       <a href="/agen" class="nav-link {% if active=='agen' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
         {% if user.role=='admin' %}Agen{% else %}Sub Agen{% endif %}
       </a>
       {% endif %}
 
+      {% if user.role == 'admin' %}
+      <a href="/teknisi-admin" class="nav-link {% if active=='teknisi_admin' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Teknisi
+      </a>
+      {% endif %}
 
       <a href="/transaksi" class="nav-link {% if active=='transaksi' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -153,9 +185,14 @@
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Saldo
       </a>
+      {% endif %}{# end teknisi #}
     </nav>
 
-    <div class="px-3 py-3" style="border-top:1px solid rgba(255,255,255,0.06)">
+    <div class="px-3 py-3 space-y-1" style="border-top:1px solid rgba(255,255,255,0.06)">
+      <a href="/profil" class="nav-link {% if active=='profil' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Profil Saya
+      </a>
       <a href="/logout" class="nav-link text-red-400 hover:text-red-300">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
         Keluar

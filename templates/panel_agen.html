@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Agen — {{ user.nama }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style type="text/tailwindcss">
+  @layer base { * { font-family: 'Inter', sans-serif; } }
+  @layer components {
+    .card { @apply bg-white rounded-2xl border border-gray-100 shadow-sm; }
+    .btn-primary { @apply inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl text-sm transition-all px-4 py-2.5 cursor-pointer shadow-sm shadow-blue-200; }
+    .btn-green  { @apply inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-all px-4 py-2.5 cursor-pointer; }
+    .btn-ghost  { @apply inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-all px-4 py-2.5 cursor-pointer; }
+    .form-input { @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all; }
+    .form-select { @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all; }
+    .badge-green { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100; }
+    .badge-blue  { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100; }
+    .badge-gray  { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500; }
+    .tab-btn    { @apply px-4 py-2 text-sm font-semibold rounded-xl transition-all cursor-pointer; }
+    .tab-active { @apply bg-white text-blue-700 shadow-sm; }
+    .tab-idle   { @apply text-gray-500 hover:text-gray-700; }
+  }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
+  <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-gray-900 text-sm leading-tight">{{ user.nama }}</p>
+        <p class="text-xs text-gray-400">{{ user.role | capitalize }}{% if isp %} · {{ isp.nama }}{% endif %}</p>
+      </div>
+    </div>
+    <a href="/panel/logout"
+      class="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium flex items-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      Keluar
+    </a>
+  </div>
+</header>
+
+<div class="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+  <!-- Notifikasi generate berhasil -->
+  {% if ok_msg == 'generate' and last_kodes %}
+  <div class="card p-4 border-emerald-200 bg-emerald-50">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <p class="text-sm font-semibold text-emerald-800">{{ last_kodes | length }} voucher berhasil digenerate!</p>
+          {% if last_paket %}
+          <span class="text-xs text-emerald-600 font-medium">{{ last_paket.nama }}</span>
+          {% endif %}
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          {% for k in last_kodes %}
+          <span class="font-mono text-xs bg-white border border-emerald-200 text-emerald-700 font-bold px-2 py-1 rounded-lg">{{ k }}</span>
+          {% endfor %}
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="copyAllKodes()"
+            class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+            Salin Semua
+          </button>
+          <button onclick="cetakVoucher()"
+            class="text-xs px-3 py-1.5 bg-white hover:bg-gray-50 border border-emerald-300 text-emerald-700 rounded-lg font-medium transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+            </svg>
+            Cetak Voucher
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if ok_msg == 'topup' %}
+  <div class="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-sm text-emerald-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Topup sedang diproses. Saldo akan bertambah setelah pembayaran dikonfirmasi.
+  </div>
+  {% endif %}
+
+  {% if err_msg %}
+  <div class="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-2 text-sm text-red-700">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    {{ err_msg }}
+  </div>
+  {% endif %}
+
+  <!-- Kartu Saldo -->
+  <div class="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-5 text-white shadow-lg shadow-blue-200">
+    <div class="flex justify-between items-start">
+      <div>
+        <p class="text-blue-200 text-xs font-medium mb-1">Saldo Tersedia</p>
+        <p class="text-3xl font-bold tracking-tight">Rp {{ "{:,}".format(user.saldo).replace(",", ".") }}</p>
+        <p class="text-blue-200 text-xs mt-1">{{ user.nama }} · {{ user.username }}</p>
+      </div>
+      <button onclick="bukaTopup()"
+        class="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Topup
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab navigasi -->
+  <div class="bg-gray-100 rounded-2xl p-1 flex gap-1">
+    <button class="tab-btn tab-active flex-1" id="tab-btn-generate" onclick="showTab('generate')">Generate Voucher</button>
+    <button class="tab-btn tab-idle flex-1"  id="tab-btn-riwayat"  onclick="showTab('riwayat')">Riwayat Saldo</button>
+  </div>
+
+  <!-- Tab: Generate Voucher -->
+  <div id="tab-generate">
+    {% if not isp %}
+    <div class="card p-8 text-center text-gray-400">
+      <p class="text-sm">Akun belum terhubung ke ISP. Hubungi administrator.</p>
+    </div>
+    {% elif not pakets %}
+    <div class="card p-8 text-center text-gray-400">
+      <p class="text-sm">ISP belum menambahkan paket hotspot.</p>
+    </div>
+    {% else %}
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-800 mb-4">Generate Voucher ke MikroTik</h3>
+      <form method="post" action="/panel/generate" onsubmit="return konfirmGenerate(this)">
+        <!-- Pilih Paket -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Paket Hotspot</label>
+          <select name="paket_id" id="sel-paket" class="form-select" onchange="updateInfo()" required>
+            <option value="">-- Pilih Paket --</option>
+            {% for p in pakets %}
+            <option value="{{ p.id }}"
+              data-harga="{{ p.harga }}"
+              data-nama="{{ p.nama }}"
+              data-durasi="{{ p.durasi }}"
+              data-speed="{{ p.kecepatan }}">
+              {{ p.nama }} — Rp {{ "{:,}".format(p.harga).replace(",", ".") }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Pilih Server -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Server MikroTik</label>
+          {% if servers %}
+          <select name="server_id" class="form-select" required>
+            {% for s in servers %}
+            <option value="{{ s.id }}">{{ s.nama }} ({{ s.lokasi or s.vpn_ip }})</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <div class="px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-700">
+            ISP belum punya server aktif. Voucher tetap tersimpan di database.
+          </div>
+          <input type="hidden" name="server_id" value="">
+          {% endif %}
+        </div>
+
+        <!-- Jumlah -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Jumlah Voucher</label>
+          <input type="number" name="jumlah" id="inp-jumlah"
+            class="form-input" value="1" min="1" max="100"
+            onchange="updateInfo()" required>
+        </div>
+
+        <!-- Info harga -->
+        <div id="info-harga" class="hidden mb-4 bg-blue-50 border border-blue-100 rounded-xl p-3 text-sm">
+          <div class="flex justify-between mb-1">
+            <span class="text-gray-600">Paket</span>
+            <span id="info-nama" class="font-medium text-gray-800"></span>
+          </div>
+          <div class="flex justify-between mb-1">
+            <span class="text-gray-600">Harga satuan</span>
+            <span id="info-satuan" class="font-medium text-gray-800"></span>
+          </div>
+          <div class="flex justify-between mb-1">
+            <span class="text-gray-600">Jumlah</span>
+            <span id="info-jml" class="font-medium text-gray-800"></span>
+          </div>
+          <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
+            <span class="font-semibold text-blue-700">Total Saldo</span>
+            <span id="info-total" class="font-bold text-blue-700"></span>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span class="text-gray-500">Sisa saldo</span>
+            <span id="info-sisa" class="font-semibold"></span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-green w-full">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+          </svg>
+          Generate & Push ke MikroTik
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Tab: Riwayat Saldo -->
+  <div id="tab-riwayat" class="hidden">
+    {% if saldo_log %}
+    <div class="card divide-y divide-gray-50 overflow-hidden">
+      {% for r in saldo_log %}
+      <div class="px-4 py-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+            {% if r.tipe == 'kredit' %}bg-emerald-50{% else %}bg-red-50{% endif %}">
+            {% if r.tipe == 'kredit' %}
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            {% else %}
+            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+            </svg>
+            {% endif %}
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm text-gray-700 truncate">{{ r.keterangan or (r.tipe | capitalize) }}</p>
+            <p class="text-xs text-gray-400">{{ r.created_at | ts_date }}</p>
+          </div>
+        </div>
+        <p class="text-sm font-semibold whitespace-nowrap
+          {% if r.tipe == 'kredit' %}text-emerald-600{% else %}text-red-500{% endif %}">
+          {% if r.tipe == 'kredit' %}+{% else %}-{% endif %}Rp {{ "{:,}".format(r.jumlah).replace(",", ".") }}
+        </p>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-8 text-center text-sm text-gray-400">Belum ada riwayat transaksi</div>
+    {% endif %}
+  </div>
+
+</div><!-- /max-w -->
+
+<!-- Modal Topup Saldo -->
+<div id="modal-topup" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+    <h3 class="font-bold text-gray-900 text-lg mb-1">Topup Saldo</h3>
+    <p class="text-sm text-gray-500 mb-4">Bayar via QRIS. Saldo otomatis masuk setelah pembayaran berhasil.</p>
+
+    <div id="topup-form-area">
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Jumlah Topup</label>
+        <input type="number" id="inp-topup" class="form-input" placeholder="Contoh: 100000" min="10000" step="10000">
+        <p class="text-xs text-gray-400 mt-1">Minimal Rp 10.000</p>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-4">
+        {% for n in [50000, 100000, 200000, 500000] %}
+        <button type="button" onclick="document.getElementById('inp-topup').value={{ n }}"
+          class="text-xs px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-colors">
+          Rp {{ "{:,}".format(n).replace(",", ".") }}
+        </button>
+        {% endfor %}
+      </div>
+      <div class="flex gap-2">
+        <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
+        <button onclick="prosesTopup()" id="btn-topup-ok" class="btn-primary flex-1">Bayar via QRIS</button>
+      </div>
+    </div>
+
+    <div id="topup-loading" class="hidden text-center py-4">
+      <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+      <p class="text-sm text-gray-500">Memproses topup...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Konfirmasi Generate -->
+<div id="modal-gen" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+  <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+    <div class="text-center mb-4">
+      <div class="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+        </svg>
+      </div>
+      <h3 class="font-bold text-gray-900">Konfirmasi Generate</h3>
+    </div>
+    <div class="bg-gray-50 rounded-xl p-3 mb-4 space-y-2 text-sm">
+      <div class="flex justify-between"><span class="text-gray-500">Paket</span><span id="gen-paket" class="font-medium"></span></div>
+      <div class="flex justify-between"><span class="text-gray-500">Jumlah</span><span id="gen-jml" class="font-medium"></span></div>
+      <div class="flex justify-between"><span class="text-gray-500">Total</span><span id="gen-total" class="font-bold text-emerald-700"></span></div>
+      <div class="flex justify-between border-t border-gray-200 pt-2"><span class="text-gray-500">Sisa saldo</span><span id="gen-sisa" class="font-semibold"></span></div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="tutupGen()" class="btn-ghost flex-1">Batal</button>
+      <button id="btn-gen-ok" onclick="submitGen()" class="btn-green flex-1">Generate</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SALDO = {{ user.saldo }};
+const ALL_KODES = {{ last_kodes | tojson }};
+const ISP_NAMA  = {{ (isp.nama if isp else '') | tojson }};
+const PAKET_INFO = {
+  nama:      {{ (last_paket.nama      if last_paket else '') | tojson }},
+  durasi:    {{ (last_paket.durasi    if last_paket else '') | tojson }},
+  kecepatan: {{ (last_paket.kecepatan if last_paket else '') | tojson }},
+  harga:     {{ last_paket.harga if last_paket else 0 }}
+};
+
+// ── Tab ──────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  ['generate','riwayat'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-active', t === name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-idle',   t !== name);
+  });
+}
+
+// ── Info harga ────────────────────────────────────────────────────────────────
+function updateInfo() {
+  const sel   = document.getElementById('sel-paket');
+  const opt   = sel.options[sel.selectedIndex];
+  const jml   = parseInt(document.getElementById('inp-jumlah').value) || 1;
+  const info  = document.getElementById('info-harga');
+  if (!opt || !opt.value) { info.classList.add('hidden'); return; }
+  const harga  = parseInt(opt.dataset.harga);
+  const total  = harga * jml;
+  const sisa   = SALDO - total;
+  info.classList.remove('hidden');
+  document.getElementById('info-nama').textContent   = opt.dataset.nama;
+  document.getElementById('info-satuan').textContent = 'Rp ' + harga.toLocaleString('id-ID');
+  document.getElementById('info-jml').textContent    = jml + ' voucher';
+  document.getElementById('info-total').textContent  = 'Rp ' + total.toLocaleString('id-ID');
+  const sisaEl = document.getElementById('info-sisa');
+  sisaEl.textContent = 'Rp ' + sisa.toLocaleString('id-ID');
+  sisaEl.className   = 'font-semibold ' + (sisa < 0 ? 'text-red-600' : 'text-gray-700');
+}
+
+// ── Konfirmasi generate ────────────────────────────────────────────────────────
+let _genForm = null;
+function konfirmGenerate(form) {
+  const sel  = document.getElementById('sel-paket');
+  const opt  = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return false;
+  const jml   = parseInt(document.getElementById('inp-jumlah').value) || 1;
+  const harga = parseInt(opt.dataset.harga);
+  const total = harga * jml;
+  const sisa  = SALDO - total;
+  _genForm = form;
+  document.getElementById('gen-paket').textContent = opt.dataset.nama;
+  document.getElementById('gen-jml').textContent   = jml + ' voucher';
+  document.getElementById('gen-total').textContent = 'Rp ' + total.toLocaleString('id-ID');
+  const sisaEl = document.getElementById('gen-sisa');
+  sisaEl.textContent  = 'Rp ' + sisa.toLocaleString('id-ID');
+  sisaEl.className    = 'font-semibold ' + (sisa < 0 ? 'text-red-600' : 'text-gray-700');
+  document.getElementById('modal-gen').classList.remove('hidden');
+  return false;
+}
+function tutupGen() {
+  document.getElementById('modal-gen').classList.add('hidden');
+  _genForm = null;
+}
+function submitGen() {
+  if (_genForm) {
+    document.getElementById('btn-gen-ok').textContent = 'Memproses...';
+    document.getElementById('btn-gen-ok').disabled = true;
+    _genForm.submit();
+  }
+}
+
+// ── Topup ─────────────────────────────────────────────────────────────────────
+function bukaTopup()  { document.getElementById('modal-topup').classList.remove('hidden'); }
+function tutupTopup() { document.getElementById('modal-topup').classList.add('hidden'); }
+
+async function prosesTopup() {
+  const amount = parseInt(document.getElementById('inp-topup').value);
+  if (!amount || amount < 10000) { alert('Minimal topup Rp 10.000'); return; }
+  document.getElementById('topup-form-area').classList.add('hidden');
+  document.getElementById('topup-loading').classList.remove('hidden');
+  try {
+    const fd = new FormData();
+    fd.append('amount', amount);
+    const res = await fetch('/panel/topup', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok && data.payment_url) {
+      // Duitku: redirect ke halaman pembayaran
+      window.location.href = data.payment_url;
+    } else if (data.ok && data.snap_token) {
+      // Midtrans fallback
+      snap.pay(data.snap_token, {
+        onSuccess: () => { location.href = '/panel?ok=topup'; },
+        onPending: () => { location.href = '/panel?ok=topup'; },
+        onClose:   () => { tutupTopup(); resetTopupModal(); }
+      });
+    } else {
+      alert(data.msg || 'Gagal membuat transaksi');
+      resetTopupModal();
+    }
+  } catch(e) {
+    alert('Koneksi gagal');
+    resetTopupModal();
+  }
+}
+
+function resetTopupModal() {
+  document.getElementById('topup-form-area').classList.remove('hidden');
+  document.getElementById('topup-loading').classList.add('hidden');
+}
+
+// ── Salin semua kode ──────────────────────────────────────────────────────────
+function copyAllKodes() {
+  navigator.clipboard.writeText(ALL_KODES.join('\n')).then(() => {
+    event.target.textContent = 'Disalin!';
+    setTimeout(() => event.target.textContent = 'Salin Semua', 2000);
+  });
+}
+
+// ── Cetak Voucher ─────────────────────────────────────────────────────────────
+function cetakVoucher() {
+  const hargaFmt = PAKET_INFO.harga
+    ? 'Rp ' + PAKET_INFO.harga.toLocaleString('id-ID')
+    : '';
+  const cards = ALL_KODES.map(k => `
+    <div class="voucher-card">
+      <div class="isp-name">${ISP_NAMA}</div>
+      <div class="paket-name">${PAKET_INFO.nama || 'Voucher Hotspot'}</div>
+      <div class="kode">${k}</div>
+      <div class="meta">
+        ${PAKET_INFO.durasi ? '<span>⏱ ' + PAKET_INFO.durasi + '</span>' : ''}
+        ${PAKET_INFO.kecepatan ? '<span>⚡ ' + PAKET_INFO.kecepatan + '</span>' : ''}
+        ${hargaFmt ? '<span>' + hargaFmt + '</span>' : ''}
+      </div>
+      <div class="footer">Gunakan kode di atas untuk login hotspot</div>
+    </div>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Cetak Voucher — ${ISP_NAMA}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #fff; padding: 10mm; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+  .voucher-card {
+    border: 1.5px dashed #3b82f6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    background: #fff;
+    page-break-inside: avoid;
+  }
+  .isp-name { font-size: 9px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .paket-name { font-size: 11px; font-weight: 700; color: #1e40af; margin-bottom: 6px; }
+  .kode {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #1f2937;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 6px 4px;
+    margin: 4px 0 8px;
+  }
+  .meta { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .meta span { font-size: 9px; color: #4b5563; background: #f3f4f6; padding: 2px 6px; border-radius: 10px; }
+  .footer { font-size: 8px; color: #9ca3af; }
+  @media print {
+    body { padding: 5mm; }
+    @page { margin: 8mm; size: A4; }
+  }
+</style>
+</head>
+<body>
+  <div class="grid">${cards}</div>
+  <script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+}
+
+// Tutup modal klik di luar
+['modal-topup','modal-gen'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) {
+      id === 'modal-topup' ? tutupTopup() : tutupGen();
+    }
+  });
+});
+</script>
+</body>
+</html>

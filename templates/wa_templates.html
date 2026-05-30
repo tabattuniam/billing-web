@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Template Notifikasi WA — {{ app_name }}{% endblock %}
+{% block topbar_title %}Template Notifikasi WhatsApp{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Template Notifikasi WhatsApp</h1>
+    <p class="page-sub">Atur isi pesan WA yang dikirim ke pelanggan. Gunakan variabel yang tersedia.</p>
+  </div>
+</div>
+
+<!-- Variable Guide -->
+<div class="card p-5 mb-6 bg-blue-50 border-blue-100">
+  <div class="flex items-start gap-3">
+    <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div>
+      <p class="text-sm font-semibold text-blue-800 mb-2">Variabel yang bisa digunakan dalam template:</p>
+      <div class="flex flex-wrap gap-2">
+        {% set all_vars = [
+          ("{nama}", "Nama pelanggan"),
+          ("{nominal}", "Jumlah tagihan (Rp)"),
+          ("{bulan}", "Bulan tagihan (misal: Mei 2026)"),
+          ("{tgl_bayar}", "Tanggal jatuh tempo"),
+          ("{paket}", "Nama paket internet"),
+          ("{kecepatan}", "Kecepatan paket"),
+          ("{username}", "Username PPPoE"),
+          ("{password}", "Password PPPoE"),
+          ("{link}", "Link pembayaran"),
+          ("{isp}", "Nama ISP Anda")
+        ] %}
+        {% for var, desc in all_vars %}
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-mono text-blue-700 cursor-help" title="{{ desc }}">{{ var }}</span>
+        {% endfor %}
+      </div>
+      <p class="text-xs text-blue-600 mt-2">Arahkan kursor ke variabel untuk melihat keterangannya. Variabel yang tidak tersedia untuk jenis template tertentu akan dikosongkan otomatis.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Template Cards -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+  {% for t in templates %}
+  <div class="card p-5" id="card-{{ t.jenis }}">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <div class="flex items-center gap-2 mb-0.5">
+          <h3 class="font-semibold text-gray-900 text-sm">{{ t.label }}</h3>
+          {% if t.is_custom %}
+          <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs">Dikustomisasi</span>
+          {% else %}
+          <span class="badge bg-gray-100 text-gray-500 border border-gray-200 text-xs">Default</span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-gray-400">{{ t.desc }}</p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+        {% if t.is_custom %}
+        <button onclick="resetTemplate('{{ t.jenis }}')" class="btn-ghost px-2.5 py-1.5 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Reset
+        </button>
+        {% endif %}
+        <button onclick="saveTemplate('{{ t.jenis }}')" class="btn-primary px-3 py-1.5 text-xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+          Simpan
+        </button>
+      </div>
+    </div>
+
+    <!-- Variable chips for this template -->
+    <div class="flex flex-wrap gap-1.5 mb-3">
+      {% for v in t.vars_used %}
+      <button onclick="insertVar('{{ t.jenis }}', '{{ v }}')"
+        class="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md text-xs font-mono transition-colors border border-blue-100"
+        title="Klik untuk sisipkan">{{ v }}</button>
+      {% endfor %}
+    </div>
+
+    <!-- Textarea -->
+    <textarea id="tpl-{{ t.jenis }}"
+      rows="9"
+      class="form-input font-mono text-xs leading-relaxed resize-y"
+      placeholder="Isi template pesan WhatsApp...">{{ t.isi }}</textarea>
+
+    {% if t.updated_at %}
+    <p class="text-xs text-gray-400 mt-1.5">Terakhir diubah: {{ t.updated_at | ts_date }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Preview Modal -->
+<div id="modal-preview" class="modal-overlay hidden" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-900 text-sm">Preview Pesan WA</h3>
+      <button onclick="document.getElementById('modal-preview').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-5">
+      <!-- WA bubble mockup -->
+      <div class="bg-gray-100 rounded-xl p-3">
+        <div class="bg-white rounded-lg px-3 py-2.5 shadow-sm max-w-xs ml-auto">
+          <p id="preview-text" class="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"></p>
+          <p class="text-right text-xs text-gray-400 mt-1.5">10:00 ✓✓</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function insertVar(jenis, v) {
+  const ta = document.getElementById('tpl-' + jenis);
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.substring(0, start) + v + ta.value.substring(end);
+  ta.selectionStart = ta.selectionEnd = start + v.length;
+  ta.focus();
+}
+
+async function saveTemplate(jenis) {
+  const ta = document.getElementById('tpl-' + jenis);
+  const isi = ta ? ta.value.trim() : '';
+  if (!isi) { showToast('Template tidak boleh kosong', 'error'); return; }
+  const r = await fetch('/wa-templates/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({jenis, isi})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    showToast('Template disimpan', 'success');
+    // Update badge
+    const card = document.getElementById('card-' + jenis);
+    if (card) {
+      const badge = card.querySelector('.badge');
+      if (badge) {
+        badge.className = 'badge bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs';
+        badge.textContent = 'Dikustomisasi';
+      }
+      // Show reset button if not present
+      const btnArea = card.querySelector('.flex.items-center.gap-2.flex-shrink-0');
+      if (btnArea && !btnArea.querySelector('[data-reset]')) {
+        location.reload();
+      }
+    }
+  } else {
+    showToast(d.msg || 'Gagal simpan', 'error');
+  }
+}
+
+async function resetTemplate(jenis) {
+  if (!confirm('Reset ke template default? Perubahan kustom akan hilang.')) return;
+  const r = await fetch('/wa-templates/reset', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({jenis})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    const ta = document.getElementById('tpl-' + jenis);
+    if (ta && d.default_isi) ta.value = d.default_isi;
+    showToast('Template direset ke default', 'success');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    showToast(d.msg || 'Gagal reset', 'error');
+  }
+}
+</script>
+{% endblock %}

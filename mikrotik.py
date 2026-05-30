@@ -5,8 +5,14 @@ import routeros_api
 
 class MikroTik:
     def __init__(self, host: str, port: int, username: str, password: str):
-        self.host = host
-        self.port = port
+        # vpn_ip bisa disimpan sebagai "host:port" — parse jika demikian
+        if ":" in str(host):
+            parts = str(host).rsplit(":", 1)
+            self.host = parts[0]
+            self.port = int(parts[1])
+        else:
+            self.host = host
+            self.port = int(port)
         self.username = username
         self.password = password
 
@@ -16,6 +22,10 @@ class MikroTik:
             port=self.port, plaintext_login=True
         )
         return pool.get_api()
+
+    @property
+    def api(self):
+        return self._conn()
 
     # ── PPPoE ─────────────────────────────────────────────────────────────────
 
@@ -87,14 +97,33 @@ class MikroTik:
         except Exception:
             return ["default"]
 
+    def list_pppoe_profiles_detail(self) -> list[dict]:
+        try:
+            api = self._conn()
+            rows = api.get_resource("/ppp/profile").get()
+            result = []
+            for r in rows:
+                result.append({
+                    "name":       r.get("name", ""),
+                    "rate_limit": r.get("rate-limit", ""),
+                    "local_address":  r.get("local-address", ""),
+                    "remote_address": r.get("remote-address", ""),
+                })
+            return result
+        except Exception:
+            return []
+
     # ── Hotspot ───────────────────────────────────────────────────────────────
 
-    def add_hotspot_user(self, username: str, password: str, profile: str = "default", comment: str = "") -> bool:
+    def add_hotspot_user(self, username: str, password: str, profile: str = "default",
+                         comment: str = "", limit_uptime: str = "") -> bool:
         try:
             api = self._conn()
             kwargs = dict(name=username, password=password, profile=profile)
             if comment:
                 kwargs["comment"] = comment
+            if limit_uptime:
+                kwargs["limit-uptime"] = limit_uptime
             api.get_resource("/ip/hotspot/user").add(**kwargs)
             return True
         except Exception:
@@ -118,6 +147,22 @@ class MikroTik:
             return [r["name"] for r in rows]
         except Exception:
             return ["default"]
+
+    def list_hotspot_profiles_detail(self) -> list[dict]:
+        try:
+            api = self._conn()
+            rows = api.get_resource("/ip/hotspot/user/profile").get()
+            result = []
+            for r in rows:
+                result.append({
+                    "name":            r.get("name", ""),
+                    "rate_limit":      r.get("rate-limit", ""),
+                    "session_timeout": r.get("session-timeout", ""),
+                    "shared_users":    r.get("shared-users", "1"),
+                })
+            return result
+        except Exception:
+            return []
 
     def list_hotspot_active(self) -> list[dict]:
         try:

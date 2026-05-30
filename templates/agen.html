@@ -16,58 +16,138 @@
   </button>
 </div>
 
+<!-- Banner Link Portal Agen -->
+{% if isp_slug %}
+<div class="card p-4 mb-5 border-blue-100 bg-blue-50">
+  <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+    <div class="flex-1 min-w-0">
+      <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Link Login Portal Agen</p>
+      <p class="text-sm text-blue-800 font-mono break-all" id="portal-link">https://{{ app_domain }}/beli/{{ isp_slug }}/login</p>
+      <p class="text-xs text-blue-400 mt-0.5">Bagikan link ini ke agen / sub-agen agar bisa login ke panel mereka.</p>
+    </div>
+    <button onclick="copyPortalLink()"
+      class="flex-shrink-0 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+      </svg>
+      Salin Link
+    </button>
+  </div>
+</div>
+{% endif %}
+
 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 {% for a in agenlist %}
+{% set st = stats.get(a.id, {}) %}
 <div class="card p-5 hover:shadow-md transition-shadow">
-  <div class="flex items-start gap-4 mb-4">
+  <!-- Header -->
+  <div class="flex items-start gap-3 mb-4">
     <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 font-bold text-lg text-white shadow-lg
       {% if a.role=='agen' %}bg-gradient-to-br from-blue-500 to-blue-700 shadow-blue-200
+      {% elif a.role=='teknisi' %}bg-gradient-to-br from-teal-500 to-teal-700 shadow-teal-200
       {% else %}bg-gradient-to-br from-indigo-500 to-indigo-700 shadow-indigo-200{% endif %}">
       {{ a.nama[0]|upper }}
     </div>
     <div class="flex-1 min-w-0">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <p class="font-semibold text-slate-800 truncate">{{ a.nama }}</p>
         {% if a.status=='aktif' %}
-        <span class="badge-green ml-2 flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
+        <span class="badge-green flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
         {% else %}
-        <span class="badge-red ml-2 flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>
+        <span class="badge-red flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>
         {% endif %}
       </div>
       <p class="text-xs text-slate-400 mt-0.5">@{{ a.username }} · {{ a.role.replace('_',' ')|title }}</p>
-      {% if a.nomor_wa %}<p class="text-xs text-slate-400">📱 {{ a.nomor_wa }}</p>{% endif %}
+      {% if a.nomor_wa %}<p class="text-xs text-slate-400 mt-0.5">{{ a.nomor_wa }}</p>{% endif %}
     </div>
   </div>
 
-  <div class="bg-slate-50 rounded-xl p-3 mb-4">
-    <div class="flex items-center justify-between">
-      <span class="text-xs text-slate-500">Saldo</span>
-      <span class="font-bold text-emerald-600 text-sm">{{ a.saldo | rp }}</span>
+  <!-- Stats -->
+  <div class="grid grid-cols-3 gap-2 mb-4">
+    <div class="bg-blue-50 rounded-xl p-2.5 text-center">
+      <p class="text-lg font-bold text-blue-700">{{ st.get('pppoe', 0) }}</p>
+      <p class="text-xs text-blue-400">PPPoE</p>
+    </div>
+    <div class="bg-orange-50 rounded-xl p-2.5 text-center">
+      <p class="text-lg font-bold text-orange-600">{{ st.get('voucher', 0) }}</p>
+      <p class="text-xs text-orange-400">Voucher</p>
+    </div>
+    <div class="bg-slate-50 rounded-xl p-2.5 text-center">
+      <p class="text-sm font-bold text-slate-700">{{ (st.get('omzet', 0) / 1000)|int }}K</p>
+      <p class="text-xs text-slate-400">Omzet</p>
     </div>
   </div>
 
-  <div class="flex gap-2">
+  <!-- Saldo + Komisi -->
+  {% if user.role=='admin' %}
+  <div class="flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 mb-2">
+    <span class="text-xs text-emerald-600">Saldo</span>
+    <span class="font-bold text-emerald-700 text-sm">{{ a.saldo | rp }}</span>
+  </div>
+  {% if a.role in ('agen','sub_agen') %}
+  <div class="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2 mb-4">
+    <span class="text-xs text-blue-600">Komisi Voucher</span>
+    <span class="font-bold text-blue-700 text-sm">{{ a.komisi_persen or 0 }}%</span>
+  </div>
+  {% else %}<div class="mb-4"></div>{% endif %}
+  {% else %}<div class="mb-4"></div>{% endif %}
+
+  <!-- Actions -->
+  <div class="flex gap-2 flex-wrap">
+    {% if isp_slug %}
+    <a href="https://{{ app_domain }}/beli/{{ isp_slug }}/login" target="_blank"
+      class="flex-1 text-xs px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium flex items-center justify-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+      </svg>
+      Portal
+    </a>
+    {% endif %}
     {% if user.role=='admin' %}
-    <button onclick="openTopup('{{ a.id }}','{{ a.nama }}')"
+    <button onclick="openTopup('{{ a.id }}','{{ a.nama | e }}')"
       class="flex-1 text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium flex items-center justify-center gap-1.5 transition-colors">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-      Topup Saldo
+      Topup
     </button>
     {% endif %}
-    <form method="post" action="/agen/status/{{ a.id }}" class="{% if user.role!='admin' %}flex-1{% endif %}">
+    <button onclick="openEdit(this)"
+      data-id="{{ a.id }}"
+      data-nama="{{ a.nama | e }}"
+      data-wa="{{ a.nomor_wa | e }}"
+      data-komisi="{{ a.komisi_persen or 0 }}"
+      data-role="{{ a.role }}"
+      class="text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium flex items-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      Edit
+    </button>
+    <button onclick="openReset('{{ a.id }}','{{ a.nama | e }}')"
+      class="text-xs px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium flex items-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+      Password
+    </button>
+    <form method="post" action="/agen/status/{{ a.id }}">
       {% if a.status=='aktif' %}
       <input type="hidden" name="status" value="nonaktif">
-      <button class="w-full text-xs px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium flex items-center justify-center gap-1.5 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-        Nonaktifkan
+      <button class="text-xs px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/></svg>
+        Nonaktif
       </button>
       {% else %}
       <input type="hidden" name="status" value="aktif">
-      <button class="w-full text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium flex items-center justify-center gap-1.5 transition-colors">
+      <button class="text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium flex items-center gap-1.5 transition-colors">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
         Aktifkan
       </button>
       {% endif %}
+    </form>
+    <form method="post" action="/agen/hapus/{{ a.id }}"
+      onsubmit="return confirm('Hapus akun {{ a.nama | e }}? Data tidak bisa dikembalikan.')">
+      <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        Hapus
+      </button>
     </form>
   </div>
 </div>
@@ -76,12 +156,12 @@
   <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
     <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
   </div>
-  <p class="text-slate-500 font-medium">Belum ada agen terdaftar</p>
+  <p class="text-slate-500 font-medium">Belum ada {% if user.role=='admin' %}agen{% else %}sub agen{% endif %} terdaftar</p>
 </div>
 {% endfor %}
 </div>
 
-<!-- Modal Tambah Agen -->
+<!-- Modal Tambah -->
 <div id="modal-tambah" class="hidden modal-overlay">
   <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
     <div class="flex items-center justify-between mb-5">
@@ -108,7 +188,14 @@
           <label class="form-label">No. WhatsApp</label>
           <input name="nomor_wa" placeholder="08xxxxxxxxxx" class="form-input">
         </div>
-        {% if user.role=='admin' %}<input type="hidden" name="role" value="agen">
+        {% if user.role=='admin' %}
+        <div>
+          <label class="form-label">Role</label>
+          <select name="role" class="form-input">
+            <option value="agen">Agen</option>
+            <option value="teknisi">Teknisi</option>
+          </select>
+        </div>
         {% else %}<input type="hidden" name="role" value="sub_agen">{% endif %}
       </div>
       <div class="flex gap-3 mt-6">
@@ -117,6 +204,74 @@
         <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
           Buat Akun
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit -->
+<div id="modal-edit" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Akun</h3>
+      <button onclick="document.getElementById('modal-edit').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit" method="post">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Nama Lengkap</label>
+          <input id="edit-nama" name="nama" required class="form-input">
+        </div>
+        <div>
+          <label class="form-label">No. WhatsApp</label>
+          <input id="edit-wa" name="nomor_wa" placeholder="08xxxxxxxxxx" class="form-input">
+        </div>
+        <div id="edit-komisi-wrap">
+          <label class="form-label">Komisi Voucher (%)</label>
+          <div class="flex items-center gap-3">
+            <input id="edit-komisi" name="komisi_persen" type="number" min="0" max="100"
+              placeholder="0" class="form-input flex-1">
+            <span class="text-sm text-gray-500 flex-shrink-0">%</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">Diskon harga paket saat agen generate voucher. Contoh: 10% → harga Rp 5.000 jadi Rp 4.500.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-edit').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Simpan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Reset Password -->
+<div id="modal-reset" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-bold text-slate-900 text-lg">Reset Password</h3>
+      <button onclick="document.getElementById('modal-reset').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p id="reset-nama" class="text-sm text-slate-400 mb-5"></p>
+    <form id="form-reset" method="post">
+      <div>
+        <label class="form-label">Password Baru</label>
+        <input name="password" type="password" required placeholder="••••••••" class="form-input">
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-reset').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          Reset
         </button>
       </div>
     </form>
@@ -159,8 +314,41 @@
 
 {% block scripts %}
 <script>
+
+function copyPortalLink() {
+  const link = document.getElementById('portal-link')?.textContent?.trim();
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(() => {
+    showToast('Link portal disalin!', 'success');
+  }).catch(() => {
+    showToast('Gagal menyalin link', 'error');
+  });
+}
+
+function openEdit(btn) {
+  const d = btn.dataset;
+  document.getElementById('form-edit').action = '/agen/edit/' + d.id;
+  document.getElementById('edit-nama').value = d.nama;
+  document.getElementById('edit-wa').value = d.wa;
+  document.getElementById('edit-komisi').value = d.komisi || 0;
+  // Sembunyikan field komisi untuk teknisi
+  const komisiWrap = document.getElementById('edit-komisi-wrap');
+  if (d.role === 'teknisi') {
+    komisiWrap.classList.add('hidden');
+  } else {
+    komisiWrap.classList.remove('hidden');
+  }
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+function openReset(uid, nama) {
+  document.getElementById('reset-nama').textContent = 'Reset password untuk: ' + nama;
+  document.getElementById('form-reset').action = '/agen/reset-password/' + uid;
+  document.getElementById('modal-reset').classList.remove('hidden');
+}
+
 function openTopup(uid, nama) {
-  document.getElementById('topup-nama').textContent = 'Untuk: ' + nama;
+  document.getElementById('topup-nama').textContent = 'Topup saldo untuk: ' + nama;
   document.getElementById('form-topup').action = '/saldo/topup/' + uid;
   document.getElementById('modal-topup').classList.remove('hidden');
 }

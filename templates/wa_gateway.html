@@ -157,7 +157,111 @@
   </div>
 </div>
 
-<!-- Toast -->
+<!-- Template Notifikasi WA -->
+<div id="templates" class="mt-6 card p-6">
+  <div class="flex items-start justify-between mb-4">
+    <div>
+      <h2 class="text-base font-semibold text-gray-900">Template Pesan Notifikasi</h2>
+      <p class="text-xs text-gray-400 mt-0.5">Atur isi pesan WA yang dikirim ke pelanggan. Klik variabel untuk menyisipkan.</p>
+    </div>
+  </div>
+
+  <!-- Variable Guide -->
+  <div class="flex flex-wrap gap-1.5 mb-5 p-3 bg-blue-50 rounded-xl">
+    <span class="text-xs text-blue-700 font-semibold mr-1 self-center">Variabel:</span>
+    {% set all_vars = [("{nama}","Nama pelanggan"),("{nominal}","Jumlah tagihan"),("{bulan}","Bulan tagihan"),("{tgl_bayar}","Tgl jatuh tempo"),("{paket}","Nama paket"),("{kecepatan}","Kecepatan"),("{username}","Username PPPoE"),("{password}","Password PPPoE"),("{link}","Link pembayaran"),("{isp}","Nama ISP")] %}
+    {% for v, desc in all_vars %}
+    <span class="px-2 py-0.5 bg-white border border-blue-200 rounded-md text-xs font-mono text-blue-700 cursor-help" title="{{ desc }}">{{ v }}</span>
+    {% endfor %}
+  </div>
+
+  <!-- Tab bar jenis template -->
+  <div class="flex gap-1 mb-4 flex-wrap" id="tpl-tabs">
+    {% for t in templates %}
+    <button onclick="switchTab('{{ t.jenis }}')" id="tab-{{ t.jenis }}"
+      class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
+        {% if loop.first %}bg-blue-600 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+      {{ t.label }}
+      {% if t.is_custom %}<span class="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle"></span>{% endif %}
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- Panel per template -->
+  {% for t in templates %}
+  <div id="panel-{{ t.jenis }}" class="{% if not loop.first %}hidden{% endif %}">
+    <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center gap-2">
+        <p class="text-xs text-gray-500">{{ t.desc }}</p>
+        {% if t.is_custom %}
+        <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs">Dikustomisasi</span>
+        {% else %}
+        <span class="badge bg-gray-100 text-gray-500 border border-gray-200 text-xs">Default</span>
+        {% endif %}
+      </div>
+      <div class="flex gap-2">
+        {% if t.is_custom %}
+        <button onclick="resetTpl('{{ t.jenis }}')" class="btn-warning px-2.5 py-1 text-xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Reset Default
+        </button>
+        {% endif %}
+        <button onclick="saveTpl('{{ t.jenis }}')" class="btn-primary px-3 py-1 text-xs">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+          Simpan
+        </button>
+      </div>
+    </div>
+
+    <!-- Var chips untuk template ini -->
+    <div class="flex flex-wrap gap-1.5 mb-2">
+      {% for v in t.vars_used %}
+      <button onclick="insertTplVar('{{ t.jenis }}','{{ v }}')"
+        class="px-2 py-0.5 bg-gray-100 hover:bg-blue-100 hover:text-blue-700 text-gray-600 rounded-md text-xs font-mono transition-colors border border-gray-200">{{ v }}</button>
+      {% endfor %}
+    </div>
+
+    <textarea id="tpl-{{ t.jenis }}" rows="8"
+      class="form-input font-mono text-xs leading-relaxed resize-y w-full"
+      placeholder="Isi template...">{{ t.isi }}</textarea>
+
+    {% if t.updated_at %}
+    <p class="text-xs text-gray-400 mt-1">Terakhir diubah: {{ t.updated_at | ts_date }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Test Notifikasi -->
+<div class="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+  <h2 class="text-base font-semibold text-gray-800 mb-4">Test Notifikasi WA</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Nomor HP Tujuan</label>
+      <input id="test-hp" type="tel" placeholder="08123456789"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-600 mb-1">Jenis Notifikasi</label>
+      <select id="test-type" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+        <option value="aktivasi">Aktivasi Layanan</option>
+        <option value="suspend">Suspend / Nonaktif</option>
+        <option value="reaktivasi">Reaktivasi</option>
+        <option value="tagihan">Tagihan Jatuh Tempo</option>
+      </select>
+    </div>
+    <div class="flex items-end">
+      <button onclick="kirimTestNotif()" id="btn-test-notif"
+        class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+        Kirim Test
+      </button>
+    </div>
+  </div>
+  <p class="text-xs text-gray-400 mt-3">Kirim pesan WA percobaan ke nomor di atas untuk memastikan notifikasi berjalan.</p>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -224,6 +328,85 @@ async function disconnect() {
   await fetch('/wa-gateway/disconnect', { method: 'POST' });
   showToast('WA Gateway diputus', 'info');
   setTimeout(() => window.location.reload(), 1200);
+}
+
+// ── Template WA ──
+function switchTab(jenis) {
+  document.querySelectorAll('[id^="panel-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('[id^="tab-"]').forEach(el => {
+    el.className = el.className.replace('bg-blue-600 text-white','bg-gray-100 text-gray-600 hover:bg-gray-200');
+  });
+  document.getElementById('panel-' + jenis).classList.remove('hidden');
+  const tab = document.getElementById('tab-' + jenis);
+  tab.className = tab.className.replace('bg-gray-100 text-gray-600 hover:bg-gray-200','bg-blue-600 text-white');
+}
+
+function insertTplVar(jenis, v) {
+  const ta = document.getElementById('tpl-' + jenis);
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.substring(0, s) + v + ta.value.substring(e);
+  ta.selectionStart = ta.selectionEnd = s + v.length;
+  ta.focus();
+}
+
+async function saveTpl(jenis) {
+  const ta = document.getElementById('tpl-' + jenis);
+  const isi = ta ? ta.value.trim() : '';
+  if (!isi) { showToast('Template tidak boleh kosong', 'error'); return; }
+  const r = await fetch('/wa-templates/save', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({jenis, isi})
+  });
+  const d = await r.json();
+  if (d.ok) { showToast('Template disimpan', 'success'); setTimeout(() => location.reload(), 800); }
+  else showToast(d.msg || 'Gagal simpan', 'error');
+}
+
+async function resetTpl(jenis) {
+  if (!confirm('Reset ke template default? Perubahan kustom akan hilang.')) return;
+  const r = await fetch('/wa-templates/reset', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({jenis})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    const ta = document.getElementById('tpl-' + jenis);
+    if (ta && d.default_isi) ta.value = d.default_isi;
+    showToast('Template direset ke default', 'success');
+    setTimeout(() => location.reload(), 800);
+  } else showToast(d.msg || 'Gagal reset', 'error');
+}
+
+// Auto-scroll ke section templates jika ada hash #templates
+if (window.location.hash === '#templates') {
+  setTimeout(() => document.getElementById('templates')?.scrollIntoView({behavior:'smooth'}), 300);
+}
+
+async function kirimTestNotif() {
+  const hp = document.getElementById('test-hp').value.trim();
+  const type = document.getElementById('test-type').value;
+  if (!hp) { showToast('Masukkan nomor HP tujuan', 'warning'); return; }
+
+  const btn = document.getElementById('btn-test-notif');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...';
+
+  const res = await fetch('/wa-gateway/test-notif', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ telepon: hp, type: type })
+  });
+  const data = await res.json();
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg> Kirim Test';
+
+  if (data.ok) {
+    showToast('Pesan test berhasil dikirim!', 'success');
+  } else {
+    showToast('Gagal kirim: ' + (data.detail || 'error'), 'error');
+  }
 }
 </script>
 {% endblock %}

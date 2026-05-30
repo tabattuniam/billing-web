@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Tarik Saldo — {{ app_name }}{% endblock %}
+{% block topbar_title %}Riwayat Tarik Saldo{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Riwayat Tarik Saldo</h1>
+    <p class="page-sub">
+      {% if pending_count > 0 %}
+      <span class="text-amber-500 font-semibold">{{ pending_count }} menunggu dikonfirmasi</span>
+      {% else %}Semua request sudah diproses{% endif %}
+    </p>
+  </div>
+  <a href="/saldo" class="btn-ghost px-4 py-2.5">← Kembali</a>
+</div>
+
+{% if not requests_list %}
+<div class="card p-16 text-center">
+  <svg class="w-12 h-12 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+  </svg>
+  <p class="text-gray-500 font-medium">Belum ada request tarik saldo</p>
+</div>
+{% else %}
+<div class="card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="th">Pemohon</th>
+          <th class="th">Nominal</th>
+          <th class="th">Rekening Tujuan</th>
+          <th class="th">Tanggal</th>
+          <th class="th">Status</th>
+          <th class="th">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in requests_list %}
+      <tr id="row-{{ r.id }}" class="hover:bg-gray-50 transition-colors {% if r.status != 'pending' %}opacity-60{% endif %}">
+        <td class="td">
+          <p class="font-semibold text-gray-900 text-sm">{{ r.agen_nama }}</p>
+          <p class="text-xs text-gray-400">{{ r.agen_wa or '—' }}</p>
+        </td>
+        <td class="td">
+          <span class="font-black text-gray-900 text-base">Rp {{ "{:,}".format(r.nominal).replace(",",".") }}</span>
+        </td>
+        <td class="td">
+          <p class="font-semibold text-sm text-gray-800">{{ r.bank_name }}</p>
+          <p class="text-xs text-gray-500 font-mono">{{ r.rekening_no }}</p>
+          <p class="text-xs text-gray-400">{{ r.rekening_name }}</p>
+          {% if r.catatan %}<p class="text-xs text-blue-500 mt-0.5">📝 {{ r.catatan }}</p>{% endif %}
+        </td>
+        <td class="td text-xs text-gray-400">{{ r.created_at }}</td>
+        <td class="td" id="status-{{ r.id }}">
+          {% if r.status == 'pending' %}
+          <span class="badge badge-orange">⏳ Pending</span>
+          {% elif r.status == 'approved' %}
+          <span class="badge badge-green">✅ Disetujui</span>
+          {% else %}
+          <span class="badge badge-red">❌ Ditolak</span>
+          {% endif %}
+          {% if r.admin_note %}<p class="text-xs text-gray-400 mt-1">{{ r.admin_note }}</p>{% endif %}
+        </td>
+        <td class="td">
+          {% if r.status == 'pending' %}
+          <div class="flex flex-col gap-1.5">
+            <button onclick="openApprove({{ r.id }}, '{{ r.agen_nama | e }}', {{ r.nominal }})"
+              class="btn-success text-xs px-3 py-1.5 whitespace-nowrap">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Setujui
+            </button>
+            <button onclick="openReject({{ r.id }}, '{{ r.agen_nama | e }}')"
+              class="btn-danger text-xs px-3 py-1.5 whitespace-nowrap">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              Tolak
+            </button>
+          </div>
+          {% else %}
+          <span class="text-xs text-gray-300">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal Approve -->
+<div id="modal-approve" class="hidden modal-overlay" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h3 class="font-bold text-slate-900 text-lg mb-1">Setujui Tarik Saldo</h3>
+    <p id="approve-info" class="text-sm text-gray-500 mb-4"></p>
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 mb-4">
+      ⚠️ Pastikan transfer sudah dilakukan ke rekening tujuan sebelum menekan Konfirmasi. Saldo akan otomatis dipotong.
+    </div>
+    <div>
+      <label class="form-label">Catatan (opsional)</label>
+      <input id="approve-note" type="text" placeholder="Contoh: Transfer BCA sukses" class="form-input">
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-approve').classList.add('hidden')"
+        class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+      <button onclick="doApprove()" id="btn-approve"
+        class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Konfirmasi & Potong Saldo
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reject -->
+<div id="modal-reject" class="hidden modal-overlay" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <h3 class="font-bold text-slate-900 text-lg mb-1">Tolak Request</h3>
+    <p id="reject-info" class="text-sm text-gray-500 mb-4"></p>
+    <div>
+      <label class="form-label">Alasan Penolakan</label>
+      <input id="reject-note" type="text" placeholder="Contoh: Saldo tidak mencukupi" class="form-input">
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-reject').classList.add('hidden')"
+        class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+      <button onclick="doReject()" id="btn-reject"
+        class="btn-danger flex-1 py-2.5 justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        Tolak
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _currentRid = null;
+
+function openApprove(rid, nama, nominal) {
+  _currentRid = rid;
+  document.getElementById('approve-info').textContent =
+    `${nama} — Rp ${nominal.toLocaleString('id-ID')}`;
+  document.getElementById('approve-note').value = '';
+  document.getElementById('modal-approve').classList.remove('hidden');
+}
+
+function openReject(rid, nama) {
+  _currentRid = rid;
+  document.getElementById('reject-info').textContent = `Request dari: ${nama}`;
+  document.getElementById('reject-note').value = '';
+  document.getElementById('modal-reject').classList.remove('hidden');
+}
+
+async function doApprove() {
+  const note = document.getElementById('approve-note').value.trim();
+  const btn = document.getElementById('btn-approve');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Memproses...';
+  const res = await fetch(`/saldo/tarik/${_currentRid}/approve`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ note })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Setujui & Potong Saldo';
+  if (data.ok) {
+    showToast('Request disetujui, saldo agen dipotong & WA terkirim', 'success');
+    document.getElementById('modal-approve').classList.add('hidden');
+    document.getElementById(`status-${_currentRid}`).innerHTML =
+      `<span class="badge badge-green">✅ Disetujui</span>${note ? `<p class="text-xs text-gray-400 mt-1">${note}</p>` : ''}`;
+    document.getElementById(`row-${_currentRid}`).querySelector('.flex.flex-col')?.remove();
+    document.getElementById(`row-${_currentRid}`).classList.add('opacity-60');
+  } else {
+    showToast(data.detail || 'Gagal approve', 'error');
+  }
+}
+
+async function doReject() {
+  const note = document.getElementById('reject-note').value.trim();
+  const btn = document.getElementById('btn-reject');
+  btn.disabled = true;
+  const res = await fetch(`/saldo/tarik/${_currentRid}/reject`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ note })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  if (data.ok) {
+    showToast('Request ditolak & WA notifikasi terkirim ke agen', 'success');
+    document.getElementById('modal-reject').classList.add('hidden');
+    document.getElementById(`status-${_currentRid}`).innerHTML =
+      `<span class="badge badge-red">❌ Ditolak</span>${note ? `<p class="text-xs text-gray-400 mt-1">${note}</p>` : ''}`;
+    document.getElementById(`row-${_currentRid}`).querySelector('.flex.flex-col')?.remove();
+    document.getElementById(`row-${_currentRid}`).classList.add('opacity-60');
+  } else {
+    showToast(data.detail || 'Gagal reject', 'error');
+  }
+}
+</script>
+{% endblock %}

@@ -70,8 +70,19 @@
         <option value="overdue" {% if sel_status=='overdue' %}selected{% endif %}>Terlambat</option>
       </select>
     </div>
-    <div class="flex-1"></div>
-    <a href="/pppoe/tagihan" class="btn-ghost px-3 py-2.5 text-xs">Reset</a>
+    <div class="flex-1 min-w-[180px]">
+      <label class="form-label">Cari Pelanggan</label>
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="Nama / username..."
+          class="form-input pl-9">
+      </div>
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2.5 self-end">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+      Filter
+    </button>
+    <a href="/pppoe/tagihan" class="btn-ghost px-3 py-2.5 self-end text-xs">Reset</a>
   </form>
 </div>
 
@@ -109,10 +120,15 @@
           </td>
           <td class="td" id="status-{{ t.id }}">
             {% if t.status == 'paid' %}
-            <span class="badge badge-green">
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-              Lunas
-            </span>
+            <div>
+              <span class="badge badge-green">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                Lunas
+              </span>
+              {% if t.metode_bayar %}
+              <p class="text-xs text-slate-400 mt-0.5">{{ t.metode_bayar }}{% if t.keterangan_bayar %} · {{ t.keterangan_bayar }}{% endif %}</p>
+              {% endif %}
+            </div>
             {% elif t.status == 'overdue' %}
             <span class="badge badge-red">
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
@@ -128,12 +144,12 @@
           <td class="td">
             <div class="flex items-center gap-2">
               {% if t.status != 'paid' %}
-              <button onclick="tandaiLunas({{ t.id }})"
-                class="btn-success text-xs px-3 py-1.5" title="Tandai Lunas">
+              <button onclick="openBayar({{ t.id }}, '{{ t.nama_pelanggan|e }}', {{ t.amount }})"
+                class="btn-success text-xs px-3 py-1.5" title="Input Pembayaran">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
-                Lunas
+                Bayar
               </button>
               {% endif %}
               {% if t.status != 'paid' and t.telepon %}
@@ -198,6 +214,50 @@
   </div>
 </div>
 
+<!-- Modal Input Pembayaran Manual -->
+<div id="modal-bayar" class="modal-overlay hidden" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-slate-900 text-lg">Input Pembayaran</h3>
+      <button onclick="document.getElementById('modal-bayar').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="bg-slate-50 rounded-xl px-4 py-3 mb-4">
+      <p id="bayar-info" class="text-sm font-semibold text-slate-700"></p>
+      <p id="bayar-nominal" class="text-2xl font-black text-emerald-600 mt-0.5"></p>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="form-label">Metode Pembayaran</label>
+        <select id="bayar-metode" class="form-select">
+          <option value="Tunai">Tunai / Cash</option>
+          <option value="Transfer Bank">Transfer Bank</option>
+          <option value="QRIS">QRIS</option>
+          <option value="GoPay">GoPay</option>
+          <option value="OVO">OVO</option>
+          <option value="Dana">Dana</option>
+          <option value="ShopeePay">ShopeePay</option>
+          <option value="Lainnya">Lainnya</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Keterangan (opsional)</label>
+        <input id="bayar-ket" type="text" placeholder="Contoh: Dibayar via BCA 08xx" class="form-input">
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="document.getElementById('modal-bayar').classList.add('hidden')"
+        class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+      <button onclick="konfirmasiBayar()" id="btn-konfirmasi-bayar"
+        class="btn-success flex-1 py-2.5 justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Konfirmasi Lunas
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -228,20 +288,44 @@ async function doGenerate() {
   }
 }
 
-async function tandaiLunas(tid) {
-  const res = await fetch(`/pppoe/tagihan/${tid}/lunas`, { method: 'POST' });
+let _bayarTid = null;
+
+function openBayar(tid, nama, nominal) {
+  _bayarTid = tid;
+  document.getElementById('bayar-info').textContent = nama;
+  document.getElementById('bayar-nominal').textContent = 'Rp ' + nominal.toLocaleString('id-ID');
+  document.getElementById('bayar-metode').value = 'Tunai';
+  document.getElementById('bayar-ket').value = '';
+  document.getElementById('modal-bayar').classList.remove('hidden');
+}
+
+async function konfirmasiBayar() {
+  const metode = document.getElementById('bayar-metode').value;
+  const ket    = document.getElementById('bayar-ket').value.trim();
+  const btn    = document.getElementById('btn-konfirmasi-bayar');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Menyimpan...';
+  const res = await fetch(`/pppoe/tagihan/${_bayarTid}/lunas`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ metode, keterangan: ket })
+  });
   const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Konfirmasi Lunas';
   if (data.ok) {
-    document.getElementById(`status-${tid}`).innerHTML = `
-      <span class="badge badge-green">
-        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-        Lunas
-      </span>`;
-    // hapus tombol aksi lunas
-    const row = document.getElementById(`row-${tid}`);
-    const btnLunas = row?.querySelector('button[onclick^="tandaiLunas"]');
-    if (btnLunas) btnLunas.remove();
-    showToast('Tagihan ditandai lunas', 'success');
+    document.getElementById('modal-bayar').classList.add('hidden');
+    document.getElementById(`status-${_bayarTid}`).innerHTML = `
+      <div>
+        <span class="badge badge-green">
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+          Lunas
+        </span>
+        <p class="text-xs text-slate-400 mt-0.5">${metode}${ket ? ' · ' + ket : ''}</p>
+      </div>`;
+    const row = document.getElementById(`row-${_bayarTid}`);
+    row?.querySelector('button[onclick^="openBayar"]')?.remove();
+    showToast(`Pembayaran via ${metode} dicatat`, 'success');
   } else {
     showToast('Gagal memperbarui status', 'error');
   }

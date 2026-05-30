@@ -42,7 +42,11 @@
         <p class="text-xs text-gray-400">Toko Voucher Hotspot</p>
       </div>
     </div>
-    <span class="text-xs text-gray-400 hidden sm:block">Pembayaran aman & instan</span>
+    <a href="/beli/{{ slug }}/login"
+      class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium flex items-center gap-1.5 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      Login Agen
+    </a>
   </div>
 </header>
 
@@ -140,7 +144,7 @@
   {% endif %}
 
   <!-- Trust badges -->
-  <div class="grid grid-cols-3 gap-3 mb-8">
+  <div class="grid grid-cols-3 gap-3 mb-6">
     <div class="card p-3 text-center">
       <svg class="w-5 h-5 text-blue-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -162,6 +166,33 @@
       </svg>
       <p class="text-xs font-semibold text-gray-700">Kode via WA</p>
     </div>
+  </div>
+
+  <!-- Cari Voucher -->
+  <div class="card p-5 mb-8">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-gray-800">Cari Voucher Saya</p>
+        <p class="text-xs text-gray-400">Temukan kembali voucher yang pernah dibeli</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <input type="tel" id="inp-cari-nomor" placeholder="Nomor WA / HP (contoh: 08123...)"
+        class="form-input flex-1 text-sm"
+        onkeydown="if(event.key==='Enter') cariVoucher()">
+      <button onclick="cariVoucher()" id="btn-cari"
+        class="btn-primary px-4 py-2.5 text-sm whitespace-nowrap flex-shrink-0">
+        Cari
+      </button>
+    </div>
+    <!-- Hasil pencarian -->
+    <div id="hasil-cari" class="hidden mt-4"></div>
   </div>
 </div>
 
@@ -340,6 +371,78 @@ async function submitOrder(e) {
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg> Bayar Sekarang';
   }
+}
+
+// ── Cari Voucher ──────────────────────────────────────────────────────────────
+async function cariVoucher() {
+  const nomor = document.getElementById('inp-cari-nomor').value.trim();
+  const hasil = document.getElementById('hasil-cari');
+  const btn   = document.getElementById('btn-cari');
+  if (!nomor || nomor.length < 8) {
+    hasil.innerHTML = '<p class="text-xs text-red-500">Masukkan nomor HP yang valid.</p>';
+    hasil.classList.remove('hidden');
+    return;
+  }
+  btn.textContent = 'Mencari...';
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`/beli/{{ slug }}/cari?nomor=${encodeURIComponent(nomor)}`);
+    const data = await res.json();
+    if (!data.ok) {
+      hasil.innerHTML = `<p class="text-xs text-red-500">${data.msg}</p>`;
+    } else if (!data.data || data.data.length === 0) {
+      hasil.innerHTML = `
+        <div class="text-center py-3">
+          <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-sm text-gray-500">Tidak ada voucher ditemukan untuk nomor <strong>${nomor}</strong></p>
+          <p class="text-xs text-gray-400 mt-1">Pastikan nomor HP sesuai yang digunakan saat pembelian.</p>
+        </div>`;
+    } else {
+      const rows = data.data.map(v => {
+        const tgl = v.paid_at
+          ? new Date(v.paid_at * 1000).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})
+          : '-';
+        return `
+          <div class="flex items-center justify-between gap-3 py-2.5 border-b border-gray-50 last:border-0">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-gray-700">${v.paket_nama || 'Voucher'}</p>
+              <p class="text-xs text-gray-400">${tgl}</p>
+              ${v.durasi ? `<span class="text-xs text-gray-400">⏱ ${v.durasi}</span>` : ''}
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <code id="vc-${v.order_id}" class="font-mono text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg tracking-widest">${v.kode}</code>
+              <button onclick="salinKodeVoucher('vc-${v.order_id}', this)"
+                class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                Salin
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+      hasil.innerHTML = `
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-xs font-semibold text-gray-600">${data.data.length} voucher ditemukan</p>
+        </div>
+        <div class="divide-y divide-gray-50">${rows}</div>`;
+    }
+    hasil.classList.remove('hidden');
+  } catch(e) {
+    hasil.innerHTML = '<p class="text-xs text-red-500">Gagal menghubungi server.</p>';
+    hasil.classList.remove('hidden');
+  } finally {
+    btn.textContent = 'Cari';
+    btn.disabled = false;
+  }
+}
+
+function salinKodeVoucher(id, btn) {
+  const kode = document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(kode).then(() => {
+    btn.textContent = 'Disalin!';
+    setTimeout(() => btn.textContent = 'Salin', 2000);
+  });
 }
 
 function showToast(msg, type='success') {

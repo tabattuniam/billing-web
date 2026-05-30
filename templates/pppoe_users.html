@@ -7,14 +7,79 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Pelanggan PPPoE</h1>
-    <p class="page-sub">{{ users|length }} pelanggan terdaftar</p>
+    <p class="page-sub">{{ users|length }} pelanggan terdaftar
+      {% if cache_age is not none %}
+      · <span class="text-xs">Online diperbarui {{ (cache_age // 60)|int }} mnt lalu</span>
+      {% else %}
+      · <span class="text-xs text-amber-500">Cache online belum ada — klik Refresh</span>
+      {% endif %}
+    </p>
   </div>
-  <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
-    class="btn-primary px-4 py-2.5">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-    Tambah Pelanggan
-  </button>
+  <div class="flex gap-2 flex-wrap">
+    <button id="btn-refresh-online" onclick="refreshOnline()"
+      class="btn-secondary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Refresh Online
+    </button>
+    {% if user.role != 'teknisi' %}
+    <button onclick="document.getElementById('modal-import').classList.remove('hidden')"
+      class="btn-secondary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      Import dari Router
+    </button>
+    {% endif %}
+    <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+      class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah Pelanggan
+    </button>
+  </div>
 </div>
+
+{% set total    = users | length %}
+{% set aktif    = users | selectattr('status','eq','aktif') | list | length %}
+{% set nonaktif = users | selectattr('status','eq','nonaktif') | list | length %}
+{% set online   = users | selectattr('username','in', online_set) | list | length %}
+{% set terlambat = overdue_ids | length %}
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+  <div class="card p-4 cursor-pointer hover:ring-2 hover:ring-gray-200 transition" onclick="filterTab('semua')">
+    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Total</p>
+    <p class="text-3xl font-black text-gray-900 mt-1">{{ total }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">pelanggan</p>
+  </div>
+  <div class="card p-4 cursor-pointer hover:ring-2 hover:ring-emerald-200 transition" onclick="filterTab('aktif')">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Aktif</p>
+    <p class="text-3xl font-black text-emerald-600 mt-1">{{ aktif }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">pelanggan</p>
+  </div>
+  <div class="card p-4 relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-200 transition" onclick="filterTab('online')">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Online</p>
+    <p class="text-3xl font-black text-blue-600 mt-1">{{ online }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">sekarang</p>
+    <span class="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+  </div>
+  <div class="card p-4 cursor-pointer hover:ring-2 hover:ring-amber-200 transition" onclick="filterTab('terlambat')">
+    <p class="text-xs text-amber-500 font-medium uppercase tracking-wide">Terlambat</p>
+    <p class="text-3xl font-black text-amber-600 mt-1">{{ terlambat }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">belum bayar</p>
+  </div>
+  <div class="card p-4 cursor-pointer hover:ring-2 hover:ring-red-200 transition" onclick="filterTab('nonaktif')">
+    <p class="text-xs text-red-400 font-medium uppercase tracking-wide">Nonaktif</p>
+    <p class="text-3xl font-black text-red-500 mt-1">{{ nonaktif }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">disuspend</p>
+  </div>
+</div>
+
+{% if push_msg == 'ok' %}
+<div class="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm text-emerald-700 flex items-center gap-2">
+  <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  Pelanggan berhasil dipush ke MikroTik.
+</div>
+{% elif push_msg == 'fail' %}
+<div class="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm text-red-700">
+  Gagal push ke MikroTik. Cek koneksi server.
+</div>
+{% endif %}
 
 <!-- Filter & Search -->
 <form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
@@ -43,14 +108,26 @@
   {% endif %}
 </form>
 
+<!-- Tab Filter -->
+<div class="flex gap-1 mb-3 bg-white rounded-2xl p-1 shadow-sm border border-gray-100 w-fit">
+  {% set tabs = [('semua','Semua'),('aktif','Aktif'),('online','Online'),('terlambat','Terlambat'),('nonaktif','Nonaktif')] %}
+  {% for key, label in tabs %}
+  <button id="tab-{{ key }}" onclick="filterTab('{{ key }}')"
+    class="px-4 py-1.5 rounded-xl text-sm font-medium transition-all
+    {% if loop.first %}bg-blue-600 text-white shadow{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+    {{ label }}
+  </button>
+  {% endfor %}
+</div>
+
 <!-- Table -->
 <div class="card overflow-hidden">
   <div class="overflow-x-auto">
-    <table class="w-full">
+    <table class="w-full" id="tbl-pelanggan">
       <thead>
-        <tr>
+        <tr class="border-b border-gray-100 bg-slate-50">
           <th class="th">Pelanggan</th>
-          <th class="th">Username / Password</th>
+          <th class="th">PPPoE</th>
           <th class="th">Paket</th>
           <th class="th">Server</th>
           <th class="th">Jatuh Tempo</th>
@@ -60,22 +137,44 @@
       </thead>
       <tbody>
       {% for u in users %}
-      <tr class="hover:bg-gray-50/50 transition">
+      {% set is_online  = u.username in online_set %}
+      {% set is_overdue = u.id in overdue_ids %}
+      <tr class="hover:bg-gray-50/60 transition border-b border-gray-50
+        {% if is_overdue and u.status=='aktif' %}bg-amber-50/40{% endif %}
+        row-data"
+        data-status="{{ u.status }}"
+        data-online="{{ 'ya' if is_online else 'tidak' }}"
+        data-overdue="{{ 'ya' if is_overdue else 'tidak' }}">
+
         <td class="td">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <span class="text-blue-600 text-sm font-bold">{{ u.nama_pelanggan[0]|upper }}</span>
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+              {% if is_overdue %}bg-amber-100{% elif u.status=='aktif' %}bg-blue-50{% else %}bg-gray-100{% endif %}">
+              <span class="text-sm font-bold
+                {% if is_overdue %}text-amber-600{% elif u.status=='aktif' %}text-blue-600{% else %}text-gray-400{% endif %}">
+                {{ u.nama_pelanggan[0]|upper }}
+              </span>
             </div>
             <div>
-              <p class="font-semibold text-gray-800 text-sm">{{ u.nama_pelanggan }}</p>
-              <p class="text-xs text-gray-400">{{ u.telepon or '—' }}</p>
+              <p class="font-semibold text-gray-800 text-sm leading-tight">{{ u.nama_pelanggan }}</p>
+              {% if u.telepon %}
+              <a href="https://wa.me/{{ u.telepon }}" target="_blank"
+                class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5 mt-0.5">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.117.549 4.107 1.51 5.845L.036 23.737a.5.5 0 00.61.637l6.11-1.597A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.792 9.792 0 01-5.028-1.385l-.36-.214-3.733.977.993-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+                {{ u.telepon }}
+              </a>
+              {% else %}
+              <p class="text-xs text-gray-400">—</p>
+              {% endif %}
             </div>
           </div>
         </td>
+
         <td class="td">
           <p class="font-mono text-sm text-gray-700 font-semibold">{{ u.username }}</p>
           <p class="font-mono text-xs text-gray-400">{{ u.password }}</p>
         </td>
+
         <td class="td">
           {% if u.paket_nama %}
           <p class="text-sm font-medium text-gray-700">{{ u.paket_nama }}</p>
@@ -84,56 +183,89 @@
           <span class="text-gray-300 text-sm">—</span>
           {% endif %}
         </td>
+
         <td class="td">
           <span class="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">{{ u.server_nama or u.server_id[:8] }}</span>
         </td>
+
         <td class="td">
           <div class="flex flex-col gap-0.5">
-            <span class="text-sm font-semibold text-gray-700">Tgl {{ u.tgl_bayar }}</span>
+            <span class="text-sm font-semibold {% if is_overdue %}text-amber-600{% else %}text-gray-700{% endif %}">
+              Tgl {{ u.tgl_bayar }}
+            </span>
+            {% if is_overdue %}
+            <span class="text-xs font-medium text-amber-500">⚠ Belum bayar</span>
+            {% else %}
             <span class="text-xs text-gray-400">tiap bulan</span>
+            {% endif %}
           </div>
         </td>
+
         <td class="td">
-          {% if u.status=='aktif' %}
-          <span class="badge-green">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Aktif
-          </span>
-          {% else %}
-          <span class="badge-red">
-            <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-            Nonaktif
-          </span>
-          {% endif %}
+          <div class="flex flex-col gap-1">
+            {% if u.status=='aktif' %}
+            <span class="badge-green self-start">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              Aktif
+            </span>
+            {% else %}
+            <span class="badge-red self-start">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+              Nonaktif
+            </span>
+            {% endif %}
+            {% if is_online %}
+            <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+              Online
+            </span>
+            {% elif u.mt_pushed == 0 %}
+            <span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start">
+              Blm di MT
+            </span>
+            {% endif %}
+          </div>
         </td>
+
         <td class="td">
-          <div class="flex items-center gap-1.5">
-            <!-- Detail / Edit -->
-            <button onclick="openEdit({{ u.id }}, '{{ u.nama_pelanggan }}', '{{ u.telepon or '' }}', '{{ u.alamat or '' }}', {{ u.tgl_bayar }})"
-              class="btn-ghost px-2.5 py-1.5 text-xs">
+          <div class="flex items-center gap-1">
+            <button onclick="openEdit({{ u.id }}, '{{ u.nama_pelanggan|replace("'","\\'") }}', '{{ u.telepon or '' }}', '{{ u.alamat or ''|replace("'","\\'") }}', {{ u.tgl_bayar }}, '{{ u.username }}', '{{ u.password }}')"
+              class="btn-ghost px-2 py-1.5 text-xs" title="Edit">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
-            <!-- Toggle Status -->
-            <form method="post" action="/pppoe/users/status/{{ u.id }}">
+            <form method="post" action="/pppoe/users/status/{{ u.id }}" class="inline">
               {% if u.status=='aktif' %}
               <input type="hidden" name="status" value="nonaktif">
-              <button class="btn-warning px-2.5 py-1.5 text-xs" title="Nonaktifkan">
+              <button class="btn-warning px-2 py-1.5 text-xs" title="Nonaktifkan">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               </button>
               {% else %}
               <input type="hidden" name="status" value="aktif">
-              <button class="btn-success px-2.5 py-1.5 text-xs" title="Aktifkan">
+              <button class="btn-success px-2 py-1.5 text-xs" title="Aktifkan">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               </button>
               {% endif %}
             </form>
-            <!-- Hapus -->
-            <form method="post" action="/pppoe/users/hapus/{{ u.id }}"
-              onsubmit="return confirm('Hapus pelanggan {{ u.nama_pelanggan }}? Akun PPPoE di router juga akan dihapus.')">
-              <button class="btn-danger px-2.5 py-1.5 text-xs" title="Hapus">
+            {% if u.telepon %}
+            <a href="https://wa.me/{{ u.telepon }}?text={{ ('Halo ' + u.nama_pelanggan + ', tagihan internet Anda jatuh tempo tanggal ' + u.tgl_bayar|string + ' setiap bulan. Mohon segera melakukan pembayaran. Terima kasih.')|urlencode }}"
+              target="_blank" class="btn-ghost px-2 py-1.5 text-xs text-emerald-600" title="WhatsApp">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.117.549 4.107 1.51 5.845L.036 23.737a.5.5 0 00.61.637l6.11-1.597A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.792 9.792 0 01-5.028-1.385l-.36-.214-3.733.977.993-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            </a>
+            {% endif %}
+            <form method="post" action="/pppoe/users/hapus/{{ u.id }}" class="inline"
+              onsubmit="return confirm('Hapus {{ u.nama_pelanggan }}? Akun PPPoE di router juga dihapus.')">
+              <button class="btn-danger px-2 py-1.5 text-xs" title="Hapus">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
               </button>
             </form>
+            {% if u.mt_pushed == 0 %}
+            <form method="post" action="/pppoe/users/push/{{ u.id }}" class="inline"
+              onsubmit="return confirm('Push {{ u.nama_pelanggan }} ke MikroTik?')">
+              <button class="btn-warning px-2 py-1.5 text-xs" title="Push ke MikroTik">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              </button>
+            </form>
+            {% endif %}
           </div>
         </td>
       </tr>
@@ -144,10 +276,8 @@
             <div class="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
               <svg class="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </div>
-            <div>
-              <p class="font-semibold text-gray-500 text-sm">Belum ada pelanggan PPPoE</p>
-              <p class="text-xs text-gray-400 mt-1">Klik "Tambah Pelanggan" untuk mendaftarkan pelanggan baru</p>
-            </div>
+            <p class="font-semibold text-gray-500 text-sm">Belum ada pelanggan PPPoE</p>
+            <p class="text-xs text-gray-400">Klik "Tambah Pelanggan" untuk mendaftarkan pelanggan baru</p>
           </div>
         </td>
       </tr>
@@ -239,6 +369,22 @@
           <label class="form-label">Nama Pelanggan</label>
           <input id="edit-nama" name="nama_pelanggan" required class="form-input">
         </div>
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Kredensial PPPoE</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label">Username PPPoE</label>
+              <input id="edit-username" name="username" class="form-input font-mono text-sm">
+            </div>
+            <div>
+              <label class="form-label">Password PPPoE</label>
+              <div class="relative">
+                <input id="edit-password" name="password" type="text" class="form-input font-mono text-sm pr-8">
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 mt-1.5">Perubahan username/password akan langsung diupdate ke MikroTik.</p>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="form-label">No. Telepon / WA</label>
@@ -265,17 +411,255 @@
     </form>
   </div>
 </div>
+<!-- Modal Import dari MikroTik -->
+<div id="modal-import" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between p-6 border-b border-gray-100">
+      <h3 class="font-bold text-gray-900 text-lg">Import Pelanggan dari MikroTik</h3>
+      <button onclick="closeImport()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Step 1: Pilih server -->
+    <div id="import-step1" class="p-6 space-y-4">
+      <p class="text-sm text-gray-500">Pilih server MikroTik, lalu klik <strong>Ambil Data</strong> untuk melihat daftar PPPoE secret yang belum terdaftar di billing.</p>
+      <div class="flex gap-3 items-end">
+        <div class="flex-1">
+          <label class="form-label">Server MikroTik</label>
+          <select id="import-server" class="form-select">
+            <option value="">Pilih Server</option>
+            {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+          </select>
+        </div>
+        <button onclick="ambilData()" id="btn-ambil" class="btn-primary px-5 py-2.5 whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Ambil Data
+        </button>
+      </div>
+      <div id="import-msg" class="hidden text-sm text-center py-4 text-gray-500"></div>
+    </div>
+
+    <!-- Step 2: Tabel preview -->
+    <div id="import-step2" class="hidden flex-1 overflow-hidden flex flex-col">
+      <div class="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+        <p class="text-sm text-blue-700"><span id="import-count">0</span> secret baru ditemukan. Centang yang ingin diimport.</p>
+        <div class="flex gap-3 items-center">
+          <label class="text-xs text-blue-600 flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" id="chk-all" onchange="toggleAll(this)" class="rounded"> Pilih semua
+          </label>
+          <label class="form-label mb-0 text-xs whitespace-nowrap">Paket default:</label>
+          <select id="paket-default" onchange="applyDefaultPaket()" class="form-select !w-auto text-xs py-1.5">
+            <option value="">— pilih —</option>
+            {% for p in pakets %}<option value="{{ p.id }}">{{ p.nama }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="overflow-auto flex-1">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0 bg-gray-50 z-10">
+            <tr>
+              <th class="th w-8"></th>
+              <th class="th">Username</th>
+              <th class="th">Profile Router</th>
+              <th class="th">Nama Pelanggan</th>
+              <th class="th">Telepon</th>
+              <th class="th">Paket Billing</th>
+              <th class="th w-16">Tgl</th>
+            </tr>
+          </thead>
+          <tbody id="import-tbody"></tbody>
+        </table>
+      </div>
+      <div class="p-4 border-t border-gray-100 flex justify-end gap-3">
+        <button onclick="closeImport()" class="btn-ghost px-4 py-2">Batal</button>
+        <button onclick="doImport()" id="btn-import" class="btn-primary px-6 py-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Import Terpilih
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function openEdit(id, nama, telepon, alamat, tgl) {
+const PAKETS = [{% for p in pakets %}{"id":{{ p.id }},"nama":"{{ p.nama | e }}"},{% endfor %}];
+
+function filterTab(tab) {
+  // Update tab style
+  ['semua','aktif','online','terlambat','nonaktif'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) {
+      el.className = el.className.replace(/bg-blue-600 text-white shadow|text-gray-500 hover:text-gray-700/g, '').trim();
+      el.className += t === tab ? ' bg-blue-600 text-white shadow' : ' text-gray-500 hover:text-gray-700';
+    }
+  });
+  // Filter rows
+  document.querySelectorAll('.row-data').forEach(row => {
+    const status  = row.dataset.status;
+    const online  = row.dataset.online === 'ya';
+    const overdue = row.dataset.overdue === 'ya';
+    let show = false;
+    if (tab === 'semua')      show = true;
+    if (tab === 'aktif')      show = status === 'aktif';
+    if (tab === 'nonaktif')   show = status === 'nonaktif';
+    if (tab === 'online')     show = online;
+    if (tab === 'terlambat')  show = overdue;
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+// Sync tab with URL param on load
+(function(){
+  const p = new URLSearchParams(location.search).get('status');
+  if (p) filterTab(p);
+})();
+
+function openEdit(id, nama, telepon, alamat, tgl, username, password) {
   document.getElementById('form-edit').action = '/pppoe/users/edit/' + id;
   document.getElementById('edit-nama').value = nama;
+  document.getElementById('edit-username').value = username || '';
+  document.getElementById('edit-password').value = password || '';
   document.getElementById('edit-telepon').value = telepon;
   document.getElementById('edit-alamat').value = alamat;
   document.getElementById('edit-tgl').value = tgl;
   document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+// ── Import dari MikroTik ──────────────────────────────────────────────────
+let _importSecrets = [];
+
+function closeImport() {
+  document.getElementById('modal-import').classList.add('hidden');
+  document.getElementById('import-step2').classList.add('hidden');
+  document.getElementById('import-step1').classList.remove('hidden');
+  document.getElementById('import-msg').classList.add('hidden');
+  _importSecrets = [];
+}
+
+async function ambilData() {
+  const sid = document.getElementById('import-server').value;
+  if (!sid) { alert('Pilih server terlebih dahulu'); return; }
+  const btn = document.getElementById('btn-ambil');
+  const msg = document.getElementById('import-msg');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengambil...';
+  msg.classList.remove('hidden');
+  msg.textContent = 'Menghubungi router...';
+  try {
+    const res = await fetch('/pppoe/users/import-preview?server_id=' + sid);
+    const data = await res.json();
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Ambil Data';
+    if (data.error) { msg.textContent = 'Error: ' + data.error; return; }
+    _importSecrets = data.secrets || [];
+    if (_importSecrets.length === 0) {
+      msg.textContent = 'Semua PPPoE secret sudah terdaftar di billing.';
+      return;
+    }
+    renderImportTable(sid);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = 'Ambil Data';
+    msg.textContent = 'Gagal menghubungi server.';
+  }
+}
+
+function renderImportTable(sid) {
+  document.getElementById('import-count').textContent = _importSecrets.length;
+  const tbody = document.getElementById('import-tbody');
+  tbody.innerHTML = _importSecrets.map((s, i) => {
+    const paketOpts = PAKETS.map(p => `<option value="${p.id}">${p.nama}</option>`).join('');
+    const guessedPaket = PAKETS.find(p => p.nama.toLowerCase() === (s.profile||'').toLowerCase());
+    return `<tr class="border-b border-gray-50 hover:bg-gray-50/50" id="irow-${i}">
+      <td class="td"><input type="checkbox" class="imp-chk rounded" data-idx="${i}" checked></td>
+      <td class="td font-mono text-xs font-semibold">${s.username}</td>
+      <td class="td text-xs text-gray-500">${s.profile||'default'}</td>
+      <td class="td"><input class="form-input text-xs py-1.5" id="inama-${i}" value="${s.comment || s.username}"></td>
+      <td class="td"><input class="form-input text-xs py-1.5" id="itelp-${i}" placeholder="08xx"></td>
+      <td class="td">
+        <select class="form-select text-xs py-1.5" id="ipaket-${i}">
+          <option value="">— tidak dipilih —</option>${paketOpts}
+        </select>
+      </td>
+      <td class="td"><input class="form-input text-xs py-1.5 w-14" id="itgl-${i}" type="number" value="1" min="1" max="28"></td>
+    </tr>`;
+  }).join('');
+  // auto-select paket jika nama profil cocok
+  _importSecrets.forEach((s, i) => {
+    const gp = PAKETS.find(p => p.nama.toLowerCase() === (s.profile||'').toLowerCase());
+    if (gp) document.getElementById('ipaket-' + i).value = gp.id;
+  });
+  document.getElementById('import-step1').classList.add('hidden');
+  document.getElementById('import-step2').classList.remove('hidden');
+  document.getElementById('import-msg').classList.add('hidden');
+  // store server_id for submit
+  document.getElementById('import-step2').dataset.server = sid;
+}
+
+function toggleAll(chk) {
+  document.querySelectorAll('.imp-chk').forEach(c => c.checked = chk.checked);
+}
+
+function applyDefaultPaket() {
+  const val = document.getElementById('paket-default').value;
+  if (!val) return;
+  document.querySelectorAll('[id^="ipaket-"]').forEach(sel => sel.value = val);
+}
+
+async function doImport() {
+  const sid = document.getElementById('import-step2').dataset.server;
+  const items = [];
+  document.querySelectorAll('.imp-chk:checked').forEach(chk => {
+    const i = chk.dataset.idx;
+    items.push({
+      username: _importSecrets[i].username,
+      password: _importSecrets[i].password,
+      nama:     document.getElementById('inama-'+i)?.value || _importSecrets[i].username,
+      telepon:  document.getElementById('itelp-'+i)?.value || '',
+      paket_id: document.getElementById('ipaket-'+i)?.value || null,
+      tgl_bayar: parseInt(document.getElementById('itgl-'+i)?.value) || 1,
+    });
+  });
+  if (items.length === 0) { alert('Pilih minimal 1 pelanggan'); return; }
+  const btn = document.getElementById('btn-import');
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+  const res = await fetch('/pppoe/users/import', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({server_id: sid, items})
+  });
+  const data = await res.json();
+  if (data.imported) {
+    showToast(data.imported + ' pelanggan berhasil diimport');
+    setTimeout(() => window.location.reload(), 1000);
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Import Terpilih';
+    showToast('Gagal import', false);
+  }
+}
+
+async function refreshOnline() {
+  const btn = document.getElementById('btn-refresh-online');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Memuat...';
+  try {
+    const res = await fetch('/pppoe/users/refresh-online', {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Status online diperbarui!', true);
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast('Gagal refresh', false);
+    }
+  } catch(e) {
+    showToast('Error koneksi', false);
+  }
+  btn.disabled = false;
 }
 </script>
 {% endblock %}

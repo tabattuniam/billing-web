@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Laporan Pendapatan — {{ app_name }}{% endblock %}
+{% block topbar_title %}Laporan Pendapatan{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Laporan Pendapatan</h1>
+    <p class="page-sub">Ringkasan omzet PPPoE & Voucher per bulan</p>
+  </div>
+  <form method="get" action="/laporan" class="flex items-center gap-2">
+    <select name="tahun" onchange="this.form.submit()" class="form-select w-32">
+      {% for t in tahun_list %}
+      <option value="{{ t }}" {% if t==tahun %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- Stats bulan ini -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4">
+    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Omzet Tahun {{ tahun }}</p>
+    <p class="text-xl font-black text-gray-900 mt-1">Rp {{ "{:,}".format(total_tahun).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">total terkumpul</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Lunas Bulan Ini</p>
+    <p class="text-xl font-black text-emerald-600 mt-1">{{ stats_bln.paid }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">Rp {{ "{:,}".format(stats_bln.omzet).replace(",",".") }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-amber-500 font-medium uppercase tracking-wide">Belum Bayar</p>
+    <p class="text-xl font-black text-amber-600 mt-1">{{ stats_bln.unpaid }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-red-500 font-medium uppercase tracking-wide">Terlambat</p>
+    <p class="text-xl font-black text-red-600 mt-1">{{ stats_bln.overdue }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+  </div>
+</div>
+
+<!-- Grafik Pendapatan -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+  <div class="lg:col-span-2 card p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4">Pendapatan Per Bulan ({{ tahun }})</h3>
+    <canvas id="chartPendapatan" height="100"></canvas>
+  </div>
+  <div class="card p-5">
+    <h3 class="text-sm font-semibold text-gray-700 mb-4">Pelanggan Baru ({{ tahun }})</h3>
+    <canvas id="chartPelanggan" height="100"></canvas>
+  </div>
+</div>
+
+<!-- Tabel Detail Per Bulan -->
+<div class="card overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-semibold text-gray-700">Detail Per Bulan</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="th">Bulan</th>
+          <th class="th text-right">Omzet PPPoE</th>
+          <th class="th text-right">Omzet Voucher</th>
+          <th class="th text-right">Total</th>
+          <th class="th text-center">Lunas</th>
+          <th class="th text-center">Belum Bayar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(grand=0) %}
+        {% for b in bulanan %}
+        {% set ns.grand = ns.grand + b.total %}
+        <tr class="hover:bg-gray-50 transition-colors {% if b.total == 0 %}opacity-40{% endif %}">
+          <td class="td font-semibold text-gray-800">{{ b.bulan | label_bulan }}</td>
+          <td class="td text-right text-gray-700">
+            {% if b.omzet_pppoe %}Rp {{ "{:,}".format(b.omzet_pppoe).replace(",",".") }}{% else %}—{% endif %}
+          </td>
+          <td class="td text-right text-gray-700">
+            {% if b.omzet_voucher %}Rp {{ "{:,}".format(b.omzet_voucher).replace(",",".") }}{% else %}—{% endif %}
+          </td>
+          <td class="td text-right font-bold text-gray-900">
+            {% if b.total %}Rp {{ "{:,}".format(b.total).replace(",",".") }}{% else %}—{% endif %}
+          </td>
+          <td class="td text-center">
+            {% if b.lunas_pppoe %}<span class="badge badge-green">{{ b.lunas_pppoe }}</span>{% else %}—{% endif %}
+          </td>
+          <td class="td text-center">
+            {% if b.unpaid %}<span class="badge badge-orange">{{ b.unpaid }}</span>{% else %}<span class="text-gray-300">0</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="bg-gray-50 border-t-2 border-gray-200">
+          <td class="td font-bold text-gray-900">Total {{ tahun }}</td>
+          <td class="td text-right font-bold text-gray-700">
+            Rp {{ "{:,}".format(bulanan | sum(attribute='omzet_pppoe')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-bold text-gray-700">
+            Rp {{ "{:,}".format(bulanan | sum(attribute='omzet_voucher')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-black text-emerald-700 text-base">
+            Rp {{ "{:,}".format(total_tahun).replace(",",".") }}
+          </td>
+          <td class="td text-center font-bold text-gray-700">{{ bulanan | sum(attribute='lunas_pppoe') }}</td>
+          <td class="td text-center font-bold text-amber-600">{{ bulanan | sum(attribute='unpaid') }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const BULAN_LABELS = [
+  'Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'
+];
+const DATA_PPPOE   = {{ bulanan | map(attribute='omzet_pppoe')  | list | tojson }};
+const DATA_VOUCHER = {{ bulanan | map(attribute='omzet_voucher') | list | tojson }};
+const DATA_PELANGGAN = {{ pelanggan | map(attribute='count') | list | tojson }};
+
+// ── Chart Pendapatan ──────────────────────────────────────────────────────────
+new Chart(document.getElementById('chartPendapatan'), {
+  type: 'bar',
+  data: {
+    labels: BULAN_LABELS,
+    datasets: [
+      {
+        label: 'PPPoE',
+        data: DATA_PPPOE,
+        backgroundColor: 'rgba(37,99,235,0.85)',
+        borderRadius: 6,
+        borderSkipped: false,
+      },
+      {
+        label: 'Voucher',
+        data: DATA_VOUCHER,
+        backgroundColor: 'rgba(16,185,129,0.75)',
+        borderRadius: 6,
+        borderSkipped: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` Rp ${Number(ctx.raw).toLocaleString('id-ID')}`
+        }
+      }
+    },
+    scales: {
+      x: { stacked: false, grid: { display: false } },
+      y: {
+        stacked: false,
+        ticks: {
+          callback: v => 'Rp ' + (v >= 1000000 ? (v/1000000).toFixed(1)+'jt' : (v/1000).toFixed(0)+'rb')
+        },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+      }
+    }
+  }
+});
+
+// ── Chart Pelanggan Baru ──────────────────────────────────────────────────────
+new Chart(document.getElementById('chartPelanggan'), {
+  type: 'line',
+  data: {
+    labels: BULAN_LABELS,
+    datasets: [{
+      label: 'Pelanggan Baru',
+      data: DATA_PELANGGAN,
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      tension: 0.4,
+      fill: true,
+      pointBackgroundColor: '#6366f1',
+      pointRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.raw} pelanggan` } }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { ticks: { stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } }
+    }
+  }
+});
+</script>
+{% endblock %}

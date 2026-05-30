@@ -75,10 +75,19 @@
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
       Cek Koneksi
     </button>
+    <button onclick="openEdit(this)"
+      data-id="{{ s.id }}"
+      data-nama="{{ s.nama | e }}"
+      data-vpn="{{ s.vpn_ip | e }}"
+      data-port="{{ s.api_port }}"
+      data-user="{{ s.api_user | e }}"
+      data-lokasi="{{ s.lokasi | e }}"
+      class="btn-secondary px-3 py-2 text-xs">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+    </button>
     <form method="post" action="/servers/hapus/{{ s.id }}" onsubmit="return confirm('Hapus server {{ s.nama }}?')">
       <button class="btn-danger px-3 py-2">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-        Hapus
       </button>
     </form>
   </div>
@@ -103,14 +112,15 @@
           <input name="nama" required placeholder="Contoh: Cabang Utama" class="form-input">
         </div>
         <div>
-          <label class="form-label">VPN IP (dari vpntunel.my.id)</label>
-          <input name="vpn_ip" required placeholder="10.8.0.x" class="form-input">
-          <p class="text-xs text-slate-400 mt-1">IP yang diberikan saat membuat koneksi VPN</p>
+          <label class="form-label">Host / IP MikroTik</label>
+          <input name="vpn_ip" required placeholder="10.8.0.x atau id3.tunnel.my.id" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">Bisa IP VPN atau hostname tunnel. Boleh tulis <code class="bg-gray-100 px-1 rounded">host:port</code> jika port bukan 8728</p>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="form-label">API Port</label>
             <input name="api_port" type="number" value="8728" class="form-input">
+            <p class="text-xs text-slate-400 mt-1">Abaikan jika sudah tulis host:port</p>
           </div>
           <div>
             <label class="form-label">API Username</label>
@@ -137,10 +147,72 @@
     </form>
   </div>
 </div>
+
+<!-- Modal Edit -->
+<div id="modal-edit" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-md">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Server MikroTik</h3>
+      <button onclick="document.getElementById('modal-edit').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit" method="post">
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Nama Server</label>
+          <input id="edit-nama" name="nama" required class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Host / IP MikroTik</label>
+          <input id="edit-vpn_ip" name="vpn_ip" required class="form-input">
+          <p class="text-xs text-slate-400 mt-1">Gunakan VPN IP (contoh: <code class="bg-gray-100 px-1 rounded">10.8.0.2</code>) port 8728, atau <code class="bg-gray-100 px-1 rounded">host:port</code></p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">API Port</label>
+            <input id="edit-api_port" name="api_port" type="number" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">API Username</label>
+            <input id="edit-api_user" name="api_user" class="form-input">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">API Password Baru</label>
+          <input name="api_password" type="password" placeholder="Kosongkan jika tidak diubah" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Lokasi (opsional)</label>
+          <input id="edit-lokasi" name="lokasi" class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-edit').classList.add('hidden')"
+          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Simpan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function openEdit(btn) {
+  const d = btn.dataset;
+  document.getElementById('form-edit').action = '/servers/edit/' + d.id;
+  document.getElementById('edit-nama').value = d.nama;
+  document.getElementById('edit-vpn_ip').value = d.vpn;
+  document.getElementById('edit-api_port').value = d.port;
+  document.getElementById('edit-api_user').value = d.user;
+  document.getElementById('edit-lokasi').value = d.lokasi;
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
 async function pingServer(sid) {
   const btn = document.getElementById('ping-'+sid);
   const orig = btn.innerHTML;

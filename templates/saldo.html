@@ -9,6 +9,18 @@
     <h1 class="page-title">Saldo & Mutasi</h1>
     <p class="page-sub">Riwayat perubahan saldo akun Anda</p>
   </div>
+  {% if user.role == 'admin' %}
+  <div class="flex gap-2">
+    <button onclick="openTarik()" class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+      Tarik Saldo
+    </button>
+    <a href="/saldo/tarik-requests" class="btn-secondary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Riwayat
+    </a>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Saldo Card -->
@@ -79,4 +91,121 @@
     </table>
   </div>
 </div>
+
+{% if user.role == 'admin' %}
+<!-- Modal Tarik Saldo -->
+<div id="modal-tarik" class="hidden modal-overlay" style="background:rgba(0,0,0,0.45)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tarik Saldo</h3>
+      <button onclick="document.getElementById('modal-tarik').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="bg-blue-50 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+      <span class="text-sm text-blue-600">Saldo tersedia</span>
+      <span class="font-bold text-blue-700">{{ user.saldo | rp }}</span>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="form-label">Nominal Tarik (Rp)</label>
+        <input id="tk-nominal" type="number" min="10000" placeholder="Minimal Rp 10.000" class="form-input">
+      </div>
+      {% if saved_rek.bank %}
+      <div class="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-500">Rekening tersimpan</p>
+          <p class="font-semibold text-slate-800 text-sm">{{ saved_rek.bank }} — {{ saved_rek.no }}</p>
+          <p class="text-xs text-slate-500">{{ saved_rek.nama }}</p>
+        </div>
+        <button type="button" onclick="toggleRekForm()" class="text-xs text-blue-500 hover:underline">Ganti</button>
+      </div>
+      <div id="rek-form" class="hidden space-y-3">
+      {% else %}
+      <div id="rek-form" class="space-y-3">
+      {% endif %}
+        <div>
+          <label class="form-label">Bank / E-Wallet</label>
+          <select id="tk-bank" class="form-select">
+            <option value="">Pilih tujuan transfer</option>
+            <option {% if saved_rek.bank=='BCA' %}selected{% endif %}>BCA</option>
+            <option {% if saved_rek.bank=='BRI' %}selected{% endif %}>BRI</option>
+            <option {% if saved_rek.bank=='BNI' %}selected{% endif %}>BNI</option>
+            <option {% if saved_rek.bank=='Mandiri' %}selected{% endif %}>Mandiri</option>
+            <option {% if saved_rek.bank=='BSI' %}selected{% endif %}>BSI</option>
+            <option {% if saved_rek.bank=='Danamon' %}selected{% endif %}>Danamon</option>
+            <option {% if saved_rek.bank=='GoPay' %}selected{% endif %}>GoPay</option>
+            <option {% if saved_rek.bank=='OVO' %}selected{% endif %}>OVO</option>
+            <option {% if saved_rek.bank=='Dana' %}selected{% endif %}>Dana</option>
+            <option {% if saved_rek.bank=='ShopeePay' %}selected{% endif %}>ShopeePay</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Nomor Rekening / Akun</label>
+          <input id="tk-rekno" type="text" placeholder="08xx / 1234567890" value="{{ saved_rek.no }}" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Atas Nama</label>
+          <input id="tk-rekname" type="text" placeholder="Nama pemilik rekening" value="{{ saved_rek.nama }}" class="form-input">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Catatan (opsional)</label>
+        <input id="tk-catatan" type="text" placeholder="Opsional" class="form-input">
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button onclick="document.getElementById('modal-tarik').classList.add('hidden')"
+        class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+      <button onclick="submitTarik()" id="btn-tarik" class="btn-primary flex-1 py-2.5 justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+        Ajukan Tarik
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if user.role == 'admin' %}
+<script>
+function openTarik() { document.getElementById('modal-tarik').classList.remove('hidden'); }
+function toggleRekForm() {
+  const f = document.getElementById('rek-form');
+  f.classList.toggle('hidden');
+}
+
+async function submitTarik() {
+  const nominal       = parseInt(document.getElementById('tk-nominal').value || 0);
+  const bank_name     = (document.getElementById('tk-bank')?.value || '{{ saved_rek.bank }}').trim();
+  const rekening_no   = (document.getElementById('tk-rekno')?.value || '{{ saved_rek.no }}').trim();
+  const rekening_name = (document.getElementById('tk-rekname')?.value || '{{ saved_rek.nama }}').trim();
+  const catatan       = document.getElementById('tk-catatan').value.trim();
+
+  if (!nominal || nominal < 10000) { showToast('Nominal minimal Rp 10.000', 'warning'); return; }
+  if (!bank_name) { showToast('Pilih bank/e-wallet tujuan', 'warning'); return; }
+  if (!rekening_no) { showToast('Masukkan nomor rekening', 'warning'); return; }
+
+  const btn = document.getElementById('btn-tarik');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...';
+  const res = await fetch('/saldo/tarik', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ nominal, bank_name, rekening_no, rekening_name, catatan })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg> Ajukan Tarik';
+  if (data.ok) {
+    showToast('Permintaan tarik saldo berhasil dibuat!', 'success');
+    document.getElementById('modal-tarik').classList.add('hidden');
+    setTimeout(() => window.location.href = '/saldo/tarik-requests', 1200);
+  } else {
+    showToast(data.detail || 'Gagal mengajukan', 'error');
+  }
+}
+</script>
+{% endif %}
 {% endblock %}
