@@ -22,6 +22,9 @@
     .badge-green { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100; }
     .badge-red { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-100; }
     .badge-orange { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-100; }
+    .server-card { @apply card p-4 cursor-pointer transition-all hover:shadow-md hover:border-blue-300 select-none; }
+    .server-card.active { @apply border-blue-500 ring-2 ring-blue-200 shadow-md; }
+    .server-card.offline { @apply opacity-60 cursor-not-allowed; }
   }
 </style>
 </head>
@@ -50,150 +53,220 @@
   </div>
 </header>
 
-<!-- Hero -->
 <div class="max-w-2xl mx-auto px-4 pt-8 pb-4">
+
+  <!-- Hero -->
   <div class="text-center mb-8">
     <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
       Bayar langsung, voucher langsung aktif
     </div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-1">Pilih Paket Internet</h1>
-    <p class="text-sm text-gray-500">Pilih paket yang sesuai, bayar via QRIS, dan langsung konek!</p>
+    <h1 class="text-2xl font-bold text-gray-900 mb-1">Beli Voucher Internet</h1>
+    <p class="text-sm text-gray-500">Pilih lokasi, pilih paket, bayar, dan langsung konek!</p>
   </div>
 
-  <!-- Packages -->
-  {% if pakets %}
-  <div class="grid gap-4 mb-8">
-    {% for p in pakets %}
-    <div class="card p-5 relative overflow-hidden transition-all hover:shadow-md hover:border-blue-200 cursor-pointer paket-card
-        {% if p.stok < 1 %}opacity-60{% endif %}"
-        data-paket-id="{{ p.id }}"
-        data-nama="{{ p.nama }}"
-        data-harga="{{ p.harga }}"
-        data-stok="{{ p.stok }}"
-        onclick="pilihPaket(this)">
-      {% if p.stok >= 1 %}
-      <div class="absolute top-0 right-0 w-24 h-24 bg-blue-600/5 rounded-full -translate-y-6 translate-x-6 pointer-events-none"></div>
-      {% endif %}
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex-1">
-          <div class="flex items-center gap-2 flex-wrap mb-1">
-            <h3 class="font-bold text-gray-900 text-base">{{ p.nama }}</h3>
-            {% if p.stok > 5 %}
+  <!-- ── STEP 1: Pilih Server ────────────────────────────────────────── -->
+  {% if servers|length > 1 %}
+  <div id="step-server" class="mb-6">
+    <!-- Step indicator -->
+    <div class="flex items-center gap-2 mb-4">
+      <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">1</div>
+      <p class="text-sm font-semibold text-gray-700">Pilih Lokasi / Server</p>
+    </div>
+
+    <div class="grid gap-3">
+      {% for s in servers %}
+      <div class="server-card {% if not s.online %}offline{% endif %}"
+           id="srv-card-{{ s.id }}"
+           onclick="pilihServer('{{ s.id }}', {{ 'true' if s.online else 'false' }})">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
+               {% if s.online %}bg-emerald-50{% else %}bg-gray-100{% endif %}">
+            <svg class="w-5 h-5 {% if s.online %}text-emerald-500{% else %}text-gray-400{% endif %}"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-gray-800 text-sm">{{ s.nama }}</p>
+            {% if s.lokasi %}
+            <p class="text-xs text-gray-400 mt-0.5">📍 {{ s.lokasi }}</p>
+            {% endif %}
+          </div>
+          <div class="flex-shrink-0">
+            {% if s.online %}
             <span class="badge-green">
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg>
-              Tersedia
-            </span>
-            {% elif p.stok > 0 %}
-            <span class="badge-orange">
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg>
-              Sisa {{ p.stok }}
+              <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/></svg>
+              Online
             </span>
             {% else %}
-            <span class="badge-red">Stok Habis</span>
-            {% endif %}
-          </div>
-          <div class="flex items-center gap-4 text-xs text-gray-500 mt-2 flex-wrap">
-            <span class="flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              {{ p.durasi }}
-            </span>
-            {% if p.kecepatan %}
-            <span class="flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"/>
-              </svg>
-              {{ p.kecepatan }}
+            <span class="badge-red">
+              <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/></svg>
+              Offline
             </span>
             {% endif %}
           </div>
-          {% if p.deskripsi %}
-          <p class="text-xs text-gray-400 mt-1.5">{{ p.deskripsi }}</p>
-          {% endif %}
-        </div>
-        <div class="text-right flex-shrink-0">
-          <p class="text-xl font-black text-blue-600">Rp {{ "{:,}".format(p.harga).replace(",", ".") }}</p>
-          {% if p.stok >= 1 %}
-          <button class="mt-2 btn-primary text-xs px-3 py-1.5" onclick="event.stopPropagation(); pilihPaket(this.closest('.paket-card'))">
-            Beli
-          </button>
-          {% else %}
-          <span class="mt-2 text-xs text-gray-400">Tidak tersedia</span>
-          {% endif %}
+          <!-- Checkmark saat terpilih -->
+          <div id="chk-{{ s.id }}" class="hidden w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
         </div>
       </div>
+      {% endfor %}
     </div>
-    {% endfor %}
   </div>
-  {% else %}
-  <div class="card p-10 text-center mb-8">
-    <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-        d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
-    </svg>
-    <p class="text-gray-500 font-medium">Belum ada paket tersedia</p>
-    <p class="text-xs text-gray-400 mt-1">Coba lagi nanti atau hubungi penyedia.</p>
+
+  <!-- Divider step -->
+  <div id="step-divider" class="hidden flex items-center gap-3 mb-5">
+    <div class="flex-1 h-px bg-gray-200"></div>
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">2</div>
+      <p class="text-sm font-semibold text-gray-700">Pilih Paket</p>
+    </div>
+    <div class="flex-1 h-px bg-gray-200"></div>
   </div>
   {% endif %}
 
-  <!-- Trust badges -->
-  <div class="grid grid-cols-3 gap-3 mb-6">
-    <div class="card p-3 text-center">
-      <svg class="w-5 h-5 text-blue-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-700">Pembayaran Aman</p>
-    </div>
-    <div class="card p-3 text-center">
-      <svg class="w-5 h-5 text-emerald-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M13 10V3L4 14h7v7l9-11h-7z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-700">Langsung Aktif</p>
-    </div>
-    <div class="card p-3 text-center">
-      <svg class="w-5 h-5 text-purple-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-700">Kode via WA</p>
-    </div>
-  </div>
+  <!-- ── STEP 2: Pilih Paket ─────────────────────────────────────────── -->
+  <div id="step-paket" class="{% if servers|length > 1 %}hidden{% endif %}">
 
-  <!-- Cari Voucher -->
-  <div class="card p-5 mb-8">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- Banner server terpilih (hanya muncul jika multi-server) -->
+    {% if servers|length > 1 %}
+    <div id="banner-server" class="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 mb-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
         </svg>
+        <div>
+          <p class="text-xs text-blue-500 font-medium">Server terpilih</p>
+          <p class="text-sm font-bold text-blue-700" id="banner-server-nama">—</p>
+        </div>
       </div>
-      <div>
-        <p class="text-sm font-semibold text-gray-800">Cari Voucher Saya</p>
-        <p class="text-xs text-gray-400">Temukan kembali voucher yang pernah dibeli</p>
-      </div>
-    </div>
-    <div class="flex gap-2">
-      <input type="tel" id="inp-cari-nomor" placeholder="Nomor WA / HP (contoh: 08123...)"
-        class="form-input flex-1 text-sm"
-        onkeydown="if(event.key==='Enter') cariVoucher()">
-      <button onclick="cariVoucher()" id="btn-cari"
-        class="btn-primary px-4 py-2.5 text-sm whitespace-nowrap flex-shrink-0">
-        Cari
+      <button onclick="gantiServer()" class="text-xs px-2.5 py-1.5 bg-white border border-blue-200 text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors">
+        Ganti
       </button>
     </div>
-    <!-- Hasil pencarian -->
-    <div id="hasil-cari" class="hidden mt-4"></div>
-  </div>
+    {% endif %}
+
+    {% if pakets %}
+    <div class="grid gap-4 mb-8">
+      {% for p in pakets %}
+      <div class="card p-5 relative overflow-hidden transition-all hover:shadow-md hover:border-blue-200 cursor-pointer paket-card"
+          data-paket-id="{{ p.id }}"
+          data-nama="{{ p.nama }}"
+          data-harga="{{ p.harga }}"
+          data-server-id="{{ p.server_id or '' }}"
+          onclick="pilihPaket(this)">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-blue-600/5 rounded-full -translate-y-6 translate-x-6 pointer-events-none"></div>
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+              <h3 class="font-bold text-gray-900 text-base">{{ p.nama }}</h3>
+              <span class="badge-green">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/></svg>
+                Tersedia
+              </span>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-gray-500 mt-2 flex-wrap">
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {{ p.durasi }}
+              </span>
+              {% if p.kecepatan %}
+              <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                {{ p.kecepatan }}
+              </span>
+              {% endif %}
+            </div>
+            {% if p.deskripsi %}
+            <p class="text-xs text-gray-400 mt-1.5">{{ p.deskripsi }}</p>
+            {% endif %}
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-xl font-black text-blue-600">Rp {{ "{:,}".format(p.harga).replace(",", ".") }}</p>
+            <button class="mt-2 btn-primary text-xs px-3 py-1.5"
+                    onclick="event.stopPropagation(); pilihPaket(this.closest('.paket-card'))">
+              Beli
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-10 text-center mb-8">
+      <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+      </svg>
+      <p class="text-gray-500 font-medium">Belum ada paket tersedia</p>
+      <p class="text-xs text-gray-400 mt-1">Coba lagi nanti atau hubungi penyedia.</p>
+    </div>
+    {% endif %}
+
+    <!-- Trust badges -->
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="card p-3 text-center">
+        <svg class="w-5 h-5 text-blue-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+        <p class="text-xs font-semibold text-gray-700">Pembayaran Aman</p>
+      </div>
+      <div class="card p-3 text-center">
+        <svg class="w-5 h-5 text-emerald-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <p class="text-xs font-semibold text-gray-700">Langsung Aktif</p>
+      </div>
+      <div class="card p-3 text-center">
+        <svg class="w-5 h-5 text-purple-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        <p class="text-xs font-semibold text-gray-700">Kode via WA</p>
+      </div>
+    </div>
+
+    <!-- Cari Voucher -->
+    <div class="card p-5 mb-8">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-gray-800">Cari Voucher Saya</p>
+          <p class="text-xs text-gray-400">Temukan kembali voucher yang pernah dibeli</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <input type="tel" id="inp-cari-nomor" placeholder="Nomor WA / HP (contoh: 08123...)"
+          class="form-input flex-1 text-sm"
+          onkeydown="if(event.key==='Enter') cariVoucher()">
+        <button onclick="cariVoucher()" id="btn-cari"
+          class="btn-primary px-4 py-2.5 text-sm whitespace-nowrap flex-shrink-0">
+          Cari
+        </button>
+      </div>
+      <div id="hasil-cari" class="hidden mt-4"></div>
+    </div>
+
+  </div><!-- /step-paket -->
 </div>
 
 <!-- ── Modal Pembelian ── -->
@@ -222,6 +295,7 @@
 
     <form id="form-beli" onsubmit="submitOrder(event)">
       <input type="hidden" id="field-paket-id" name="paket_id" value="">
+      <input type="hidden" id="field-server-id" name="server_id" value="">
 
       <div class="mb-4">
         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Nomor WhatsApp</label>
@@ -230,20 +304,6 @@
         <p class="text-xs text-gray-400 mt-1">Kode voucher akan dikirim ke nomor ini</p>
       </div>
 
-      {% if servers|length > 1 %}
-      <div class="mb-4">
-        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Pilih Server</label>
-        <select id="field-server-id" name="server_id" class="form-select" required>
-          {% for s in servers %}
-          <option value="{{ s.id }}">{{ s.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% else %}
-      <input type="hidden" id="field-server-id" name="server_id" value="{{ servers[0].id if servers else '' }}">
-      {% endif %}
-
-      <!-- Error -->
       <div id="modal-error" class="hidden bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600 mb-4"></div>
 
       <button type="submit" id="btn-bayar" class="btn-primary w-full py-3 text-base font-bold">
@@ -257,7 +317,7 @@
   </div>
 </div>
 
-<!-- ── Modal Voucher Langsung (dev/testing) ── -->
+<!-- ── Modal Voucher Sukses ── -->
 <div id="modal-voucher" class="fixed inset-0 z-50 hidden items-center justify-center p-4"
   style="background:rgba(0,0,0,0.6);">
   <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
@@ -282,15 +342,88 @@
 <div id="toast" class="fixed bottom-5 right-5 z-[99] pointer-events-none space-y-2"></div>
 
 <script>
+// Data server dari Jinja2
+const SERVERS = {
+  {% for s in servers %}
+  "{{ s.id }}": { nama: "{{ s.nama }}", lokasi: "{{ s.lokasi or '' }}", online: {{ 'true' if s.online else 'false' }} },
+  {% endfor %}
+};
+const IS_MULTI_SERVER = {{ 'true' if servers|length > 1 else 'false' }};
+const DEFAULT_SERVER_ID = "{{ servers[0].id if servers else '' }}";
+
 let _selectedPaket = null;
+let _selectedServerId = IS_MULTI_SERVER ? null : DEFAULT_SERVER_ID;
+
+// Auto-select jika hanya 1 server
+if (!IS_MULTI_SERVER) {
+  document.getElementById('field-server-id').value = DEFAULT_SERVER_ID;
+}
 
 function rp(n) {
   return 'Rp ' + Number(n).toLocaleString('id-ID');
 }
 
+function pilihServer(serverId, isOnline) {
+  if (!isOnline) {
+    showToast('Server ini sedang offline. Pilih server lain.', 'error');
+    return;
+  }
+
+  _selectedServerId = serverId;
+  document.getElementById('field-server-id').value = serverId;
+
+  // Sembunyikan semua kartu, tampilkan hanya yang dipilih sebagai ringkasan
+  const srv = SERVERS[serverId];
+  const namaServer = srv ? srv.nama + (srv.lokasi ? ' — ' + srv.lokasi : '') : serverId;
+  document.getElementById('step-server').innerHTML = `
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">✓</div>
+      <p class="text-sm font-semibold text-gray-700">Lokasi / Server</p>
+    </div>
+    <div class="card p-4 border-blue-300 ring-1 ring-blue-200 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+          <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+          </svg>
+        </div>
+        <p class="text-sm font-semibold text-gray-800">${namaServer}</p>
+      </div>
+      <button onclick="gantiServer()" class="text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium transition-colors flex-shrink-0">
+        Ganti
+      </button>
+    </div>`;
+
+  // Update banner server di step paket
+  const banner = document.getElementById('banner-server-nama');
+  if (banner) banner.textContent = namaServer;
+
+  // Filter ketat: hanya tampilkan paket yang server_id-nya cocok
+  document.querySelectorAll('.paket-card').forEach(card => {
+    card.style.display = (card.dataset.serverId === serverId) ? '' : 'none';
+  });
+
+  // Tampilkan step paket
+  document.getElementById('step-paket').classList.remove('hidden');
+  document.getElementById('step-divider').classList.remove('hidden');
+  document.getElementById('step-divider').classList.add('flex');
+
+  // Scroll halus ke paket
+  setTimeout(() => {
+    document.getElementById('step-paket').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
+
+function gantiServer() {
+  window.location.reload();
+}
+
 function pilihPaket(el) {
-  const stok = parseInt(el.dataset.stok || '0');
-  if (stok < 1) return;
+  if (!_selectedServerId) {
+    showToast('Pilih lokasi server terlebih dahulu.', 'warning');
+    return;
+  }
 
   _selectedPaket = {
     id:    el.dataset.paketId,
@@ -298,10 +431,11 @@ function pilihPaket(el) {
     harga: el.dataset.harga,
   };
 
-  document.getElementById('modal-nama-paket').textContent = 'Beli ' + _selectedPaket.nama;
+  document.getElementById('modal-nama-paket').textContent  = 'Beli ' + _selectedPaket.nama;
   document.getElementById('modal-paket-summary').textContent = _selectedPaket.nama;
   document.getElementById('modal-harga-summary').textContent = rp(_selectedPaket.harga);
   document.getElementById('field-paket-id').value = _selectedPaket.id;
+  document.getElementById('field-server-id').value = _selectedServerId;
   document.getElementById('modal-error').classList.add('hidden');
 
   const m = document.getElementById('modal-beli');
@@ -310,9 +444,7 @@ function pilihPaket(el) {
 }
 
 function tutupModal() {
-  const m = document.getElementById('modal-beli');
-  m.classList.add('hidden');
-  m.classList.remove('flex');
+  document.getElementById('modal-beli').classList.replace('flex', 'hidden');
 }
 
 document.getElementById('modal-beli').addEventListener('click', function(e) {
@@ -341,24 +473,16 @@ async function submitOrder(e) {
 
     tutupModal();
 
-    if (data.snap_token) {
-      // Midtrans Snap
+    if (data.payment_url) {
+      window.location.href = data.payment_url;
+    } else if (data.snap_token) {
       window.snap.pay(data.snap_token, {
-        onSuccess: function(result) {
-          window.location.href = '/beli/sukses/' + data.order_id;
-        },
-        onPending: function(result) {
-          window.location.href = '/beli/sukses/' + data.order_id;
-        },
-        onError: function(result) {
-          showToast('Pembayaran gagal. Silakan coba lagi.', 'error');
-        },
-        onClose: function() {
-          showToast('Pembayaran dibatalkan.', 'warning');
-        }
+        onSuccess: function() { window.location.href = '/beli/sukses/' + data.order_id; },
+        onPending: function() { window.location.href = '/beli/sukses/' + data.order_id; },
+        onError:   function() { showToast('Pembayaran gagal. Silakan coba lagi.', 'error'); },
+        onClose:   function() { showToast('Pembayaran dibatalkan.', 'warning'); }
       });
     } else if (data.kode) {
-      // Mode testing — tampilkan langsung
       document.getElementById('kode-voucher-display').textContent = data.kode;
       const mv = document.getElementById('modal-voucher');
       mv.classList.remove('hidden');
@@ -397,8 +521,8 @@ async function cariVoucher() {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
               d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <p class="text-sm text-gray-500">Tidak ada voucher ditemukan untuk nomor <strong>${nomor}</strong></p>
-          <p class="text-xs text-gray-400 mt-1">Pastikan nomor HP sesuai yang digunakan saat pembelian.</p>
+          <p class="text-sm text-gray-500">Tidak ada voucher untuk nomor <strong>${nomor}</strong></p>
+          <p class="text-xs text-gray-400 mt-1">Pastikan nomor HP sesuai saat pembelian.</p>
         </div>`;
     } else {
       const rows = data.data.map(v => {
@@ -422,9 +546,7 @@ async function cariVoucher() {
           </div>`;
       }).join('');
       hasil.innerHTML = `
-        <div class="mb-2 flex items-center justify-between">
-          <p class="text-xs font-semibold text-gray-600">${data.data.length} voucher ditemukan</p>
-        </div>
+        <div class="mb-2"><p class="text-xs font-semibold text-gray-600">${data.data.length} voucher ditemukan</p></div>
         <div class="divide-y divide-gray-50">${rows}</div>`;
     }
     hasil.classList.remove('hidden');

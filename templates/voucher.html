@@ -43,20 +43,44 @@
     <option value="dipakai"  {% if sel_status=='dipakai'  %}selected{% endif %}>Dipakai</option>
     <option value="expired"  {% if sel_status=='expired'  %}selected{% endif %}>Expired</option>
   </select>
+  <select name="comment" class="form-select !w-auto min-w-[200px]">
+    <option value="">Semua Comment</option>
+    {% for cd in (comments_detail if comments_detail is defined else []) %}
+    <option value="{{ cd.comment }}" {% if sel_comment==cd.comment %}selected{% endif %}>
+      {{ cd.comment }}{% if cd.paket_nama %} · {{ cd.paket_nama }}{% endif %} [{{ cd.stok }} sisa]{% if cd.agen_nama %} ({{ cd.agen_nama }}){% endif %}
+    </option>
+    {% endfor %}
+  </select>
   <button type="submit" class="btn-primary px-4 py-2.5">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
     Filter
   </button>
-  {% if sel_server or sel_status or sel_paket %}
+  {% if sel_server or sel_status or sel_paket or sel_comment %}
   <a href="/hotspot/voucher" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
   {% endif %}
   {% if sel_server %}
+  <button type="button" onclick="pushKeMikrotik('{{ sel_server }}','{{ sel_comment }}')"
+    class="text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium flex items-center gap-2 transition-colors">
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+    Push ke MikroTik
+  </button>
   <form method="post" action="/hotspot/voucher/hapus" class="ml-auto" onsubmit="return confirm('Hapus semua voucher tersedia di server ini?')">
     <input type="hidden" name="server_id" value="{{ sel_server }}">
     <input type="hidden" name="status" value="tersedia">
     <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-2 transition-colors">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
       Hapus Tersedia
+    </button>
+  </form>
+  {% endif %}
+  {% if sel_comment %}
+  {% set _cd = comments_detail | selectattr('comment', 'equalto', sel_comment) | first if comments_detail is defined else None %}
+  <form method="post" action="/hotspot/voucher/hapus-comment" class="{% if not sel_server %}ml-auto{% endif %}" onsubmit="return confirm('Hapus semua voucher tersedia dengan comment {{ sel_comment }}?')">
+    <input type="hidden" name="comment" value="{{ sel_comment }}">
+    <input type="hidden" name="status" value="tersedia">
+    <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-2 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      Hapus "{{ sel_comment }}"{% if _cd and _cd.agen_nama %} · {{ _cd.agen_nama }}{% endif %}
     </button>
   </form>
   {% endif %}
@@ -82,7 +106,9 @@
           <th class="th">Durasi</th>
           <th class="th">Profile / Speed</th>
           <th class="th">Server</th>
+          <th class="th">Comment</th>
           <th class="th">Status</th>
+          <th class="th">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -105,12 +131,40 @@
           <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ v.server_nama or v.server_id[:8] if v.server_id else '—' }}</span>
         </td>
         <td class="td">
+          {% if v.comment %}
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg font-medium">{{ v.comment }}</span>
+            {% if v.agen_nama %}
+            <span class="text-xs text-slate-400">{{ v.agen_nama }}</span>
+            {% endif %}
+          </div>
+          {% else %}
+          <span class="text-xs text-slate-300">—</span>
+          {% endif %}
+        </td>
+        <td class="td">
           {% if v.status=='tersedia' %}
           <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Tersedia</span>
           {% elif v.status=='dipakai' %}
           <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Dipakai</span>
           {% else %}
           <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expired</span>
+          {% endif %}
+        </td>
+        <td class="td">
+          {% if v.status=='tersedia' %}
+          <form method="post" action="/hotspot/voucher/hapus-kode-form"
+            onsubmit="return confirm('Hapus voucher {{ v.kode }}?\nAkan dihapus dari database dan MikroTik.')">
+            <input type="hidden" name="kode" value="{{ v.kode }}">
+            <input type="hidden" name="server_id" value="{{ v.server_id or '' }}">
+            <button type="submit"
+              class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-medium transition-colors flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              Hapus
+            </button>
+          </form>
+          {% else %}
+          <span class="text-xs text-slate-300">—</span>
           {% endif %}
         </td>
       </tr>
@@ -151,6 +205,11 @@
           <input name="jumlah" type="number" required value="10" min="1" max="500" class="form-input">
           <p class="text-xs text-slate-400 mt-1">Maksimal 500 per generate</p>
         </div>
+        <div>
+          <label class="form-label">Comment / Keterangan Batch</label>
+          <input name="comment" type="text" placeholder="Contoh: RT 01, Promo Lebaran, Batch Jan 2026" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">Digunakan untuk memilih voucher saat cetak</p>
+        </div>
         <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
           <label class="flex items-start gap-2.5 cursor-pointer">
             <input type="checkbox" name="push_mikrotik" value="1" class="mt-0.5 rounded" checked>
@@ -178,6 +237,37 @@
 <script>
 function copyKode(kode) {
   navigator.clipboard.writeText(kode).then(() => showToast('Kode disalin: ' + kode));
+}
+
+async function hapusKode(kode, serverId) {
+  if (!confirm('Hapus voucher ' + kode + '?\nAkan dihapus dari database dan MikroTik.')) return;
+  const fd = new FormData();
+  fd.append('kode', kode);
+  fd.append('server_id', serverId);
+  const res = await fetch('/hotspot/voucher/hapus-kode', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) {
+    showToast('Voucher ' + kode + ' dihapus');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    alert(data.msg);
+  }
+}
+
+async function pushKeMikrotik(serverId, comment) {
+  if (!confirm('Push semua voucher tersedia ke MikroTik?\nVoucher yang sudah ada di MikroTik akan dilewati.')) return;
+  const fd = new FormData();
+  fd.append('server_id', serverId);
+  fd.append('comment', comment || '');
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+  const res = await fetch('/hotspot/voucher/push', { method: 'POST', body: fd });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Push ke MikroTik';
+  if (data.ok) showToast(data.msg);
+  else alert(data.msg);
 }
 </script>
 {% endblock %}

@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+{% set active = "hotspot_bulanan" %}
+{% block title %}Hotspot Bulanan — {{ app_name }}{% endblock %}
+{% block topbar_title %}Hotspot Bulanan{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Hotspot Bulanan</h1>
+    <p class="page-sub">Pelanggan langganan hotspot dengan tagihan bulanan</p>
+  </div>
+  <div class="flex gap-2">
+    <button onclick="bukaModalTambah()" class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah Pelanggan
+    </button>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4">
+    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Total Pelanggan</p>
+    <p class="text-2xl font-black text-gray-900 mt-1">{{ pelanggan | length }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Lunas {{ sel_bulan }}</p>
+    <p class="text-2xl font-black text-emerald-600 mt-1">{{ stats.paid }}</p>
+    <p class="text-xs text-gray-400">Rp {{ "{:,}".format(stats.omzet).replace(",",".") }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-amber-500 font-medium uppercase tracking-wide">Belum Bayar</p>
+    <p class="text-2xl font-black text-amber-600 mt-1">{{ stats.unpaid }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total Tagihan</p>
+    <p class="text-2xl font-black text-blue-600 mt-1">{{ stats.total }}</p>
+  </div>
+</div>
+
+<!-- Tab: Tagihan & Pelanggan -->
+<div class="bg-gray-100 rounded-2xl p-1 flex gap-1 mb-5">
+  <button class="tab-btn tab-active flex-1" id="tab-btn-tagihan" onclick="showTab('tagihan')">Tagihan Bulan Ini</button>
+  <button class="tab-btn tab-idle flex-1"   id="tab-btn-daftar"  onclick="showTab('daftar')">Daftar Pelanggan</button>
+</div>
+
+<!-- Tab Tagihan -->
+<div id="tab-tagihan">
+  <div class="flex flex-wrap items-center gap-2 mb-4">
+    <form method="get" class="flex gap-2 flex-wrap">
+      <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-input w-40"
+             onchange="this.form.submit()">
+      <select name="status" class="form-select w-36" onchange="this.form.submit()">
+        <option value="">Semua Status</option>
+        <option value="unpaid" {% if sel_status=='unpaid' %}selected{% endif %}>Belum Bayar</option>
+        <option value="paid"   {% if sel_status=='paid'   %}selected{% endif %}>Lunas</option>
+      </select>
+    </form>
+    <button onclick="generateTagihan()" class="btn-secondary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Generate Tagihan
+    </button>
+  </div>
+
+  {% if not tagihan %}
+  <div class="card p-12 text-center text-slate-400">
+    <p class="font-medium">Belum ada tagihan bulan {{ sel_bulan }}</p>
+    <p class="text-sm mt-1">Klik "Generate Tagihan" untuk membuat tagihan semua pelanggan aktif</p>
+  </div>
+  {% else %}
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="th">Pelanggan</th>
+            <th class="th">Username</th>
+            <th class="th text-right">Tagihan</th>
+            <th class="th text-center">Status</th>
+            <th class="th">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tagihan %}
+          <tr class="hover:bg-gray-50/50 transition" id="row-{{ t.id }}">
+            <td class="td">
+              <div class="font-medium text-slate-800 text-sm">{{ t.pelanggan_nama }}</div>
+              {% if t.pelanggan_wa %}<div class="text-xs text-slate-400">{{ t.pelanggan_wa }}</div>{% endif %}
+            </td>
+            <td class="td"><span class="font-mono text-xs text-slate-600">{{ t.username }}</span></td>
+            <td class="td text-right font-bold text-slate-700">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</td>
+            <td class="td text-center">
+              {% if t.status == 'paid' %}
+              <span class="badge-green">Lunas</span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">Belum Bayar</span>
+              {% endif %}
+            </td>
+            <td class="td">
+              {% if t.status != 'paid' %}
+              <button onclick="bayarTagihan('{{ t.id }}')"
+                class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors">
+                ✓ Tandai Lunas
+              </button>
+              {% else %}
+              <span class="text-xs text-gray-400">{{ t.paid_at | ts_date if t.paid_at else '' }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Tab Daftar Pelanggan -->
+<div id="tab-daftar" class="hidden">
+  {% if not pelanggan %}
+  <div class="card p-12 text-center text-slate-400">
+    <p class="font-medium">Belum ada pelanggan hotspot bulanan</p>
+    <p class="text-sm mt-1">Klik "Tambah Pelanggan" untuk menambahkan</p>
+  </div>
+  {% else %}
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="th">Nama</th>
+            <th class="th">Username</th>
+            <th class="th">Profile</th>
+            <th class="th text-right">Harga/Bulan</th>
+            <th class="th text-center">Jatuh Tempo</th>
+            <th class="th text-center">Status</th>
+            <th class="th">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pelanggan %}
+          <tr class="hover:bg-gray-50/50 transition">
+            <td class="td">
+              <div class="font-medium text-slate-800 text-sm">{{ p.nama }}</div>
+              {% if p.nomor_wa %}<div class="text-xs text-slate-400">{{ p.nomor_wa }}</div>{% endif %}
+            </td>
+            <td class="td"><span class="font-mono text-xs text-slate-600">{{ p.username }}</span></td>
+            <td class="td"><span class="text-xs text-slate-500">{{ p.profile }}</span></td>
+            <td class="td text-right font-semibold text-emerald-700">Rp {{ "{:,}".format(p.harga).replace(",",".") }}</td>
+            <td class="td text-center text-sm text-slate-600">Tgl {{ p.jatuh_tempo }}</td>
+            <td class="td text-center">
+              {% if p.status == 'aktif' %}
+              <span class="badge-green">Aktif</span>
+              {% else %}
+              <span class="badge-red">Nonaktif</span>
+              {% endif %}
+            </td>
+            <td class="td">
+              <div class="flex gap-1.5">
+                <button onclick="bukaModalEdit({{ p | tojson }})"
+                  class="text-xs px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-medium transition-colors">Edit</button>
+                {% if p.status == 'aktif' %}
+                <button onclick="disablePelanggan('{{ p.id }}')"
+                  class="text-xs px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg font-medium transition-colors">Disable</button>
+                {% else %}
+                <button onclick="enablePelanggan('{{ p.id }}')"
+                  class="text-xs px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg font-medium transition-colors">Enable</button>
+                {% endif %}
+                <button onclick="hapusPelanggan('{{ p.id }}','{{ p.nama }}')"
+                  class="text-xs px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-colors">Hapus</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal Tambah Pelanggan -->
+<div id="modal-tambah" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+  <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Tambah Pelanggan Baru</h3>
+      <button onclick="tutupModal('modal-tambah')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="form-label">Server MikroTik</label>
+          <select id="t-server" class="form-select">
+            {% for s in servers %}
+            <option value="{{ s.id }}">{{ s.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Nama Pelanggan</label>
+          <input id="t-nama" type="text" class="form-input" placeholder="Nama lengkap">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Nomor WhatsApp</label>
+          <input id="t-wa" type="text" class="form-input" placeholder="628xxxxxxxxxx">
+        </div>
+        <div>
+          <label class="form-label">Username</label>
+          <input id="t-username" type="text" class="form-input" placeholder="user01">
+        </div>
+        <div>
+          <label class="form-label">Password</label>
+          <input id="t-password" type="text" class="form-input" placeholder="password">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Profile Hotspot</label>
+          <select id="t-profile" class="form-select">
+            {% for pr in profiles %}
+            <option value="{{ pr }}">{{ pr }}</option>
+            {% endfor %}
+            {% if not profiles %}
+            <option value="default">default</option>
+            {% endif %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Harga/Bulan (Rp)</label>
+          <input id="t-harga" type="number" class="form-input" placeholder="100000">
+        </div>
+        <div>
+          <label class="form-label">Jatuh Tempo (Tgl)</label>
+          <input id="t-jatuh" type="number" class="form-input" placeholder="1" min="1" max="28">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Catatan</label>
+          <input id="t-catatan" type="text" class="form-input" placeholder="Opsional">
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="tutupModal('modal-tambah')" class="btn-ghost flex-1">Batal</button>
+        <button onclick="simpanTambah()" class="btn-primary flex-1">Simpan & Buat Akun</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Edit Pelanggan -->
+<div id="modal-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+  <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Edit Pelanggan</h3>
+      <button onclick="tutupModal('modal-edit')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <input type="hidden" id="e-id">
+    <div class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="form-label">Nama Pelanggan</label>
+          <input id="e-nama" type="text" class="form-input">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Nomor WhatsApp</label>
+          <input id="e-wa" type="text" class="form-input">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Password Baru (kosongkan jika tidak ganti)</label>
+          <input id="e-password" type="text" class="form-input" placeholder="Kosongkan jika tidak diubah">
+        </div>
+        <div>
+          <label class="form-label">Harga/Bulan (Rp)</label>
+          <input id="e-harga" type="number" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Jatuh Tempo (Tgl)</label>
+          <input id="e-jatuh" type="number" class="form-input" min="1" max="28">
+        </div>
+        <div class="col-span-2">
+          <label class="form-label">Catatan</label>
+          <input id="e-catatan" type="text" class="form-input">
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="tutupModal('modal-edit')" class="btn-ghost flex-1">Batal</button>
+        <button onclick="simpanEdit()" class="btn-primary flex-1">Simpan</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name) {
+  ['tagihan','daftar'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-active', t === name);
+    document.getElementById('tab-btn-' + t).classList.toggle('tab-idle', t !== name);
+  });
+}
+
+function tutupModal(id) { document.getElementById(id).classList.add('hidden'); }
+function bukaModalTambah() { document.getElementById('modal-tambah').classList.remove('hidden'); }
+
+function bukaModalEdit(p) {
+  document.getElementById('e-id').value       = p.id;
+  document.getElementById('e-nama').value     = p.nama;
+  document.getElementById('e-wa').value       = p.nomor_wa || '';
+  document.getElementById('e-password').value = '';
+  document.getElementById('e-harga').value    = p.harga;
+  document.getElementById('e-jatuh').value    = p.jatuh_tempo;
+  document.getElementById('e-catatan').value  = p.catatan || '';
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+async function simpanTambah() {
+  const fd = new FormData();
+  fd.append('server_id',   document.getElementById('t-server').value);
+  fd.append('nama',        document.getElementById('t-nama').value.trim());
+  fd.append('nomor_wa',    document.getElementById('t-wa').value.trim());
+  fd.append('username',    document.getElementById('t-username').value.trim());
+  fd.append('password',    document.getElementById('t-password').value);
+  fd.append('profile',     document.getElementById('t-profile').value);
+  fd.append('harga',       document.getElementById('t-harga').value);
+  fd.append('jatuh_tempo', document.getElementById('t-jatuh').value);
+  fd.append('catatan',     document.getElementById('t-catatan').value.trim());
+  if (!fd.get('nama') || !fd.get('username') || !fd.get('password') || !fd.get('harga')) {
+    alert('Lengkapi semua field wajib'); return;
+  }
+  const res  = await fetch('/hotspot/bulanan/tambah', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) { showToast('Pelanggan berhasil ditambahkan'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function simpanEdit() {
+  const pid = document.getElementById('e-id').value;
+  const fd  = new FormData();
+  fd.append('nama',        document.getElementById('e-nama').value.trim());
+  fd.append('nomor_wa',    document.getElementById('e-wa').value.trim());
+  fd.append('password',    document.getElementById('e-password').value);
+  fd.append('harga',       document.getElementById('e-harga').value);
+  fd.append('jatuh_tempo', document.getElementById('e-jatuh').value);
+  fd.append('catatan',     document.getElementById('e-catatan').value.trim());
+  const res  = await fetch(`/hotspot/bulanan/${pid}/edit`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) { showToast('Perubahan disimpan'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function bayarTagihan(tid) {
+  if (!confirm('Tandai tagihan ini sebagai lunas?')) return;
+  const res  = await fetch(`/hotspot/bulanan/tagihan/${tid}/bayar`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) { showToast('Tagihan ditandai lunas, akun diaktifkan'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function generateTagihan() {
+  const bulan = document.querySelector('input[name=bulan]')?.value || '';
+  const fd = new FormData(); fd.append('bulan', bulan);
+  const res  = await fetch('/hotspot/bulanan/tagihan/generate', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.ok) { showToast(`${data.generated} tagihan berhasil di-generate`); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function disablePelanggan(pid) {
+  if (!confirm('Disable akun pelanggan ini di MikroTik?')) return;
+  const res  = await fetch(`/hotspot/bulanan/${pid}/disable`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) { showToast('Akun dinonaktifkan'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function enablePelanggan(pid) {
+  const res  = await fetch(`/hotspot/bulanan/${pid}/enable`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) { showToast('Akun diaktifkan'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+
+async function hapusPelanggan(pid, nama) {
+  if (!confirm(`Hapus pelanggan "${nama}" dan akun MikroTik-nya?`)) return;
+  const res  = await fetch(`/hotspot/bulanan/${pid}/hapus`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) { showToast('Pelanggan dihapus'); setTimeout(() => location.reload(), 800); }
+  else alert(data.msg);
+}
+</script>
+{% endblock %}

@@ -137,8 +137,9 @@
 
   <!-- Tab navigasi -->
   <div class="bg-gray-100 rounded-2xl p-1 flex gap-1">
-    <button class="tab-btn tab-active flex-1" id="tab-btn-generate" onclick="showTab('generate')">Generate Voucher</button>
-    <button class="tab-btn tab-idle flex-1"  id="tab-btn-riwayat"  onclick="showTab('riwayat')">Riwayat Saldo</button>
+    <button class="tab-btn tab-active flex-1" id="tab-btn-generate" onclick="showTab('generate')">Generate</button>
+    <button class="tab-btn tab-idle flex-1"  id="tab-btn-cetak"    onclick="showTab('cetak')">Cetak</button>
+    <button class="tab-btn tab-idle flex-1"  id="tab-btn-riwayat"  onclick="showTab('riwayat')">Riwayat</button>
   </div>
 
   <!-- Tab: Generate Voucher -->
@@ -155,28 +156,12 @@
     <div class="card p-5">
       <h3 class="font-semibold text-gray-800 mb-4">Generate Voucher ke MikroTik</h3>
       <form method="post" action="/panel/generate" onsubmit="return konfirmGenerate(this)">
-        <!-- Pilih Paket -->
-        <div class="mb-4">
-          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Paket Hotspot</label>
-          <select name="paket_id" id="sel-paket" class="form-select" onchange="updateInfo()" required>
-            <option value="">-- Pilih Paket --</option>
-            {% for p in pakets %}
-            <option value="{{ p.id }}"
-              data-harga="{{ p.harga }}"
-              data-nama="{{ p.nama }}"
-              data-durasi="{{ p.durasi }}"
-              data-speed="{{ p.kecepatan }}">
-              {{ p.nama }} — Rp {{ "{:,}".format(p.harga).replace(",", ".") }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-
         <!-- Pilih Server -->
         <div class="mb-4">
           <label class="block text-xs font-semibold text-gray-600 mb-1.5">Server MikroTik</label>
           {% if servers %}
-          <select name="server_id" class="form-select" required>
+          <select name="server_id" id="sel-server" class="form-select" onchange="filterPaketByServer(this.value)" required>
+            <option value="">-- Pilih Server --</option>
             {% for s in servers %}
             <option value="{{ s.id }}">{{ s.nama }} ({{ s.lokasi or s.vpn_ip }})</option>
             {% endfor %}
@@ -189,12 +174,38 @@
           {% endif %}
         </div>
 
+        <!-- Pilih Paket -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Paket Hotspot</label>
+          <select name="paket_id" id="sel-paket" class="form-select" onchange="updateInfo()" required>
+            <option value="">-- Pilih Server dulu --</option>
+            {% for p in pakets %}
+            <option value="{{ p.id }}"
+              data-server-id="{{ p.server_id or '' }}"
+              data-harga="{{ p.harga }}"
+              data-nama="{{ p.nama }}"
+              data-durasi="{{ p.durasi }}"
+              data-speed="{{ p.kecepatan }}"
+              style="display:none">
+              {{ p.nama }} — Rp {{ "{:,}".format(p.harga).replace(",", ".") }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
         <!-- Jumlah -->
         <div class="mb-4">
           <label class="block text-xs font-semibold text-gray-600 mb-1.5">Jumlah Voucher</label>
           <input type="number" name="jumlah" id="inp-jumlah"
             class="form-input" value="1" min="1" max="100"
             onchange="updateInfo()" required>
+        </div>
+
+        <!-- Comment / Batch -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Comment / Keterangan Batch</label>
+          <input name="comment" type="text" placeholder="Contoh: RT 01, Promo Lebaran, Batch Jan 2026" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">Digunakan untuk memilih voucher saat cetak</p>
         </div>
 
         <!-- Info harga -->
@@ -233,9 +244,130 @@
     {% endif %}
   </div>
 
+  <!-- Tab: Cetak Voucher -->
+  <div id="tab-cetak" class="hidden">
+    {% if not isp %}
+    <div class="card p-8 text-center text-gray-400">
+      <p class="text-sm">Akun belum terhubung ke ISP.</p>
+    </div>
+    {% else %}
+    <div class="card p-5">
+      <h3 class="font-semibold text-gray-800 mb-1">Cetak Voucher per Batch</h3>
+      <p class="text-xs text-gray-400 mb-4">Pilih comment/batch untuk mencetak voucher yang sudah digenerate</p>
+      {% set all_cd = comments_detail if comments_detail is defined else [] %}
+      {% if all_cd %}
+      <div class="space-y-2">
+        <!-- Batch masih ada stok -->
+        {% for cd in all_cd %}
+        {% if cd.stok > 0 %}
+        <a href="/panel/voucher/print?comment={{ cd.comment | urlencode }}" target="_blank"
+          class="flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-colors group">
+          <div class="flex flex-col min-w-0 gap-0.5">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2z"/></svg>
+              <span class="text-sm font-semibold text-indigo-700 truncate">{{ cd.comment }}</span>
+              <span class="flex-shrink-0 text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">{{ cd.stok }} tersedia</span>
+            </div>
+            {% if cd.paket_nama %}
+            <span class="text-xs text-slate-400 pl-6">{{ cd.paket_nama }}</span>
+            {% endif %}
+          </div>
+          <span class="flex-shrink-0 flex items-center gap-1 text-xs text-indigo-500 group-hover:text-indigo-700 font-medium ml-2">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Cetak
+          </span>
+        </a>
+        {% endif %}
+        {% endfor %}
+
+        <!-- Batch sudah habis (lipat) -->
+        {% set ns = namespace(habis_count=0) %}
+        {% for cd in all_cd %}{% if cd.stok == 0 %}{% set ns.habis_count = ns.habis_count + 1 %}{% endif %}{% endfor %}
+        {% if ns.habis_count > 0 %}
+        <div class="mt-2 border-t border-gray-100 pt-2">
+          <button type="button" onclick="toggleHabis(this)"
+            class="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 font-medium py-1">
+            <svg id="chevron-habis" class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            {{ ns.habis_count }} batch sudah habis
+          </button>
+          <div id="list-habis" class="hidden space-y-2 mt-1">
+            {% for cd in all_cd %}
+            {% if cd.stok == 0 %}
+            <div class="flex flex-col gap-0.5 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-50">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2z"/></svg>
+                <span class="text-sm text-gray-400 truncate">{{ cd.comment }}</span>
+                <span class="ml-auto flex-shrink-0 text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">habis</span>
+              </div>
+              {% if cd.paket_nama %}
+              <span class="text-xs text-gray-300 pl-6">{{ cd.paket_nama }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="text-center py-8 text-gray-400">
+        <svg class="w-10 h-10 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        <p class="text-sm">Belum ada batch voucher</p>
+        <p class="text-xs mt-1">Generate voucher dengan comment untuk mulai</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
   <!-- Tab: Riwayat Saldo -->
   <div id="tab-riwayat" class="hidden">
+
+    <!-- Riwayat Topup Manual -->
+    {% set topup_list = topup_orders if topup_orders is defined else [] %}
+    {% set manual_list = topup_list | selectattr('tipe', 'equalto', 'manual') | list %}
+    {% if manual_list %}
+    <div class="mb-4">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Riwayat Topup Manual</p>
+      <div class="card divide-y divide-gray-50 overflow-hidden">
+        {% for t in manual_list %}
+        <div class="px-4 py-3 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+              {% if t.status == 'paid' %}bg-emerald-50{% elif t.status == 'rejected' %}bg-red-50{% else %}bg-yellow-50{% endif %}">
+              {% if t.status == 'paid' %}
+              <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              {% elif t.status == 'rejected' %}
+              <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              {% else %}
+              <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              {% endif %}
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm text-gray-700">Topup Manual QRIS</p>
+              {% if t.catatan_agen %}<p class="text-xs text-gray-400 truncate">{{ t.catatan_agen }}</p>{% endif %}
+              <p class="text-xs text-gray-400">{{ t.created_at | ts_date }}</p>
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-sm font-semibold text-gray-700">Rp {{ "{:,}".format(t.amount).replace(",", ".") }}</p>
+            {% if t.status == 'paid' %}
+            <span class="text-xs text-emerald-600 font-medium">Disetujui</span>
+            {% elif t.status == 'rejected' %}
+            <span class="text-xs text-red-500 font-medium">Ditolak</span>
+            {% else %}
+            <span class="text-xs text-yellow-600 font-medium">Menunggu</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Mutasi Saldo -->
     {% if saldo_log %}
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Mutasi Saldo</p>
     <div class="card divide-y divide-gray-50 overflow-hidden">
       {% for r in saldo_log %}
       <div class="px-4 py-3 flex items-center justify-between gap-3">
@@ -264,7 +396,7 @@
       </div>
       {% endfor %}
     </div>
-    {% else %}
+    {% elif not manual_list %}
     <div class="card p-8 text-center text-sm text-gray-400">Belum ada riwayat transaksi</div>
     {% endif %}
   </div>
@@ -274,14 +406,19 @@
 <!-- Modal Topup Saldo -->
 <div id="modal-topup" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
   <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-    <h3 class="font-bold text-gray-900 text-lg mb-1">Topup Saldo</h3>
-    <p class="text-sm text-gray-500 mb-4">Bayar via QRIS. Saldo otomatis masuk setelah pembayaran berhasil.</p>
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-gray-900 text-lg">Topup Saldo</h3>
+      <button onclick="tutupTopup()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
 
-    <div id="topup-form-area">
+    <!-- Step 1: Pilih nominal -->
+    <div id="topup-step1">
       <div class="mb-4">
         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Jumlah Topup</label>
-        <input type="number" id="inp-topup" class="form-input" placeholder="Contoh: 100000" min="10000" step="10000">
-        <p class="text-xs text-gray-400 mt-1">Minimal Rp 10.000</p>
+        <input type="number" id="inp-topup" class="form-input" placeholder="Contoh: 100000" min="5000" step="5000">
+        <p class="text-xs text-gray-400 mt-1">Minimal Rp 5.000</p>
       </div>
       <div class="flex flex-wrap gap-2 mb-4">
         {% for n in [50000, 100000, 200000, 500000] %}
@@ -291,15 +428,47 @@
         </button>
         {% endfor %}
       </div>
+      {% if isp and isp.qris_image %}
+      <div class="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 font-medium flex items-center gap-2">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.24M10.07 4.26A10 10 0 1020 14H10"/></svg>
+        Bayar via QRIS ISP — konfirmasi manual
+      </div>
+      <div class="flex gap-2">
+        <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
+        <button onclick="lanjutQrisManual()" class="btn-primary flex-1">Lanjut → Lihat QRIS</button>
+      </div>
+      {% else %}
       <div class="flex gap-2">
         <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
         <button onclick="prosesTopup()" id="btn-topup-ok" class="btn-primary flex-1">Bayar via QRIS</button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Step 2: Tampilkan QRIS ISP -->
+    <div id="topup-step2" class="hidden">
+      <div class="text-center mb-3">
+        <p class="text-sm text-gray-600 mb-1">Transfer sejumlah:</p>
+        <p id="topup-nominal-display" class="text-2xl font-bold text-emerald-700"></p>
+      </div>
+      {% if isp and isp.qris_image %}
+      <div class="flex justify-center mb-3">
+        <img src="{{ isp.qris_image }}" alt="QRIS" class="w-52 h-52 object-contain border rounded-xl p-1">
+      </div>
+      {% endif %}
+      <p class="text-xs text-center text-gray-400 mb-4">Scan QRIS di atas, lalu klik tombol di bawah setelah transfer berhasil</p>
+      <div class="mb-3">
+        <input type="text" id="inp-catatan-topup" class="form-input" placeholder="Catatan (opsional, mis: sudah transfer jam 10.00)">
+      </div>
+      <div class="flex gap-2">
+        <button onclick="kembaliStep1()" class="btn-ghost flex-1">← Kembali</button>
+        <button onclick="konfirmasiManual()" class="btn-primary flex-1">✓ Sudah Transfer</button>
       </div>
     </div>
 
     <div id="topup-loading" class="hidden text-center py-4">
       <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-      <p class="text-sm text-gray-500">Memproses topup...</p>
+      <p class="text-sm text-gray-500">Memproses...</p>
     </div>
   </div>
 </div>
@@ -340,13 +509,36 @@ const PAKET_INFO = {
   harga:     {{ last_paket.harga if last_paket else 0 }}
 };
 
+// ── Toggle batch habis ────────────────────────────────────────────────────────
+function toggleHabis(btn) {
+  const list = document.getElementById('list-habis');
+  const icon = document.getElementById('chevron-habis');
+  list.classList.toggle('hidden');
+  icon.style.transform = list.classList.contains('hidden') ? '' : 'rotate(90deg)';
+}
+
 // ── Tab ──────────────────────────────────────────────────────────────────────
 function showTab(name) {
-  ['generate','riwayat'].forEach(t => {
+  ['generate','cetak','riwayat'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== name);
     document.getElementById('tab-btn-' + t).classList.toggle('tab-active', t === name);
     document.getElementById('tab-btn-' + t).classList.toggle('tab-idle',   t !== name);
   });
+}
+
+// ── Filter paket sesuai server ────────────────────────────────────────────────
+function filterPaketByServer(serverId) {
+  const sel = document.getElementById('sel-paket');
+  sel.value = '';
+  let visibleCount = 0;
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.value) { opt.style.display = ''; return; }
+    const match = !serverId || opt.dataset.serverId === serverId;
+    opt.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  sel.options[0].textContent = visibleCount ? '-- Pilih Paket --' : '-- Tidak ada paket untuk server ini --';
+  document.getElementById('info-harga').classList.add('hidden');
 }
 
 // ── Info harga ────────────────────────────────────────────────────────────────
@@ -402,8 +594,54 @@ function submitGen() {
 }
 
 // ── Topup ─────────────────────────────────────────────────────────────────────
-function bukaTopup()  { document.getElementById('modal-topup').classList.remove('hidden'); }
-function tutupTopup() { document.getElementById('modal-topup').classList.add('hidden'); }
+function bukaTopup()  {
+  document.getElementById('modal-topup').classList.remove('hidden');
+  document.getElementById('topup-step1').classList.remove('hidden');
+  document.getElementById('topup-step2').classList.add('hidden');
+  document.getElementById('topup-loading').classList.add('hidden');
+}
+function tutupTopup() {
+  document.getElementById('modal-topup').classList.add('hidden');
+  document.getElementById('inp-topup').value = '';
+  document.getElementById('topup-step1').classList.remove('hidden');
+  document.getElementById('topup-step2').classList.add('hidden');
+  document.getElementById('topup-loading').classList.add('hidden');
+}
+
+function lanjutQrisManual() {
+  const amount = parseInt(document.getElementById('inp-topup').value);
+  if (!amount || amount < 5000) { alert('Masukkan nominal minimal Rp 5.000'); return; }
+  document.getElementById('topup-nominal-display').textContent = 'Rp ' + amount.toLocaleString('id-ID');
+  document.getElementById('topup-step1').classList.add('hidden');
+  document.getElementById('topup-step2').classList.remove('hidden');
+}
+
+function kembaliStep1() {
+  document.getElementById('topup-step2').classList.add('hidden');
+  document.getElementById('topup-step1').classList.remove('hidden');
+}
+
+async function konfirmasiManual() {
+  const amount = parseInt(document.getElementById('inp-topup').value);
+  const catatan = document.getElementById('inp-catatan-topup')?.value || '';
+  document.getElementById('topup-step2').classList.add('hidden');
+  document.getElementById('topup-loading').classList.remove('hidden');
+  try {
+    const fd = new FormData();
+    fd.append('amount', amount);
+    fd.append('catatan', catatan);
+    const res = await fetch('/panel/topup/manual', { method: 'POST', body: fd });
+    const data = await res.json();
+    document.getElementById('topup-loading').classList.add('hidden');
+    tutupTopup();
+    if (data.ok) { alert('Permintaan topup terkirim, tunggu konfirmasi ISP'); location.reload(); }
+    else alert(data.msg || 'Gagal mengirim permintaan');
+  } catch(e) {
+    document.getElementById('topup-loading').classList.add('hidden');
+    tutupTopup();
+    alert('Error: ' + e.message);
+  }
+}
 
 async function prosesTopup() {
   const amount = parseInt(document.getElementById('inp-topup').value);

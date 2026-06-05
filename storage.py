@@ -64,7 +64,121 @@ class Storage:
                 UNIQUE(user_id, jenis)
             )
         """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                role        TEXT NOT NULL DEFAULT '',
+                aksi        TEXT NOT NULL,
+                detail      TEXT DEFAULT '',
+                ip          TEXT DEFAULT '',
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        al_cols = {r[1] for r in con.execute("PRAGMA table_info(activity_log)")}
+        if "ip" not in al_cols:
+            con.execute("ALTER TABLE activity_log ADD COLUMN ip TEXT DEFAULT ''")
+
+        ph_cols = {r[1] for r in con.execute("PRAGMA table_info(paket_hotspot)")}
+        if "server_id" not in ph_cols:
+            con.execute("ALTER TABLE paket_hotspot ADD COLUMN server_id TEXT DEFAULT ''")
+
+        vh_cols = {r[1] for r in con.execute("PRAGMA table_info(voucher_hotspot)")}
+        if "comment" not in vh_cols:
+            con.execute("ALTER TABLE voucher_hotspot ADD COLUMN comment TEXT DEFAULT ''")
+        if "agen_id" not in vh_cols:
+            con.execute("ALTER TABLE voucher_hotspot ADD COLUMN agen_id TEXT DEFAULT ''")
+
+        u_cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+        if "qris_image" not in u_cols:
+            con.execute("ALTER TABLE users ADD COLUMN qris_image TEXT DEFAULT ''")
+
+        to_cols = {r[1] for r in con.execute("PRAGMA table_info(topup_orders)")}
+        if "tipe" not in to_cols:
+            con.execute("ALTER TABLE topup_orders ADD COLUMN tipe TEXT DEFAULT 'gateway'")
+        if "isp_id" not in to_cols:
+            con.execute("ALTER TABLE topup_orders ADD COLUMN isp_id TEXT DEFAULT ''")
+        if "catatan_agen" not in to_cols:
+            con.execute("ALTER TABLE topup_orders ADD COLUMN catatan_agen TEXT DEFAULT ''")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS agen_income (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                agen_id     TEXT NOT NULL,
+                paket_id    INTEGER NOT NULL,
+                jumlah      INTEGER NOT NULL,
+                total       INTEGER NOT NULL,
+                komisi_persen INTEGER DEFAULT 0,
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS hotspot_pelanggan (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                server_id   TEXT NOT NULL DEFAULT '',
+                nama        TEXT NOT NULL,
+                nomor_wa    TEXT DEFAULT '',
+                username    TEXT NOT NULL,
+                password    TEXT NOT NULL,
+                profile     TEXT NOT NULL DEFAULT 'default',
+                harga       INTEGER NOT NULL DEFAULT 0,
+                jatuh_tempo INTEGER NOT NULL DEFAULT 1,
+                status      TEXT NOT NULL DEFAULT 'aktif',
+                catatan     TEXT DEFAULT '',
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS hotspot_tagihan (
+                id          TEXT PRIMARY KEY,
+                pelanggan_id TEXT NOT NULL,
+                user_id     TEXT NOT NULL,
+                bulan       TEXT NOT NULL,
+                amount      INTEGER NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'unpaid',
+                paid_at     INTEGER,
+                created_at  INTEGER NOT NULL,
+                UNIQUE(pelanggan_id, bulan)
+            )
+        """)
+        hp_cols = {r[1] for r in con.execute("PRAGMA table_info(hotspot_pelanggan)")}
+        if "catatan" not in hp_cols:
+            con.execute("ALTER TABLE hotspot_pelanggan ADD COLUMN catatan TEXT DEFAULT ''")
         con.commit()
+
+    def log_activity(self, user_id: str, role: str, aksi: str, detail: str = "", ip: str = ""):
+        import time as _time
+        con = self._conn()
+        con.execute(
+            "INSERT INTO activity_log (user_id, role, aksi, detail, ip, created_at) VALUES (?,?,?,?,?,?)",
+            (user_id, role, aksi, detail, ip, int(_time.time()))
+        )
+        con.commit()
+        con.close()
+
+    def get_activity_log(self, user_id: str = None, limit: int = 100) -> list[dict]:
+        con = self._conn()
+        if user_id:
+            rows = con.execute(
+                """SELECT a.*, u.nama, u.username, u.role as user_role
+                   FROM activity_log a
+                   LEFT JOIN users u ON u.id = a.user_id
+                   WHERE a.user_id=? OR u.parent_id=?
+                   ORDER BY a.created_at DESC LIMIT ?""",
+                (user_id, user_id, limit)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                """SELECT a.*, u.nama, u.username, u.role as user_role
+                   FROM activity_log a
+                   LEFT JOIN users u ON u.id = a.user_id
+                   ORDER BY a.created_at DESC LIMIT ?""",
+                (limit,)
+            ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
 
     def list_teknisi(self, parent_id: str) -> list[dict]:
         con = self._conn()
@@ -423,6 +537,15 @@ class Storage:
         con.commit()
         con.close()
 
+    def update_user_field(self, uid: str, field: str, value):
+        allowed = {"qris_image", "nomor_wa", "nama", "slug"}
+        if field not in allowed:
+            return
+        con = self._conn()
+        con.execute(f"UPDATE users SET {field}=? WHERE id=?", (value, uid))
+        con.commit()
+        con.close()
+
     def reset_password(self, uid: str, password: str):
         con = self._conn()
         con.execute("UPDATE users SET password=? WHERE id=?", (_hash(password), uid))
@@ -586,16 +709,25 @@ class Storage:
 
     # ── Paket Hotspot ─────────────────────────────────────────────────────────
 
-    def create_paket_hotspot(self, user_id, nama, durasi, kecepatan, harga) -> int:
+    def create_paket_hotspot(self, user_id, nama, durasi, kecepatan, harga, server_id="") -> int:
         con = self._conn()
         cur = con.execute(
-            "INSERT INTO paket_hotspot (user_id,nama,durasi,kecepatan,harga,created_at) VALUES (?,?,?,?,?,?)",
-            (user_id, nama, durasi, kecepatan, harga, int(time.time()))
+            "INSERT INTO paket_hotspot (user_id,nama,durasi,kecepatan,harga,server_id,created_at) VALUES (?,?,?,?,?,?,?)",
+            (user_id, nama, durasi, kecepatan, harga, server_id, int(time.time()))
         )
         con.commit()
         pid = cur.lastrowid
         con.close()
         return pid
+
+    def update_paket_hotspot(self, pid: int, user_id: str, nama: str, durasi: str, kecepatan: str, harga: int, server_id: str = ""):
+        con = self._conn()
+        con.execute(
+            "UPDATE paket_hotspot SET nama=?,durasi=?,kecepatan=?,harga=?,server_id=? WHERE id=? AND user_id=?",
+            (nama, durasi, kecepatan, harga, server_id, pid, user_id)
+        )
+        con.commit()
+        con.close()
 
     def list_paket_hotspot(self, user_id: str) -> list[dict]:
         con = self._conn()
@@ -611,7 +743,7 @@ class Storage:
 
     # ── Voucher Hotspot ───────────────────────────────────────────────────────
 
-    def create_vouchers(self, user_id: str, server_id: str, paket_id: int, jumlah: int) -> list[str]:
+    def create_vouchers(self, user_id: str, server_id: str, paket_id: int, jumlah: int, comment: str = "") -> list[str]:
         import random, string
         kodes = []
         con = self._conn()
@@ -622,21 +754,22 @@ class Storage:
                 if not exists:
                     break
             con.execute(
-                "INSERT INTO voucher_hotspot (user_id,server_id,paket_id,kode,created_at) VALUES (?,?,?,?,?)",
-                (user_id, server_id, paket_id, kode, int(time.time()))
+                "INSERT INTO voucher_hotspot (user_id,server_id,paket_id,kode,comment,created_at) VALUES (?,?,?,?,?,?)",
+                (user_id, server_id, paket_id, kode, comment, int(time.time()))
             )
             kodes.append(kode)
         con.commit()
         con.close()
         return kodes
 
-    def list_vouchers(self, user_id: str, server_id: str = None, status: str = None, paket_id: str = None) -> list[dict]:
+    def list_vouchers(self, user_id: str, server_id: str = None, status: str = None, paket_id: str = None, comment: str = None) -> list[dict]:
         con = self._conn()
         q = """SELECT v.*, p.nama as paket_nama, p.durasi, p.kecepatan,
-                      s.nama as server_nama
+                      s.nama as server_nama, u.nama as agen_nama
                FROM voucher_hotspot v
                LEFT JOIN paket_hotspot p ON p.id=v.paket_id
                LEFT JOIN mikrotik_servers s ON s.id=v.server_id
+               LEFT JOIN users u ON u.id=v.agen_id
                WHERE v.user_id=?"""
         args = [user_id]
         if server_id:
@@ -648,16 +781,125 @@ class Storage:
         if paket_id:
             q += " AND v.paket_id=?"
             args.append(paket_id)
+        if comment is not None:
+            q += " AND v.comment=?"
+            args.append(comment)
         q += " ORDER BY v.created_at DESC"
         rows = con.execute(q, args).fetchall()
         con.close()
         return [dict(r) for r in rows]
+
+    def list_voucher_comments_with_agen(self, user_id: str) -> list[dict]:
+        """List comment unik beserta nama agen, nama paket dominan, dan jumlah tersedia (untuk panel ISP)."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT v.comment, u.nama as agen_nama, v.agen_id, "
+            "COUNT(CASE WHEN v.status='tersedia' THEN 1 END) as stok, "
+            "(SELECT p.nama FROM paket_hotspot p "
+            " WHERE p.id = (SELECT v2.paket_id FROM voucher_hotspot v2 "
+            "               WHERE v2.user_id=v.user_id AND v2.comment=v.comment AND v2.agen_id=v.agen_id "
+            "               GROUP BY v2.paket_id ORDER BY COUNT(*) DESC LIMIT 1) LIMIT 1) as paket_nama "
+            "FROM voucher_hotspot v LEFT JOIN users u ON u.id=v.agen_id "
+            "WHERE v.user_id=? AND v.comment!='' "
+            "GROUP BY v.comment, v.agen_id ORDER BY v.comment",
+            (user_id,)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def list_voucher_comments(self, user_id: str, agen_id: str = "") -> list[str]:
+        """Daftar comment unik. Jika agen_id diisi, hanya comment milik agen tersebut."""
+        con = self._conn()
+        if agen_id:
+            rows = con.execute(
+                "SELECT DISTINCT comment FROM voucher_hotspot "
+                "WHERE user_id=? AND agen_id=? AND comment!='' ORDER BY comment",
+                (user_id, agen_id)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT DISTINCT comment FROM voucher_hotspot WHERE user_id=? AND comment!='' ORDER BY comment",
+                (user_id,)
+            ).fetchall()
+        con.close()
+        return [r[0] for r in rows]
+
+    def list_voucher_comments_detail(self, user_id: str, agen_id: str = "") -> list[dict]:
+        """Daftar comment dengan paket_nama dominan dan stok tersedia. Untuk panel agen/ISP."""
+        con = self._conn()
+        if agen_id:
+            rows = con.execute(
+                "SELECT v.comment, "
+                "COUNT(CASE WHEN v.status='tersedia' THEN 1 END) as stok, "
+                "(SELECT p.nama FROM paket_hotspot p WHERE p.id = ("
+                " SELECT v2.paket_id FROM voucher_hotspot v2 "
+                " WHERE v2.user_id=v.user_id AND v2.comment=v.comment AND v2.agen_id=v.agen_id "
+                " GROUP BY v2.paket_id ORDER BY COUNT(*) DESC LIMIT 1) LIMIT 1) as paket_nama "
+                "FROM voucher_hotspot v "
+                "WHERE v.user_id=? AND v.agen_id=? AND v.comment!='' "
+                "GROUP BY v.comment ORDER BY v.comment",
+                (user_id, agen_id)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT v.comment, "
+                "COUNT(CASE WHEN v.status='tersedia' THEN 1 END) as stok, "
+                "(SELECT p.nama FROM paket_hotspot p WHERE p.id = ("
+                " SELECT v2.paket_id FROM voucher_hotspot v2 "
+                " WHERE v2.user_id=v.user_id AND v2.comment=v.comment "
+                " GROUP BY v2.paket_id ORDER BY COUNT(*) DESC LIMIT 1) LIMIT 1) as paket_nama "
+                "FROM voucher_hotspot v "
+                "WHERE v.user_id=? AND v.comment!='' "
+                "GROUP BY v.comment ORDER BY v.comment",
+                (user_id,)
+            ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def count_vouchers_by_comment(self, user_id: str, agen_id: str = "") -> dict:
+        """Jumlah voucher tersedia per comment. Jika agen_id diisi, filter per agen."""
+        con = self._conn()
+        if agen_id:
+            rows = con.execute(
+                "SELECT comment, COUNT(*) FROM voucher_hotspot "
+                "WHERE user_id=? AND agen_id=? AND comment!='' AND status='tersedia' "
+                "GROUP BY comment",
+                (user_id, agen_id)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT comment, COUNT(*) FROM voucher_hotspot "
+                "WHERE user_id=? AND comment!='' AND status='tersedia' "
+                "GROUP BY comment",
+                (user_id,)
+            ).fetchall()
+        con.close()
+        return {r[0]: r[1] for r in rows}
 
     def delete_vouchers(self, user_id: str, server_id: str, status: str = "tersedia"):
         con = self._conn()
         con.execute("DELETE FROM voucher_hotspot WHERE user_id=? AND server_id=? AND status=?", (user_id, server_id, status))
         con.commit()
         con.close()
+
+    def delete_vouchers_by_comment(self, user_id: str, comment: str, status: str = "tersedia"):
+        con = self._conn()
+        con.execute("DELETE FROM voucher_hotspot WHERE user_id=? AND comment=? AND status=?", (user_id, comment, status))
+        con.commit()
+        con.close()
+
+    def delete_voucher_kode(self, user_id: str, kode: str) -> bool:
+        con = self._conn()
+        cur = con.execute("DELETE FROM voucher_hotspot WHERE user_id=? AND kode=? AND status='tersedia'", (user_id, kode))
+        con.commit()
+        con.close()
+        return cur.rowcount > 0
+
+    def get_voucher_by_kode(self, user_id: str, kode: str) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM voucher_hotspot WHERE user_id=? AND kode=?", (user_id, kode)).fetchone()
+        con.close()
+        return dict(row) if row else None
 
     def list_servers_all(self) -> list[dict]:
         con = self._conn()
@@ -883,9 +1125,77 @@ class Storage:
         con.close()
         return [dict(r) for r in rows]
 
+    def create_topup_manual(self, user_id: str, isp_id: str, amount: int, catatan: str = "") -> str:
+        """Buat topup manual (QRIS ISP), menunggu approval ISP."""
+        oid = "MAN-" + uuid.uuid4().hex[:10].upper()
+        con = self._conn()
+        con.execute(
+            "INSERT INTO topup_orders (id,user_id,isp_id,amount,tipe,catatan_agen,created_at) VALUES (?,?,?,?,?,?,?)",
+            (oid, user_id, isp_id, amount, "manual", catatan, int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return oid
+
+    def list_topup_manual_isp(self, isp_id: str, status: str = "pending") -> list[dict]:
+        """List permintaan topup manual untuk ISP beserta nama agen."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT t.*, u.nama as agen_nama, u.nomor_wa as agen_wa "
+            "FROM topup_orders t JOIN users u ON u.id=t.user_id "
+            "WHERE t.isp_id=? AND t.tipe='manual' AND t.status=? "
+            "ORDER BY t.created_at DESC",
+            (isp_id, status)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def count_topup_manual_pending(self, isp_id: str) -> int:
+        con = self._conn()
+        n = con.execute(
+            "SELECT COUNT(*) FROM topup_orders WHERE isp_id=? AND tipe='manual' AND status='pending'",
+            (isp_id,)
+        ).fetchone()[0]
+        con.close()
+        return n
+
+    def approve_topup_manual(self, oid: str, isp_id: str) -> dict | None:
+        con = self._conn()
+        order = con.execute(
+            "SELECT * FROM topup_orders WHERE id=? AND isp_id=? AND tipe='manual' AND status='pending'",
+            (oid, isp_id)
+        ).fetchone()
+        if not order:
+            con.close()
+            return None
+        order = dict(order)
+        con.execute("UPDATE topup_orders SET status='paid', paid_at=? WHERE id=?", (int(time.time()), oid))
+        con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (order["amount"], order["user_id"]))
+        con.execute(
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
+            (order["user_id"], order["amount"], "kredit", f"Topup QRIS disetujui #{oid}", int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return order
+
+    def reject_topup_manual(self, oid: str, isp_id: str) -> dict | None:
+        con = self._conn()
+        order = con.execute(
+            "SELECT * FROM topup_orders WHERE id=? AND isp_id=? AND tipe='manual' AND status='pending'",
+            (oid, isp_id)
+        ).fetchone()
+        if not order:
+            con.close()
+            return None
+        con.execute("UPDATE topup_orders SET status='rejected' WHERE id=?", (oid,))
+        con.commit()
+        con.close()
+        return dict(order)
+
     # ── Generate Voucher Agen (debit saldo) ───────────────────────────────────
 
-    def generate_voucher_agen(self, agen_uid: str, isp_uid: str, paket_id: int, jumlah: int) -> dict:
+    def generate_voucher_agen(self, agen_uid: str, isp_uid: str, paket_id: int, jumlah: int, comment: str = "", server_id: str = "") -> dict:
         """Generate N voucher untuk agen, potong saldo, return kodes."""
         import random, string as _string
         con = self._conn()
@@ -915,12 +1225,20 @@ class Storage:
                     "msg": f"Saldo tidak cukup. Butuh Rp {total:,}, saldo Rp {agen['saldo']:,}"
                 }
 
-            # Ambil server dari ISP (pilih pertama jika ada)
-            server = con.execute(
-                "SELECT * FROM mikrotik_servers WHERE user_id=? AND status='aktif' ORDER BY created_at LIMIT 1",
-                (isp_uid,)
-            ).fetchone()
-            server_id = dict(server)["id"] if server else ""
+            # Gunakan server yang dipilih agen; fallback ke server pertama ISP
+            if server_id:
+                srv = con.execute(
+                    "SELECT * FROM mikrotik_servers WHERE id=? AND user_id=? AND status='aktif'",
+                    (server_id, isp_uid)
+                ).fetchone()
+                if not srv:
+                    server_id = ""
+            if not server_id:
+                srv = con.execute(
+                    "SELECT * FROM mikrotik_servers WHERE user_id=? AND status='aktif' ORDER BY created_at LIMIT 1",
+                    (isp_uid,)
+                ).fetchone()
+                server_id = dict(srv)["id"] if srv else ""
 
             # Generate kode unik
             kodes = []
@@ -931,24 +1249,25 @@ class Storage:
                     if not exists:
                         break
                 con.execute(
-                    "INSERT INTO voucher_hotspot (user_id,server_id,paket_id,kode,created_at) VALUES (?,?,?,?,?)",
-                    (isp_uid, server_id, paket_id, kode, int(time.time()))
+                    "INSERT INTO voucher_hotspot (user_id,server_id,paket_id,kode,comment,agen_id,created_at) VALUES (?,?,?,?,?,?,?)",
+                    (isp_uid, server_id, paket_id, kode, comment, agen_uid, int(time.time()))
                 )
                 kodes.append(kode)
 
-            # Debit saldo agen, kredit ISP (nett setelah komisi)
-            con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (total, agen_uid))
-            con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (total_isp, isp_uid))
+            # Debit saldo agen saja — ISP tidak dapat kredit saldo sistem
+            # (ISP sudah terima uang fisik via QRIS manual topup)
             komisi_ket = f" (komisi {komisi_persen}%)" if komisi_persen else ""
+            con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (total, agen_uid))
             con.execute(
                 "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
                 (agen_uid, total, "debit",
                  f"Generate {jumlah}x voucher {paket['nama']}{komisi_ket}", int(time.time()))
             )
+            # Catat pendapatan agen ke tabel agen_income untuk laporan ISP
             con.execute(
-                "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
-                (isp_uid, total_isp, "kredit",
-                 f"Voucher {jumlah}x {paket['nama']} dari agen{komisi_ket}", int(time.time()))
+                "INSERT OR IGNORE INTO agen_income (user_id,agen_id,paket_id,jumlah,total,komisi_persen,created_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (isp_uid, agen_uid, paket_id, jumlah, total_isp, komisi_persen, int(time.time()))
             )
             con.commit()
             return {"ok": True, "kodes": kodes, "paket": paket["nama"],
@@ -1293,12 +1612,10 @@ class Storage:
             con.close()
 
     def list_paket_hotspot_publik(self, user_id: str) -> list[dict]:
-        """Paket hotspot aktif + stok voucher tersedia untuk toko publik."""
+        """Paket hotspot aktif untuk toko publik. server_id kosong = tampil di semua server."""
         con = self._conn()
         rows = con.execute("""
-            SELECT p.*,
-                   (SELECT COUNT(*) FROM voucher_hotspot v
-                    WHERE v.paket_id=p.id AND v.user_id=p.user_id AND v.status='tersedia') as stok
+            SELECT p.*
             FROM paket_hotspot p
             WHERE p.user_id=? AND p.status='aktif'
             ORDER BY p.harga
@@ -1332,8 +1649,10 @@ class Storage:
         con.commit()
         con.close()
 
-    def confirm_order(self, order_id: str) -> dict | None:
-        """Tandai order paid, ambil satu voucher dari stok, return voucher."""
+    def confirm_order(self, order_id: str, mt_callback=None) -> dict | None:
+        """Tandai order paid, generate voucher baru on-demand, return voucher.
+        mt_callback(server_id, kode, paket) dipanggil untuk push ke MikroTik."""
+        import uuid as _uuid
         con = self._conn()
         order = con.execute("SELECT * FROM hotspot_orders WHERE id=? AND status='pending'",
                             (order_id,)).fetchone()
@@ -1341,23 +1660,37 @@ class Storage:
             con.close()
             return None
         order = dict(order)
-        # Ambil voucher tersedia dari paket yang sama
-        voucher = con.execute(
-            "SELECT * FROM voucher_hotspot WHERE user_id=? AND paket_id=? AND status='tersedia' LIMIT 1",
-            (order["user_id"], order["paket_id"])
-        ).fetchone()
-        if not voucher:
-            con.close()
-            return None
-        voucher = dict(voucher)
+
+        # Generate kode voucher unik
+        kode = _uuid.uuid4().hex[:8].upper()
+        while con.execute("SELECT id FROM voucher_hotspot WHERE kode=?", (kode,)).fetchone():
+            kode = _uuid.uuid4().hex[:8].upper()
+
+        paket = con.execute("SELECT * FROM paket_hotspot WHERE id=?", (order["paket_id"],)).fetchone()
+        paket = dict(paket) if paket else {}
+
         now = int(time.time())
-        con.execute("UPDATE voucher_hotspot SET status='dipakai', dipakai_at=? WHERE id=?",
-                    (now, voucher["id"]))
+        # Simpan voucher baru ke DB
+        vid = con.execute(
+            "INSERT INTO voucher_hotspot (user_id, paket_id, kode, status, created_at, dipakai_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (order["user_id"], order["paket_id"], kode, "dipakai", now, now)
+        ).lastrowid
+
         con.execute("UPDATE hotspot_orders SET status='paid', voucher_id=?, paid_at=? WHERE id=?",
-                    (voucher["id"], now, order_id))
+                    (vid, now, order_id))
         con.commit()
         con.close()
-        return voucher
+
+        # Push ke MikroTik (opsional, via callback)
+        if mt_callback:
+            try:
+                mt_callback(order["server_id"], kode, paket)
+            except Exception:
+                pass
+
+        return {"id": vid, "kode": kode, "paket_id": order["paket_id"],
+                "user_id": order["user_id"], "status": "dipakai"}
 
     def cari_voucher_by_nomor(self, isp_uid: str, nomor_hp: str) -> list[dict]:
         """Cari voucher yang sudah dibeli berdasarkan nomor HP."""
@@ -1388,7 +1721,7 @@ class Storage:
 
     def stats(self, user_id: str, role: str) -> dict:
         con = self._conn()
-        agen    = con.execute("SELECT COUNT(*) FROM users WHERE parent_id=?", (user_id,)).fetchone()[0]
+        agen    = con.execute("SELECT COUNT(*) FROM users WHERE parent_id=? AND role IN ('agen','sub_agen')", (user_id,)).fetchone()[0]
         servers = con.execute("SELECT COUNT(*) FROM mikrotik_servers WHERE user_id=?", (user_id,)).fetchone()[0]
         pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (user_id,)).fetchone()[0]
         voucher = con.execute("SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='tersedia'", (user_id,)).fetchone()[0]
@@ -1431,6 +1764,183 @@ class Storage:
                 "lunas_voucher":  voucher[1] if voucher else 0,
                 "total":          pppoe[0] + (voucher[0] if voucher else 0),
                 "unpaid":         total_unpaid,
+            })
+        con.close()
+        return result
+
+    # ── Hotspot Bulanan ───────────────────────────────────────────────────────
+
+    def add_hotspot_pelanggan(self, user_id: str, server_id: str, nama: str,
+                               nomor_wa: str, username: str, password: str,
+                               profile: str, harga: int, jatuh_tempo: int,
+                               catatan: str = "") -> str:
+        pid = "HP-" + uuid.uuid4().hex[:8].upper()
+        con = self._conn()
+        con.execute(
+            "INSERT INTO hotspot_pelanggan "
+            "(id,user_id,server_id,nama,nomor_wa,username,password,profile,harga,jatuh_tempo,catatan,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (pid, user_id, server_id, nama, nomor_wa, username, password,
+             profile, harga, jatuh_tempo, catatan, int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return pid
+
+    def list_hotspot_pelanggan(self, user_id: str, status: str = "") -> list[dict]:
+        con = self._conn()
+        q = "SELECT * FROM hotspot_pelanggan WHERE user_id=?"
+        args = [user_id]
+        if status:
+            q += " AND status=?"
+            args.append(status)
+        q += " ORDER BY nama"
+        rows = con.execute(q, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_hotspot_pelanggan(self, pid: str, user_id: str = "") -> dict | None:
+        con = self._conn()
+        if user_id:
+            row = con.execute("SELECT * FROM hotspot_pelanggan WHERE id=? AND user_id=?", (pid, user_id)).fetchone()
+        else:
+            row = con.execute("SELECT * FROM hotspot_pelanggan WHERE id=?", (pid,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def update_hotspot_pelanggan(self, pid: str, user_id: str, **kwargs) -> bool:
+        allowed = {"nama","nomor_wa","password","profile","harga","jatuh_tempo","status","catatan","server_id"}
+        fields = {k: v for k, v in kwargs.items() if k in allowed}
+        if not fields:
+            return False
+        con = self._conn()
+        sets = ", ".join(f"{k}=?" for k in fields)
+        vals = list(fields.values()) + [pid, user_id]
+        con.execute(f"UPDATE hotspot_pelanggan SET {sets} WHERE id=? AND user_id=?", vals)
+        con.commit()
+        con.close()
+        return True
+
+    def delete_hotspot_pelanggan(self, pid: str, user_id: str) -> bool:
+        con = self._conn()
+        con.execute("DELETE FROM hotspot_pelanggan WHERE id=? AND user_id=?", (pid, user_id))
+        con.execute("DELETE FROM hotspot_tagihan WHERE pelanggan_id=? AND user_id=?", (pid, user_id))
+        con.commit()
+        con.close()
+        return True
+
+    def get_or_create_hotspot_tagihan(self, pelanggan_id: str, user_id: str, bulan: str, amount: int) -> dict:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM hotspot_tagihan WHERE pelanggan_id=? AND bulan=?", (pelanggan_id, bulan)
+        ).fetchone()
+        if row:
+            con.close()
+            return dict(row)
+        tid = "HT-" + uuid.uuid4().hex[:8].upper()
+        con.execute(
+            "INSERT INTO hotspot_tagihan (id,pelanggan_id,user_id,bulan,amount,created_at) VALUES (?,?,?,?,?,?)",
+            (tid, pelanggan_id, user_id, bulan, amount, int(time.time()))
+        )
+        con.commit()
+        row = con.execute("SELECT * FROM hotspot_tagihan WHERE id=?", (tid,)).fetchone()
+        con.close()
+        return dict(row)
+
+    def list_hotspot_tagihan(self, user_id: str, bulan: str = "", status: str = "") -> list[dict]:
+        con = self._conn()
+        q = ("SELECT t.*, p.nama as pelanggan_nama, p.nomor_wa as pelanggan_wa, p.username "
+             "FROM hotspot_tagihan t JOIN hotspot_pelanggan p ON p.id=t.pelanggan_id "
+             "WHERE t.user_id=?")
+        args = [user_id]
+        if bulan:
+            q += " AND t.bulan=?"
+            args.append(bulan)
+        if status:
+            q += " AND t.status=?"
+            args.append(status)
+        q += " ORDER BY p.nama"
+        rows = con.execute(q, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def bayar_hotspot_tagihan(self, tid: str, user_id: str) -> dict | None:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM hotspot_tagihan WHERE id=? AND user_id=?", (tid, user_id)
+        ).fetchone()
+        if not row:
+            con.close()
+            return None
+        con.execute(
+            "UPDATE hotspot_tagihan SET status='paid', paid_at=? WHERE id=?",
+            (int(time.time()), tid)
+        )
+        con.commit()
+        con.close()
+        return dict(row)
+
+    def stats_hotspot_tagihan(self, user_id: str, bulan: str) -> dict:
+        con = self._conn()
+        total  = con.execute("SELECT COUNT(*) FROM hotspot_tagihan WHERE user_id=? AND bulan=?", (user_id, bulan)).fetchone()[0]
+        paid   = con.execute("SELECT COUNT(*) FROM hotspot_tagihan WHERE user_id=? AND bulan=? AND status='paid'", (user_id, bulan)).fetchone()[0]
+        unpaid = total - paid
+        omzet  = con.execute("SELECT COALESCE(SUM(amount),0) FROM hotspot_tagihan WHERE user_id=? AND bulan=? AND status='paid'", (user_id, bulan)).fetchone()[0]
+        con.close()
+        return {"total": total, "paid": paid, "unpaid": unpaid, "omzet": omzet}
+
+    def get_hotspot_jatuh_tempo_hari_ini(self, user_id: str, hari: int, bulan: str) -> list[dict]:
+        """Pelanggan yang jatuh tempo hari ini dan belum ada tagihan bulan ini."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT p.* FROM hotspot_pelanggan p "
+            "WHERE p.user_id=? AND p.status='aktif' AND p.jatuh_tempo=? "
+            "AND NOT EXISTS (SELECT 1 FROM hotspot_tagihan t WHERE t.pelanggan_id=p.id AND t.bulan=?)",
+            (user_id, hari, bulan)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def laporan_pendapatan_agen(self, isp_id: str, tahun: str) -> list[dict]:
+        """Pendapatan dari agen (voucher) per bulan — tidak masuk saldo ISP."""
+        import calendar
+        con = self._conn()
+        result = []
+        for m in range(1, 13):
+            _, last_day = calendar.monthrange(int(tahun), m)
+            ts_start = int(time.mktime((int(tahun), m, 1, 0, 0, 0, 0, 0, -1)))
+            ts_end   = int(time.mktime((int(tahun), m, last_day, 23, 59, 59, 0, 0, -1)))
+            row = con.execute(
+                "SELECT COALESCE(SUM(total),0), COUNT(*) FROM agen_income "
+                "WHERE user_id=? AND created_at BETWEEN ? AND ?",
+                (isp_id, ts_start, ts_end)
+            ).fetchone()
+            result.append({
+                "bulan":  f"{tahun}-{str(m).zfill(2)}",
+                "total":  row[0] if row else 0,
+                "jumlah": row[1] if row else 0,
+            })
+        con.close()
+        return result
+
+    def laporan_topup_agen(self, isp_id: str, tahun: str) -> list[dict]:
+        """Rekapitulasi topup manual agen per bulan dalam satu tahun."""
+        import calendar
+        con = self._conn()
+        result = []
+        for m in range(1, 13):
+            _, last_day = calendar.monthrange(int(tahun), m)
+            ts_start = int(time.mktime((int(tahun), m, 1, 0, 0, 0, 0, 0, -1)))
+            ts_end   = int(time.mktime((int(tahun), m, last_day, 23, 59, 59, 0, 0, -1)))
+            row = con.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM topup_orders "
+                "WHERE isp_id=? AND tipe='manual' AND status='paid' AND paid_at BETWEEN ? AND ?",
+                (isp_id, ts_start, ts_end)
+            ).fetchone()
+            result.append({
+                "bulan":  f"{tahun}-{str(m).zfill(2)}",
+                "total":  row[0] if row else 0,
+                "jumlah": row[1] if row else 0,
             })
         con.close()
         return result

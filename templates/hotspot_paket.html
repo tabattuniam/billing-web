@@ -43,6 +43,15 @@
       <span class="font-semibold text-slate-700 font-mono text-xs">{{ p.kecepatan }}</span>
     </div>
     {% endif %}
+    {% set srv_info = servers | selectattr('id', 'equalto', p.server_id) | first | default(None) %}
+    <div class="flex items-center justify-between text-sm">
+      <span class="text-slate-400">Server</span>
+      {% if srv_info %}
+      <span class="text-xs font-medium text-blue-600">📍 {{ srv_info.nama }}</span>
+      {% else %}
+      <span class="text-xs text-orange-500">⚠ Belum ada server</span>
+      {% endif %}
+    </div>
   </div>
   <div class="flex items-center justify-between pt-3 border-t border-slate-100">
     <span class="text-xs text-slate-400">Harga voucher</span>
@@ -55,6 +64,7 @@
       data-durasi="{{ p.durasi | e }}"
       data-kecepatan="{{ p.kecepatan | e }}"
       data-harga="{{ p.harga }}"
+      data-server-id="{{ p.server_id or '' }}"
       class="flex-1 btn-secondary px-3 py-2 text-xs justify-center">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
       Edit
@@ -91,15 +101,20 @@
       <div class="space-y-4">
         <div>
           <label class="form-label">Nama Paket</label>
-          <input name="nama" id="nama-tambah" required placeholder="Contoh: 1 Hari 5Mbps" class="form-input">
+          <input name="nama" id="nama-tambah" required placeholder="Contoh: 1 Jam 5Mbps" class="form-input">
         </div>
-
-        <!-- Profile dari router -->
+        <div>
+          <label class="form-label">Server</label>
+          <select name="server_id" id="srv-paket-tambah" class="form-select" required>
+            <option value="">— Pilih Server —</option>
+            {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}{% if s.lokasi %} ({{ s.lokasi }}){% endif %}</option>{% endfor %}
+          </select>
+        </div>
         <div>
           <label class="form-label">Profile MikroTik</label>
           <div class="flex gap-2 mb-2">
             <select id="srv-tambah" class="form-select flex-1 text-xs">
-              <option value="">Pilih server</option>
+              <option value="">Pilih server untuk muat profile</option>
               {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
             </select>
             <button type="button" onclick="muatProfile('tambah')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
@@ -110,13 +125,12 @@
           <select name="kecepatan" id="profile-tambah" class="form-select">
             <option value="">— muat dari router —</option>
           </select>
-          <p id="hint-tambah" class="text-xs text-slate-400 mt-1">Klik <strong>Muat</strong> untuk ambil profil dari router. Durasi & kecepatan otomatis terisi.</p>
+          <p id="hint-tambah" class="text-xs text-slate-400 mt-1">Klik <strong>Muat</strong> untuk ambil profil dari router.</p>
         </div>
-
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="form-label">Durasi</label>
-            <input name="durasi" id="durasi-tambah" required placeholder="1d / 8h / 1h30m" class="form-input">
+            <input name="durasi" id="durasi-tambah" required placeholder="1d / 8h / 1h" class="form-input">
           </div>
           <div>
             <label class="form-label">Rate Limit</label>
@@ -133,7 +147,7 @@
           class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
         <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Simpan Paket
+          Simpan
         </button>
       </div>
     </form>
@@ -156,10 +170,15 @@
           <input name="nama" id="edit-nama" required class="form-input">
         </div>
         <div>
+          <label class="form-label">Server</label>
+          <input id="edit-server-nama" class="form-input bg-gray-100 text-gray-500" disabled>
+          <input type="hidden" name="server_id" id="edit-server-id">
+        </div>
+        <div>
           <label class="form-label">Profile MikroTik</label>
           <div class="flex gap-2 mb-2">
             <select id="srv-edit" class="form-select flex-1 text-xs">
-              <option value="">Pilih server (opsional)</option>
+              <option value="">Pilih server untuk muat profile</option>
               {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
             </select>
             <button type="button" onclick="muatProfile('edit')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
@@ -346,6 +365,8 @@ function applyDefaultHarga(val) {
 }
 
 async function doImport() {
+  const serverId = document.getElementById('imp-server').value;
+  if (!serverId) { showToast('Pilih server terlebih dahulu', 'warning'); return; }
   const pakets = [];
   for (let i = 0; i < _profileCount; i++) {
     if (!document.getElementById('imp-chk-' + i)?.checked) continue;
@@ -355,6 +376,7 @@ async function doImport() {
       durasi:    hargaEl?.dataset.durasi || '1d',
       kecepatan: hargaEl?.dataset.kecepatan || '',
       harga:     parseInt(hargaEl?.value || 0),
+      server_id: serverId,
     });
   }
   if (!pakets.length) { showToast('Tidak ada paket yang dipilih', 'warning'); return; }
@@ -378,6 +400,10 @@ async function doImport() {
   }
 }
 
+const SERVER_NAMES = {
+  {% for s in servers %}"{{ s.id }}": "{{ s.nama }}{% if s.lokasi %} — {{ s.lokasi }}{% endif %}",{% endfor %}
+};
+
 function openEdit(btn) {
   const d = btn.dataset;
   document.getElementById('form-edit').action = '/hotspot/paket/edit/' + d.id;
@@ -385,6 +411,8 @@ function openEdit(btn) {
   document.getElementById('edit-durasi').value = d.durasi;
   document.getElementById('edit-rate').value = '';
   document.getElementById('edit-harga').value = d.harga;
+  document.getElementById('edit-server-id').value = d.serverId || '';
+  document.getElementById('edit-server-nama').value = SERVER_NAMES[d.serverId] || '—';
   document.getElementById('edit-kecepatan-current').value = 'Profile saat ini: ' + (d.kecepatan || '—');
   document.getElementById('profile-edit').innerHTML = `<option value="${d.kecepatan}" selected>${d.kecepatan || '— muat dari router —'}</option>`;
   document.getElementById('modal-edit').classList.remove('hidden');

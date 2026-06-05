@@ -140,6 +140,36 @@ class MikroTik:
         except Exception:
             return False
 
+    def disable_hotspot_user(self, username: str) -> bool:
+        try:
+            api = self._conn()
+            res = api.get_resource("/ip/hotspot/user")
+            rows = res.get(name=username)
+            for r in rows:
+                res.set(id=r["id"], disabled="yes")
+            return True
+        except Exception:
+            return False
+
+    def enable_hotspot_user(self, username: str) -> bool:
+        try:
+            api = self._conn()
+            res = api.get_resource("/ip/hotspot/user")
+            rows = res.get(name=username)
+            for r in rows:
+                res.set(id=r["id"], disabled="no")
+            return True
+        except Exception:
+            return False
+
+    def get_hotspot_user(self, username: str) -> dict | None:
+        try:
+            api = self._conn()
+            rows = api.get_resource("/ip/hotspot/user").get(name=username)
+            return dict(rows[0]) if rows else None
+        except Exception:
+            return None
+
     def list_hotspot_profiles(self) -> list[str]:
         try:
             api = self._conn()

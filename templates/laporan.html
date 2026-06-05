@@ -18,12 +18,24 @@
 </div>
 
 <!-- Stats bulan ini -->
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-  <div class="card p-4">
-    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Omzet Tahun {{ tahun }}</p>
-    <p class="text-xl font-black text-gray-900 mt-1">Rp {{ "{:,}".format(total_tahun).replace(",",".") }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">total terkumpul</p>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+  <div class="card p-4 border-l-4 border-blue-400">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total Semua Pendapatan {{ tahun }}</p>
+    <p class="text-2xl font-black text-blue-700 mt-1">Rp {{ "{:,}".format(total_semua).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">Gateway + QRIS Manual</p>
   </div>
+  <div class="card p-4 border-l-4 border-emerald-400">
+    <p class="text-xs text-emerald-600 font-medium uppercase tracking-wide">Gateway (PPPoE + Voucher)</p>
+    <p class="text-xl font-black text-emerald-700 mt-1">Rp {{ "{:,}".format(total_tahun).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">via Duitku / Midtrans</p>
+  </div>
+  <div class="card p-4 border-l-4 border-indigo-400">
+    <p class="text-xs text-indigo-500 font-medium uppercase tracking-wide">QRIS Manual (Agen)</p>
+    <p class="text-xl font-black text-indigo-700 mt-1">Rp {{ "{:,}".format(total_topup_manual).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">transfer langsung ke rekening</p>
+  </div>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
   <div class="card p-4">
     <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Lunas Bulan Ini</p>
     <p class="text-xl font-black text-emerald-600 mt-1">{{ stats_bln.paid }}</p>
@@ -55,26 +67,29 @@
 
 <!-- Tabel Detail Per Bulan -->
 <div class="card overflow-hidden">
-  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-    <h3 class="text-sm font-semibold text-gray-700">Detail Per Bulan</h3>
+  <div class="px-5 py-4 border-b border-gray-100">
+    <h3 class="text-sm font-semibold text-gray-700">Rekap Pendapatan Per Bulan ({{ tahun }})</h3>
+    <p class="text-xs text-gray-400 mt-0.5">Gateway = via payment gateway · QRIS Manual = transfer langsung ke rekening ISP</p>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full">
       <thead>
         <tr class="border-b border-gray-100">
           <th class="th">Bulan</th>
-          <th class="th text-right">Omzet PPPoE</th>
-          <th class="th text-right">Omzet Voucher</th>
-          <th class="th text-right">Total</th>
-          <th class="th text-center">Lunas</th>
-          <th class="th text-center">Belum Bayar</th>
+          <th class="th text-right">PPPoE</th>
+          <th class="th text-right">Voucher Gateway</th>
+          <th class="th text-right bg-emerald-50 text-emerald-700">Total Gateway</th>
+          <th class="th text-right bg-indigo-50 text-indigo-700">QRIS Manual</th>
+          <th class="th text-right bg-blue-50 text-blue-700">Total Semua</th>
         </tr>
       </thead>
       <tbody>
-        {% set ns = namespace(grand=0) %}
+        {% set ns = namespace(idx=0) %}
         {% for b in bulanan %}
-        {% set ns.grand = ns.grand + b.total %}
-        <tr class="hover:bg-gray-50 transition-colors {% if b.total == 0 %}opacity-40{% endif %}">
+        {% set tm = topup_manual[ns.idx] if topup_manual is defined and ns.idx < topup_manual|length else {'total':0} %}
+        {% set ns.idx = ns.idx + 1 %}
+        {% set grand = b.total + tm.total %}
+        <tr class="hover:bg-gray-50 transition-colors {% if grand == 0 %}opacity-40{% endif %}">
           <td class="td font-semibold text-gray-800">{{ b.bulan | label_bulan }}</td>
           <td class="td text-right text-gray-700">
             {% if b.omzet_pppoe %}Rp {{ "{:,}".format(b.omzet_pppoe).replace(",",".") }}{% else %}—{% endif %}
@@ -82,14 +97,14 @@
           <td class="td text-right text-gray-700">
             {% if b.omzet_voucher %}Rp {{ "{:,}".format(b.omzet_voucher).replace(",",".") }}{% else %}—{% endif %}
           </td>
-          <td class="td text-right font-bold text-gray-900">
+          <td class="td text-right font-bold text-emerald-700 bg-emerald-50/40">
             {% if b.total %}Rp {{ "{:,}".format(b.total).replace(",",".") }}{% else %}—{% endif %}
           </td>
-          <td class="td text-center">
-            {% if b.lunas_pppoe %}<span class="badge badge-green">{{ b.lunas_pppoe }}</span>{% else %}—{% endif %}
+          <td class="td text-right font-bold text-indigo-700 bg-indigo-50/40">
+            {% if tm.total %}Rp {{ "{:,}".format(tm.total).replace(",",".") }}{% else %}—{% endif %}
           </td>
-          <td class="td text-center">
-            {% if b.unpaid %}<span class="badge badge-orange">{{ b.unpaid }}</span>{% else %}<span class="text-gray-300">0</span>{% endif %}
+          <td class="td text-right font-black text-blue-700 bg-blue-50/40">
+            {% if grand %}Rp {{ "{:,}".format(grand).replace(",",".") }}{% else %}—{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -103,11 +118,15 @@
           <td class="td text-right font-bold text-gray-700">
             Rp {{ "{:,}".format(bulanan | sum(attribute='omzet_voucher')).replace(",",".") }}
           </td>
-          <td class="td text-right font-black text-emerald-700 text-base">
+          <td class="td text-right font-black text-emerald-700">
             Rp {{ "{:,}".format(total_tahun).replace(",",".") }}
           </td>
-          <td class="td text-center font-bold text-gray-700">{{ bulanan | sum(attribute='lunas_pppoe') }}</td>
-          <td class="td text-center font-bold text-amber-600">{{ bulanan | sum(attribute='unpaid') }}</td>
+          <td class="td text-right font-black text-indigo-700">
+            Rp {{ "{:,}".format(total_topup_manual).replace(",",".") }}
+          </td>
+          <td class="td text-right font-black text-blue-700 text-base">
+            Rp {{ "{:,}".format(total_semua).replace(",",".") }}
+          </td>
         </tr>
       </tfoot>
     </table>
