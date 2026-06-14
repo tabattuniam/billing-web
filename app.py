@@ -29,6 +29,8 @@ WA_TOKEN    = CFG.get("wuzapi", {}).get("token", "")
 WA_ADMIN_TOKEN   = CFG.get("wuzapi", {}).get("admin_token", "")
 WA_USERS_DB      = CFG.get("wuzapi", {}).get("users_db", "")
 PLATFORM_OWNER_WA = CFG.get("platform", {}).get("owner_wa", "")
+SA_USERNAME = CFG.get("superadmin", {}).get("username", "superadmin")
+SA_PASSWORD = CFG.get("superadmin", {}).get("password", "")
 MT_SERVER   = CFG.get("midtrans", {}).get("server_key", "")
 MT_CLIENT   = CFG.get("midtrans", {}).get("client_key", "")
 MT_PROD     = CFG.get("midtrans", {}).get("is_production", False)
@@ -671,6 +673,12 @@ async def dashboard(request: Request):
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, user=user, stats=stats))
 
 
+@app.get("/bantuan", response_class=HTMLResponse)
+async def bantuan_page(request: Request):
+    user = require_login(request)
+    return tpl.TemplateResponse(request, "bantuan.html", _ctx(request, user=user))
+
+
 @app.get("/laporan", response_class=HTMLResponse)
 async def laporan_page(request: Request, tahun: str = ""):
     user = require_login(request)
@@ -807,14 +815,121 @@ async def pppoe_paket_tambah(
     db.create_paket_pppoe(user["id"], nama, kecepatan, harga)
     return RedirectResponse("/pppoe/paket", status_code=302)
 
+# ── ODP ───────────────────────────────────────────────────────────────────────
+
+@app.get("/odp", response_class=HTMLResponse)
+async def odp_page(request: Request, server_id: str = ""):
+    user = require_login(request)
+    iid = _isp_id(user)
+    servers  = db.list_servers(iid)
+    odp_list = db.list_odp(iid, server_id if server_id else None)
+    odc_list = db.list_odc(iid, server_id if server_id else None)
+    odc_map  = {o["id"]: o for o in odc_list}
+    for o in odp_list:
+        if o.get("odc_id") and o.get("tap_tipe"):
+            odc = odc_map.get(o["odc_id"])
+            o["daya_odp_dbm"] = db.def_odp_power(odc, o["tap_tipe"]) if odc else None
+        else:
+            o["daya_odp_dbm"] = None
+    return tpl.TemplateResponse(request, "odp.html", _ctx(
+        request, user=user, odp_list=odp_list, odc_list=odc_list,
+        servers=servers, sel_server=server_id))
+
+@app.post("/odc/tambah")
+async def odc_tambah(request: Request, server_id: str = Form(...), nama: str = Form(...),
+                     lokasi: str = Form(""), tipe_splitter: str = Form("1:4"),
+                     daya_masuk_dbm: str = Form("-3"),
+                     lat: str = Form(""), lng: str = Form("")):
+    user = require_login(request)
+    iid = _isp_id(user)
+    db.create_odc(iid, server_id, nama.strip(), lokasi.strip(), tipe_splitter,
+                  float(daya_masuk_dbm or -3),
+                  float(lat) if lat.strip() else None,
+                  float(lng) if lng.strip() else None)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.post("/odc/edit/{odc_id}")
+async def odc_edit(request: Request, odc_id: int, server_id: str = Form(...),
+                   nama: str = Form(...), lokasi: str = Form(""),
+                   tipe_splitter: str = Form("1:4"), daya_masuk_dbm: str = Form("-3"),
+                   lat: str = Form(""), lng: str = Form("")):
+    user = require_login(request)
+    db.update_odc(odc_id, server_id, nama.strip(), lokasi.strip(), tipe_splitter,
+                  float(daya_masuk_dbm or -3),
+                  float(lat) if lat.strip() else None,
+                  float(lng) if lng.strip() else None)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.post("/odc/hapus/{odc_id}")
+async def odc_hapus(request: Request, odc_id: int):
+    user = require_login(request)
+    db.delete_odc(odc_id)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.post("/odp/tambah")
+async def odp_tambah(request: Request, server_id: str = Form(...), nama: str = Form(...),
+                     lokasi: str = Form(""), kapasitas: int = Form(8),
+                     lat: str = Form(""), lng: str = Form(""),
+                     odc_id: str = Form(""), tap_tipe: str = Form("")):
+    user = require_login(request)
+    iid = _isp_id(user)
+    _lat = float(lat) if lat.strip() else None
+    _lng = float(lng) if lng.strip() else None
+    _odc = int(odc_id) if odc_id.strip() else None
+    db.create_odp(iid, server_id, nama.strip(), lokasi.strip(), kapasitas, _lat, _lng, _odc, tap_tipe)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.post("/odp/edit/{odp_id}")
+async def odp_edit(request: Request, odp_id: int, server_id: str = Form(...),
+                   nama: str = Form(...), lokasi: str = Form(""), kapasitas: int = Form(8),
+                   lat: str = Form(""), lng: str = Form(""),
+                   odc_id: str = Form(""), tap_tipe: str = Form("")):
+    user = require_login(request)
+    _lat = float(lat) if lat.strip() else None
+    _lng = float(lng) if lng.strip() else None
+    _odc = int(odc_id) if odc_id.strip() else None
+    db.update_odp(odp_id, server_id, nama.strip(), lokasi.strip(), kapasitas, _lat, _lng, _odc, tap_tipe)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.get("/odp/{odp_id}/ports", response_class=JSONResponse)
+async def odp_ports(request: Request, odp_id: int):
+    user = require_login(request)
+    iid = _isp_id(user)
+    pelanggan = db.list_pppoe_by_odp(iid, odp_id)
+    port_map = {p["odp_port"]: {"nama": p["nama_pelanggan"], "username": p["username"], "id": p["id"]} for p in pelanggan if p.get("odp_port")}
+    return JSONResponse({"ok": True, "ports": port_map})
+
+@app.post("/odp/hapus/{odp_id}")
+async def odp_hapus(request: Request, odp_id: int):
+    user = require_login(request)
+    db.delete_odp(odp_id)
+    return RedirectResponse("/odp", status_code=303)
+
+@app.post("/odp/assign/{pppoe_id}")
+async def odp_assign(request: Request, pppoe_id: int, odp_id: str = Form(""), odp_port: str = Form("")):
+    user = require_login(request)
+    _odp_id = int(odp_id) if odp_id else None
+    _odp_port = int(odp_port) if odp_port else None
+    db.assign_odp(pppoe_id, _odp_id, _odp_port)
+    return RedirectResponse("/pppoe/users", status_code=303)
+
+@app.get("/kalkulator-odp", response_class=HTMLResponse)
+async def kalkulator_odp(request: Request):
+    user = require_login(request)
+    return tpl.TemplateResponse(request, "kalkulator_odp.html", _ctx(request, user=user))
+
 # ── PPPoE Users ───────────────────────────────────────────────────────────────
 
 @app.get("/pppoe/users", response_class=HTMLResponse)
-async def pppoe_users(request: Request, server_id: str = "", status: str = "", q: str = ""):
+async def pppoe_users(request: Request, server_id: str = "", status: str = "", q: str = "", odp_id: str = ""):
     user = require_login(request)
     iid = _isp_id(user)
     servers = db.list_servers(iid)
-    users = db.list_pppoe_users(iid, server_id if server_id else None)
+    # Semua ODP (untuk JS data mapping), filter dropdown sesuai server dipilih
+    odp_list = db.list_odp(iid)
+    odp_filter_list = db.list_odp(iid, server_id if server_id else None)
+    _odp_id = int(odp_id) if odp_id else None
+    users = db.list_pppoe_users(iid, server_id if server_id else None, odp_id=_odp_id)
     if status:
         users = [u for u in users if u["status"] == status]
     if q:
@@ -825,11 +940,12 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
                  q_lower in (u["telepon"] or "").lower()]
     pakets = db.list_paket_pppoe(iid)
     online_set = db.get_all_online_usernames()
-    # Overdue pppoe_user IDs bulan ini
+    # Status tagihan bulan ini per pelanggan
     from datetime import date
     bulan_ini = date.today().strftime("%Y-%m")
-    tagihan_overdue = db.list_tagihan(iid, bulan=bulan_ini, status="overdue")
-    overdue_ids = {t["pppoe_id"] for t in tagihan_overdue}
+    tagihan_bulan = db.list_tagihan(iid, bulan=bulan_ini)
+    tagihan_map = {t["pppoe_id"]: t["status"] for t in tagihan_bulan}
+    overdue_ids = {t["pppoe_id"] for t in tagihan_bulan if t["status"] == "overdue"}
     # Hitung usia cache
     cache_ages = []
     for s in servers:
@@ -840,8 +956,11 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
     push_msg = request.query_params.get("push")
     return tpl.TemplateResponse(request, "pppoe_users.html", _ctx(
         request, user=user, users=users, servers=servers, pakets=pakets,
-        sel_server=server_id, sel_status=status, q=q,
+        sel_server=server_id, sel_status=status, q=q, sel_odp=odp_id,
+        odp_list=odp_list,
         online_set=online_set, overdue_ids=overdue_ids,
+        tagihan_map=tagihan_map, bulan_ini=bulan_ini,
+        odp_filter_list=odp_filter_list,
         cache_age=cache_age, push_msg=push_msg,
     ))
 
@@ -852,13 +971,16 @@ async def pppoe_user_tambah(
     server_id: str = Form(...), nama_pelanggan: str = Form(...),
     username: str = Form(...), password: str = Form(...),
     paket_id: int = Form(...), telepon: str = Form(""),
-    alamat: str = Form(""), tgl_bayar: int = Form(1)
+    alamat: str = Form(""), tgl_bayar: int = Form(1),
+    odp_id: str = Form(""), odp_port: str = Form("")
 ):
     user = require_login(request)
     iid = _isp_id(user)
     isp = db.get_user(iid)
     paket = db.get_paket_pppoe(paket_id)
     pid = db.create_pppoe_user(iid, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed=0)
+    if odp_id.strip():
+        db.assign_odp(pid, int(odp_id), int(odp_port) if odp_port.strip() else None)
     mt = get_mt(server_id)
     pushed = False
     if mt:
@@ -1524,16 +1646,39 @@ async def voucher_generate(
     user = require_login(request)
     jumlah = min(jumlah, 500)
     kodes = db.create_vouchers(user["id"], server_id, paket_id, jumlah, comment.strip())
+
+    push_ok = 0
+    push_fail = 0
+    push_attempted = False
+
     if push_mikrotik:
+        push_attempted = True
         paket = db.get_paket_hotspot(paket_id)
         mt = get_mt(server_id)
         if mt and paket:
-            profile    = paket.get("kecepatan") or "default"
-            mt_comment = comment.strip() or paket.get("nama", "")
+            profile      = paket.get("kecepatan") or "default"
+            mt_comment   = comment.strip() or paket.get("nama", "")
             limit_uptime = paket.get("durasi") or ""
             for kode in kodes:
-                mt.add_hotspot_user(kode, kode, profile=profile, comment=mt_comment, limit_uptime=limit_uptime)
-    return RedirectResponse("/hotspot/voucher", status_code=302)
+                ok = mt.add_hotspot_user(kode, kode, profile=profile,
+                                         comment=mt_comment, limit_uptime=limit_uptime)
+                if ok:
+                    push_ok += 1
+                    db.set_voucher_mt_pushed(kode, True)
+                else:
+                    push_fail += 1
+        else:
+            push_fail = len(kodes)
+
+    if push_attempted:
+        if push_fail == 0:
+            status = f"generate_ok&pushed={push_ok}"
+        else:
+            status = f"generate_push_error&pushed={push_ok}&failed={push_fail}"
+    else:
+        status = f"generate_ok&pushed=0"
+
+    return RedirectResponse(f"/hotspot/voucher?ok={status}&jumlah={len(kodes)}", status_code=302)
 
 
 @app.post("/hotspot/voucher/hapus")
@@ -1610,9 +1755,13 @@ async def voucher_push(request: Request, server_id: str = Form(...), comment: st
         limit_uptime = paket.get("durasi") or "" if paket else ""
         mt_comment = v.get("comment") or (paket.get("nama", "") if paket else "")
         try:
-            mt.add_hotspot_user(v["kode"], v["kode"], profile=profile,
-                                comment=mt_comment, limit_uptime=limit_uptime)
-            berhasil += 1
+            ok = mt.add_hotspot_user(v["kode"], v["kode"], profile=profile,
+                                    comment=mt_comment, limit_uptime=limit_uptime)
+            if ok:
+                db.set_voucher_mt_pushed(v["kode"], True)
+                berhasil += 1
+            else:
+                gagal += 1
         except Exception:
             gagal += 1
     return JSONResponse({"ok": True, "berhasil": berhasil, "gagal": gagal,
@@ -1638,21 +1787,34 @@ async def voucher_print(request: Request, server_id: str = "", paket_id: str = "
 
 # ── Agen Management ───────────────────────────────────────────────────────────
 
-@app.get("/agen", response_class=HTMLResponse)
-async def agen_page(request: Request):
+@app.get("/tim", response_class=HTMLResponse)
+async def tim_page(request: Request):
     user = require_login(request)
+    if user["role"] not in ("admin", "agen"):
+        return RedirectResponse("/dashboard", status_code=302)
     if user["role"] == "admin":
         agenlist = db.list_users(role="agen", parent_id=user["id"])
-    elif user["role"] == "agen":
-        agenlist = db.list_users(role="sub_agen", parent_id=user["id"])
+        teknisi_list = db.list_teknisi(user["id"])
     else:
-        return RedirectResponse("/dashboard", status_code=302)
+        agenlist = db.list_users(role="sub_agen", parent_id=user["id"])
+        teknisi_list = []
     stats = {a["id"]: db.stats_agen(a["id"]) for a in agenlist}
     isp_slug = user.get("slug") or user.get("username", "")
-    return tpl.TemplateResponse(request, "agen.html", _ctx(
-        request, user=user, agenlist=agenlist, stats=stats,
-        isp_slug=isp_slug, app_domain=APP_DOMAIN
+    return tpl.TemplateResponse(request, "tim.html", _ctx(
+        request, user=user, agenlist=agenlist, teknisi_list=teknisi_list,
+        stats=stats, isp_slug=isp_slug, app_domain=APP_DOMAIN,
+        ok=request.query_params.get("ok"),
+        error=request.query_params.get("error"),
     ))
+
+
+@app.get("/agen", response_class=HTMLResponse)
+async def agen_page(request: Request):
+    return RedirectResponse("/tim", status_code=302)
+
+@app.get("/teknisi-admin", response_class=HTMLResponse)
+async def teknisi_admin_redirect(request: Request):
+    return RedirectResponse("/tim?tab=teknisi", status_code=302)
 
 
 @app.post("/agen/tambah")
@@ -1714,18 +1876,6 @@ async def agen_hapus(request: Request, uid: str):
 
 # ── Manajemen Teknisi (admin billing) ────────────────────────────────────────
 
-@app.get("/teknisi-admin", response_class=HTMLResponse)
-async def teknisi_admin_page(request: Request):
-    user = require_login(request)
-    if user["role"] != "admin":
-        return RedirectResponse("/dashboard", status_code=302)
-    teknisi_list = db.list_teknisi(user["id"])
-    isp_slug = user.get("slug") or user.get("username")
-    return tpl.TemplateResponse(request, "teknisi_admin.html", _ctx(
-        request, user=user, teknisi_list=teknisi_list, isp_slug=isp_slug,
-        ok=request.query_params.get("ok"),
-        error=request.query_params.get("error"),
-    ))
 
 
 @app.post("/teknisi-admin/tambah")
@@ -1784,17 +1934,44 @@ async def teknisi_hapus(request: Request, uid: str):
 # ── Saldo ─────────────────────────────────────────────────────────────────────
 
 @app.get("/saldo", response_class=HTMLResponse)
-async def saldo_page(request: Request):
+async def saldo_page(request: Request, bulan: str = ""):
+    from datetime import date, datetime
     user = require_login(request)
-    logs = db.list_saldo_log(user["id"])
+    if not bulan:
+        bulan = date.today().strftime("%Y-%m")
+    logs_all = db.list_saldo_log(user["id"])
+
+    # Filter bulan
+    def _in_bulan(ts, bln):
+        try:
+            return datetime.fromtimestamp(int(ts)).strftime("%Y-%m") == bln
+        except Exception:
+            return False
+
+    logs = [l for l in logs_all if _in_bulan(l["created_at"], bulan)]
+
+    total_kredit = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
+    total_debit  = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
+
     saved_rek = {
         "bank": user.get("rek_bank") or "",
         "no":   user.get("rek_no") or "",
         "nama": user.get("rek_nama") or "",
     }
     pending_topup_count = db.count_topup_manual_pending(user["id"]) if user.get("role") == "admin" else 0
+
+    # Tarik saldo pending
+    con = db._conn()
+    tarik_pending = con.execute(
+        "SELECT COUNT(*) FROM tarik_saldo WHERE user_id=? AND status='pending'", (user["id"],)
+    ).fetchone()[0]
+    con.close()
+
     return tpl.TemplateResponse(request, "saldo.html", _ctx(
         request, user=user, logs=logs, saved_rek=saved_rek,
+        sel_bulan=bulan,
+        stats={"kredit": total_kredit, "debit": total_debit,
+               "total_log": len(logs), "tarik_pending": tarik_pending},
         pending_topup_count=pending_topup_count))
 
 
@@ -1813,10 +1990,18 @@ async def saldo_tarik_request(request: Request):
     rekening_name = (body.get("rekening_name") or "").strip()
     catatan       = (body.get("catatan") or "").strip()
 
-    if nominal <= 0:
-        return JSONResponse({"ok": False, "detail": "Nominal harus lebih dari 0"})
-    if nominal > user["saldo"]:
-        return JSONResponse({"ok": False, "detail": f"Saldo tidak cukup (saldo: Rp {user['saldo']:,})"})
+    TARIK_MIN    = 1_000_000
+    TARIK_FEE    = 5_000
+    total_potong = nominal + TARIK_FEE
+
+    if nominal < TARIK_MIN:
+        return JSONResponse({"ok": False, "detail": f"Minimal tarik saldo Rp {TARIK_MIN:,}"})
+    if total_potong > user["saldo"]:
+        return JSONResponse({"ok": False, "detail": (
+            f"Saldo tidak cukup. Dibutuhkan Rp {total_potong:,} "
+            f"(nominal Rp {nominal:,} + biaya admin Rp {TARIK_FEE:,}), "
+            f"saldo Anda Rp {user['saldo']:,}. Turunkan nominal tarik."
+        )})
     if not bank_name or not rekening_no:
         return JSONResponse({"ok": False, "detail": "Nama bank dan nomor rekening wajib diisi"})
 
@@ -1826,28 +2011,32 @@ async def saldo_tarik_request(request: Request):
     pesan_admin = (
         f"💸 *Permintaan Tarik Saldo*\n\n"
         f"Nominal: *Rp {nominal:,}*\n"
+        f"Biaya admin: Rp {TARIK_FEE:,}\n"
+        f"Total dipotong: *Rp {total_potong:,}*\n"
         f"Rekening: *{bank_name}*\n"
         f"No. Rek: `{rekening_no}`\n"
         f"Atas Nama: {rekening_name}\n"
         f"{('Catatan: ' + catatan + chr(10)) if catatan else ''}\n"
-        f"Request masuk dan menunggu konfirmasi.\n"
-        f"Buka Riwayat Tarik Saldo untuk konfirmasi setelah transfer dilakukan."
+        f"Request masuk dan menunggu konfirmasi platform."
     )
     # WA notif ke admin ISP sendiri
     if user.get("nomor_wa"):
         send_wa(user["nomor_wa"], pesan_admin, token=_isp_wa_token(user["id"]))
 
-    # WA notif ke platform owner
-    if PLATFORM_OWNER_WA:
-        pesan_owner = (
-            f"🔔 *[Platform] Permintaan Tarik Saldo*\n\n"
+    # WA notif ke platform SA menggunakan platform token
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    sa_wa = db.get_platform_config("wa_number") or PLATFORM_OWNER_WA
+    if sa_wa:
+        pesan_sa = (
+            f"🔔 *[Platform] Permintaan Tarik Saldo ISP*\n\n"
             f"Tenant: *{user['nama']}*\n"
             f"Nominal: *Rp {nominal:,}*\n"
             f"Rekening: {bank_name} — `{rekening_no}`\n"
             f"Atas Nama: {rekening_name}\n"
-            f"{('Catatan: ' + catatan) if catatan else ''}"
+            f"{('Catatan: ' + catatan + chr(10)) if catatan else ''}"
+            f"\nBuka admin.vpntunel.my.id → Tarik Saldo untuk menyetujui."
         )
-        send_wa(PLATFORM_OWNER_WA, pesan_owner, token=_isp_wa_token(user["id"]))
+        send_wa(sa_wa, pesan_sa, token=platform_token)
 
     return JSONResponse({"ok": True, "id": rid})
 
@@ -1864,26 +2053,53 @@ async def tarik_requests_page(request: Request):
     ))
 
 
-@app.post("/saldo/tarik/{rid}/approve", response_class=JSONResponse)
-async def tarik_approve(request: Request, rid: int):
-    user = require_login(request)
+@app.post("/sa/platform/tarik/{rid}/approve", response_class=JSONResponse)
+async def sa_tarik_approve(request: Request, rid: int):
+    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
     body = await request.json()
     admin_note = (body.get("note") or "").strip()
-    row = db.approve_tarik_saldo(rid, user["id"], admin_note)
+    row = db.approve_tarik_saldo_sa(rid, admin_note)
     if not row:
         return JSONResponse({"ok": False, "detail": "Request tidak ditemukan atau sudah diproses"})
+    # WA notif ke ISP
+    isp = db.get_user(row["user_id"])
+    if isp and isp.get("nomor_wa"):
+        platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+        send_wa(isp["nomor_wa"], (
+            f"✅ *Tarik Saldo Disetujui*\n\n"
+            f"Nominal: *Rp {row['nominal']:,}*\n"
+            f"Rekening: {row['bank_name']} — {row['rekening_no']}\n"
+            f"Dana akan ditransfer segera.\n"
+            f"{('Catatan SA: ' + admin_note) if admin_note else ''}"
+        ), token=platform_token)
     return JSONResponse({"ok": True})
 
 
-@app.post("/saldo/tarik/{rid}/reject", response_class=JSONResponse)
-async def tarik_reject(request: Request, rid: int):
-    user = require_login(request)
+@app.post("/sa/platform/tarik/{rid}/reject", response_class=JSONResponse)
+async def sa_tarik_reject(request: Request, rid: int):
+    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
     body = await request.json()
     admin_note = (body.get("note") or "").strip()
-    row = db.reject_tarik_saldo(rid, user["id"], admin_note)
+    row = db.reject_tarik_saldo_sa(rid, admin_note)
     if not row:
         return JSONResponse({"ok": False, "detail": "Request tidak ditemukan atau sudah diproses"})
+    # WA notif ke ISP
+    isp = db.get_user(row["user_id"])
+    if isp and isp.get("nomor_wa"):
+        platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+        send_wa(isp["nomor_wa"], (
+            f"❌ *Tarik Saldo Ditolak*\n\n"
+            f"Nominal: *Rp {row['nominal']:,}*\n"
+            f"{('Alasan: ' + admin_note) if admin_note else 'Hubungi platform untuk info lebih lanjut.'}"
+        ), token=platform_token)
     return JSONResponse({"ok": True})
+
+
+@app.get("/sa/platform/tarik-json", response_class=JSONResponse)
+async def sa_tarik_json(request: Request):
+    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
+    rows = db.list_tarik_saldo_all()
+    return JSONResponse({"ok": True, "rows": rows})
 
 
 @app.post("/saldo/topup/{uid}")
@@ -1932,7 +2148,7 @@ async def qris_image(request: Request):
 
 @app.post("/panel/topup/manual", response_class=JSONResponse)
 async def panel_topup_manual(request: Request, amount: int = Form(...), catatan: str = Form("")):
-    """Agen ajukan topup manual via QRIS ISP."""
+    """Agen ajukan topup manual via QRIS platform."""
     user = _require_agen(request)
     if not user:
         return JSONResponse({"ok": False, "msg": "Tidak terotorisasi"})
@@ -1942,14 +2158,19 @@ async def panel_topup_manual(request: Request, amount: int = Form(...), catatan:
     if not isp:
         return JSONResponse({"ok": False, "msg": "ISP tidak ditemukan"})
     oid = db.create_topup_manual(user["id"], isp["id"], amount, catatan.strip())
-    # Notif WA ke ISP jika ada
-    wa_msg = (f"💳 *Permintaan Topup Saldo*\n\n"
+    # Notif WA ke platform SA (bukan ISP lagi)
+    sa_wa = db.get_platform_config("wa_number") or PLATFORM_OWNER_WA
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    isp_nama = isp.get("nama") or isp.get("username", "-")
+    wa_msg = (f"💳 *[Platform] Permintaan Topup*\n\n"
               f"Agen: *{user['nama']}*\n"
+              f"ISP: *{isp_nama}*\n"
               f"Nominal: *Rp {amount:,}*\n"
               f"Catatan: {catatan or '-'}\n\n"
-              f"Silakan cek panel untuk konfirmasi.")
-    send_wa(isp.get("nomor_wa", ""), wa_msg)
-    return JSONResponse({"ok": True, "order_id": oid, "msg": "Permintaan terkirim, tunggu konfirmasi ISP"})
+              f"Cek panel SA untuk konfirmasi: /sa?tab=topup")
+    if sa_wa:
+        send_wa(sa_wa, wa_msg, token=platform_token)
+    return JSONResponse({"ok": True, "order_id": oid, "msg": "Permintaan terkirim, tunggu konfirmasi platform"})
 
 
 @app.get("/saldo/topup-manual", response_class=HTMLResponse)
@@ -1964,28 +2185,13 @@ async def saldo_topup_manual_page(request: Request, status: str = "pending"):
 
 @app.post("/saldo/topup-manual/{oid}/approve", response_class=JSONResponse)
 async def topup_manual_approve(request: Request, oid: str):
-    user = require_login(request)
-    order = db.approve_topup_manual(oid, user["id"])
-    if not order:
-        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan"})
-    agen = db.get_user(order["user_id"])
-    if agen:
-        send_wa(agen.get("nomor_wa", ""),
-                 f"✅ Topup saldo Rp {order['amount']:,} telah dikonfirmasi. Saldo Anda bertambah.")
-    return JSONResponse({"ok": True})
+    # Approval sekarang dilakukan oleh SA platform, bukan ISP
+    return JSONResponse({"ok": False, "msg": "Persetujuan topup dikelola oleh platform vpntunel."})
 
 
 @app.post("/saldo/topup-manual/{oid}/reject", response_class=JSONResponse)
 async def topup_manual_reject(request: Request, oid: str):
-    user = require_login(request)
-    order = db.reject_topup_manual(oid, user["id"])
-    if not order:
-        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan"})
-    agen = db.get_user(order["user_id"])
-    if agen:
-        send_wa(agen.get("nomor_wa", ""),
-                 f"❌ Permintaan topup Rp {order['amount']:,} ditolak. Hubungi ISP untuk informasi lebih lanjut.")
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False, "msg": "Persetujuan topup dikelola oleh platform vpntunel."})
 
 # ── Hotspot Bulanan ───────────────────────────────────────────────────────────
 
@@ -2160,10 +2366,106 @@ async def hotspot_tagihan_generate(request: Request, bulan: str = Form("")):
 # ── Transaksi ─────────────────────────────────────────────────────────────────
 
 @app.get("/transaksi", response_class=HTMLResponse)
-async def transaksi_page(request: Request):
+async def transaksi_page(request: Request, tipe: str = "", bulan: str = ""):
+    from datetime import date
     user = require_login(request)
-    txs = db.list_transaksi(user["id"])
-    return tpl.TemplateResponse(request, "transaksi.html", _ctx(request, user=user, txs=txs))
+    iid  = _isp_id(user)
+    if not bulan:
+        bulan = date.today().strftime("%Y-%m")
+    con = db._conn()
+
+    # Hotspot orders (toko online) - semua status
+    orders = con.execute(
+        """SELECT o.id, o.amount, o.status, o.nomor_hp, o.created_at, o.paid_at,
+                  p.nama as paket_nama, 'hotspot_order' as tipe
+           FROM hotspot_orders o
+           LEFT JOIN paket_hotspot p ON p.id = o.paket_id
+           WHERE o.user_id=? ORDER BY o.created_at DESC LIMIT 200""",
+        (iid,)
+    ).fetchall()
+
+    # Tagihan PPPoE (yang sudah dibayar)
+    tagihan = con.execute(
+        """SELECT t.id, t.amount, t.status, t.paid_at, t.created_at,
+                  u.nama_pelanggan as pelanggan, t.bulan, 'tagihan_pppoe' as tipe
+           FROM tagihan_pppoe t
+           LEFT JOIN pppoe_users u ON u.id = t.pppoe_id
+           WHERE t.user_id=? ORDER BY t.created_at DESC LIMIT 200""",
+        (iid,)
+    ).fetchall()
+
+    # Transaksi internal (PPPoE tambah, dll)
+    txs_raw = con.execute(
+        "SELECT *, 'internal' as tipe FROM transaksi WHERE user_id=? ORDER BY created_at DESC LIMIT 200",
+        (iid,)
+    ).fetchall()
+    con.close()
+
+    # Gabung dan format semua transaksi
+    all_txs = []
+    for o in orders:
+        all_txs.append({
+            "id": o["id"], "tipe": "hotspot_order",
+            "label": "Voucher Online",
+            "keterangan": f"Beli voucher {o['paket_nama'] or ''} · {o['nomor_hp'] or ''}",
+            "amount": o["amount"],
+            "status": o["status"],
+            "created_at": o["created_at"],
+            "paid_at": o["paid_at"],
+        })
+    for t in tagihan:
+        all_txs.append({
+            "id": str(t["id"]), "tipe": "tagihan_pppoe",
+            "label": "Tagihan PPPoE",
+            "keterangan": f"Tagihan {t['bulan']} · {t['pelanggan'] or ''}",
+            "amount": t["amount"],
+            "status": t["status"],
+            "created_at": t["created_at"],
+            "paid_at": t["paid_at"],
+        })
+    for tx in txs_raw:
+        all_txs.append({
+            "id": tx["id"], "tipe": tx["ref_type"],
+            "label": "PPPoE" if tx["ref_type"] == "pppoe" else tx["ref_type"].title(),
+            "keterangan": tx["keterangan"],
+            "amount": tx["amount"],
+            "status": tx["status"],
+            "created_at": tx["created_at"],
+            "paid_at": None,
+        })
+
+    # Filter tipe
+    if tipe:
+        all_txs = [t for t in all_txs if t["tipe"] == tipe]
+
+    # Filter bulan
+    import time as _time
+    def _in_bulan(ts, bln):
+        if not ts:
+            return False
+        from datetime import datetime
+        try:
+            return datetime.fromtimestamp(int(ts)).strftime("%Y-%m") == bln
+        except Exception:
+            return False
+    all_txs_bulan = [t for t in all_txs if _in_bulan(t["created_at"], bulan)]
+
+    # Sort by created_at desc
+    all_txs_bulan.sort(key=lambda x: x["created_at"] or 0, reverse=True)
+
+    # Stats bulan ini
+    total_omzet = sum(t["amount"] for t in all_txs_bulan if t["status"] in ("paid", "lunas"))
+    total_all   = len(all_txs_bulan)
+    total_paid  = sum(1 for t in all_txs_bulan if t["status"] in ("paid", "lunas"))
+    total_pending = sum(1 for t in all_txs_bulan if t["status"] == "pending")
+
+    return tpl.TemplateResponse(request, "transaksi.html", _ctx(
+        request, user=user,
+        txs=all_txs_bulan,
+        sel_tipe=tipe, sel_bulan=bulan,
+        stats={"omzet": total_omzet, "total": total_all,
+               "paid": total_paid, "pending": total_pending},
+    ))
 
 
 
@@ -2450,8 +2752,8 @@ async def store_login_post(
 # ── Panel Agen (halaman mandiri) ──────────────────────────────────────────────
 
 def _require_agen(request: Request):
-    """Pastikan user login dan role agen/sub_agen."""
-    user = current_user_agen(request)
+    """Pastikan user login dan role agen/sub_agen. Cek kedua cookie."""
+    user = current_user_agen(request) or current_user(request)
     if not user or user["role"] not in ("agen", "sub_agen"):
         return None
     return user
@@ -2480,6 +2782,7 @@ async def panel_agen(request: Request):
             last_paket = db.get_paket_hotspot(pid) if pid else None
         except Exception:
             pass
+    platform_qris = db.get_platform_config("qris_image")
     return tpl.TemplateResponse(request, "panel_agen.html", _ctx(
         request, user=user, isp=isp, pakets=pakets, servers=servers,
         comments=comments, comment_counts=comment_counts, comments_detail=comments_detail,
@@ -2487,7 +2790,8 @@ async def panel_agen(request: Request):
         ok_msg=request.query_params.get("ok"),
         err_msg=request.query_params.get("error"),
         last_kodes=last_kodes, last_paket=last_paket,
-        mt_client=MT_CLIENT, mt_prod=MT_PROD
+        mt_client=MT_CLIENT, mt_prod=MT_PROD,
+        platform_qris=platform_qris
     ))
 
 
@@ -2598,33 +2902,41 @@ async def panel_generate(
         return RedirectResponse(f"/panel?error={result['msg']}", status_code=302)
 
     kodes = result["kodes"]
-    # Push ke MikroTik
-    server = db.get_server(server_id)
+    # Push ke MikroTik — gunakan server_id yang sudah di-resolve storage (termasuk fallback)
+    resolved_server_id = result.get("server_id") or server_id
+    server = db.get_server(resolved_server_id) if resolved_server_id else None
+    push_errors = []
     if server and server["user_id"] == isp["id"]:
         paket = db.get_paket_hotspot(paket_id)
         try:
             mt = MikroTik(server["vpn_ip"], server["api_port"],
                           server["api_user"], server["api_password"])
-            profile      = paket.get("kecepatan") or "default" if paket else "default"
+            profile      = (paket.get("kecepatan") or "default") if paket else "default"
             mt_comment   = comment or (paket.get("nama", "") if paket else "")
-            limit_uptime = paket.get("durasi") or "" if paket else ""
+            limit_uptime = (paket.get("durasi") or "") if paket else ""
             for kode in kodes:
-                try:
-                    mt.add_hotspot_user(
-                        kode, kode,
-                        profile=profile,
-                        comment=mt_comment,
-                        limit_uptime=limit_uptime
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                ok = mt.add_hotspot_user(
+                    kode, kode,
+                    profile=profile,
+                    comment=mt_comment,
+                    limit_uptime=limit_uptime
+                )
+                if ok:
+                    db.set_voucher_mt_pushed(kode, True)
+                else:
+                    push_errors.append(kode)
+        except Exception as e:
+            push_errors = kodes  # semua gagal, catat di log
+            _log(request, user, "Generate Voucher Push Error", str(e))
 
     paket_nama = db.get_paket_hotspot(paket_id)
-    _log(request, user, "Generate Voucher", f"{jumlah} voucher paket {paket_nama['nama'] if paket_nama else paket_id}{' [' + comment + ']' if comment else ''}")
+    push_info = f" | push_error={len(push_errors)}" if push_errors else ""
+    _log(request, user, "Generate Voucher",
+         f"{jumlah} voucher paket {paket_nama['nama'] if paket_nama else paket_id}"
+         f"{' [' + comment + ']' if comment else ''}{push_info}")
     params = "&".join(f"kode={k}" for k in kodes)
-    return RedirectResponse(f"/panel?ok=generate&paket_id={paket_id}&{params}", status_code=303)
+    status = "generate_push_error" if push_errors else "generate"
+    return RedirectResponse(f"/panel?ok={status}&paket_id={paket_id}&{params}", status_code=303)
 
 
 @app.get("/panel/voucher/print", response_class=HTMLResponse)
@@ -3084,6 +3396,445 @@ async def toko_sukses(request: Request, order_id: str):
     return tpl.TemplateResponse(request, "store_sukses.html", _ctx(
         request, order=order, voucher=voucher, paket=paket, isp=isp
     ))
+
+
+# ── Superadmin Panel ──────────────────────────────────────────────────────────
+
+def _sa_hash(pw: str) -> str:
+    import hashlib
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+SA_TOKEN_COOKIE = "sa_session"
+
+def current_sa(request: Request) -> bool:
+    token = request.cookies.get(SA_TOKEN_COOKIE)
+    if not token:
+        return False
+    try:
+        val = signer.loads(token, max_age=86400 * 2)
+        return val == "superadmin"
+    except Exception:
+        return False
+
+def require_sa(request: Request):
+    if not current_sa(request):
+        raise HTTPException(status_code=302, headers={"Location": "/sa/login"})
+
+
+@app.get("/sa/login", response_class=HTMLResponse)
+async def sa_login_page(request: Request):
+    if current_sa(request):
+        return RedirectResponse("/sa", status_code=302)
+    return tpl.TemplateResponse(request, "sa_login.html", _ctx(request))
+
+
+@app.post("/sa/login")
+async def sa_login_post(request: Request,
+                        username: str = Form(""), password: str = Form("")):
+    if username == SA_USERNAME and _sa_hash(password) == _sa_hash(SA_PASSWORD):
+        token = signer.dumps("superadmin")
+        resp = RedirectResponse("/sa", status_code=302)
+        resp.set_cookie(SA_TOKEN_COOKIE, token, httponly=True, max_age=86400 * 2)
+        return resp
+    return tpl.TemplateResponse(request, "sa_login.html", _ctx(request, error="Username atau password salah"))
+
+
+@app.get("/sa/logout")
+async def sa_logout(request: Request):
+    resp = RedirectResponse("/sa/login", status_code=302)
+    resp.delete_cookie(SA_TOKEN_COOKIE)
+    return resp
+
+
+@app.get("/sa", response_class=HTMLResponse)
+async def sa_dashboard(request: Request):
+    require_sa(request)
+    tenants = db.list_tenants()
+    stats = {t["id"]: db.get_tenant_stats(t["id"]) for t in tenants}
+    adjustments = db.list_saldo_adjustments(limit=30)
+    platform_qris = db.get_platform_config("qris_image")
+    platform_wa = db.get_platform_config("wa_number")
+    pending_topup_count = 0
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT COUNT(*) FROM topup_orders WHERE tipe='manual' AND status='pending'").fetchone()
+    if row:
+        pending_topup_count = row[0]
+    con.close()
+    reg_stats = db.count_registrasi()
+    registrasi_list = db.list_registrasi()
+    tarik_list = db.list_tarik_saldo_all()
+    tarik_pending_count = sum(1 for t in tarik_list if t["status"] == "pending")
+    return tpl.TemplateResponse(request, "sa_dashboard.html", _ctx(
+        request, tenants=tenants, stats=stats, adjustments=adjustments,
+        platform_qris=platform_qris, platform_wa=platform_wa,
+        pending_topup_count=pending_topup_count,
+        registrasi_list=registrasi_list, reg_stats=reg_stats,
+        tarik_list=tarik_list, tarik_pending_count=tarik_pending_count,
+        ok=request.query_params.get("ok"), err=request.query_params.get("error")
+    ))
+
+
+@app.get("/registrasi")
+async def registrasi_redirect(request: Request):
+    """Shortlink dari notif WA → langsung ke SA tab registrasi."""
+    return RedirectResponse("/sa?tab=registrasi", status_code=302)
+
+
+@app.post("/sa/registrasi/{rid}/approve", response_class=JSONResponse)
+async def sa_registrasi_approve(request: Request, rid: int,
+                                 username: str = Form(...), password: str = Form(...)):
+    require_sa(request)
+    reg = db.get_registrasi(rid)
+    if not reg:
+        return JSONResponse({"ok": False, "msg": "Data tidak ditemukan"})
+    # Cek duplikat username
+    _con = sqlite3.connect(DB_PATH); _con.row_factory = sqlite3.Row
+    existing = _con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    _con.close()
+    if existing:
+        return JSONResponse({"ok": False, "msg": f"Username '{username}' sudah dipakai"})
+    # Buat akun tenant
+    uid = db.create_user(
+        nama=reg["nama_isp"], username=username, password=password,
+        role="admin", nomor_wa=reg["nomor_wa"]
+    )
+    # Update status registrasi
+    db.update_registrasi_status(rid, "aktif")
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE tenant_registrasi SET username_tenant=?, password_tenant=? WHERE id=?",
+                (username, password, rid))
+    con.commit(); con.close()
+    # Notif WA ke ISP baru pakai WA platform
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    send_wa(reg["nomor_wa"],
+            f"✅ *Akun ISP Anda Sudah Aktif!*\n\n"
+            f"Nama ISP: *{reg['nama_isp']}*\n"
+            f"Username: *{username}*\n"
+            f"Password: *{password}*\n\n"
+            f"Login di: https://billing.vpntunel.my.id/login",
+            token=platform_token)
+    return JSONResponse({"ok": True, "msg": f"Akun {username} berhasil dibuat dan diaktifkan"})
+
+
+@app.post("/sa/registrasi/{rid}/tolak", response_class=JSONResponse)
+async def sa_registrasi_tolak(request: Request, rid: int):
+    require_sa(request)
+    reg = db.get_registrasi(rid)
+    if not reg:
+        return JSONResponse({"ok": False, "msg": "Data tidak ditemukan"})
+    db.update_registrasi_status(rid, "ditolak")
+    send_wa(reg["nomor_wa"],
+            f"❌ Maaf, pendaftaran ISP *{reg['nama_isp']}* ditolak. "
+            f"Hubungi admin vpntunel untuk info lebih lanjut.")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/sa/tenant/{uid}/adjust-saldo", response_class=JSONResponse)
+async def sa_adjust_saldo(request: Request, uid: str,
+                          amount: int = Form(0), catatan: str = Form("")):
+    require_sa(request)
+    if amount == 0:
+        return JSONResponse({"ok": False, "msg": "Jumlah tidak boleh 0"})
+    result = db.adjust_saldo_admin(uid, amount, catatan)
+    if not result:
+        return JSONResponse({"ok": False, "msg": "Tenant tidak ditemukan"})
+    return JSONResponse({"ok": True, "saldo_before": result["saldo_before"], "saldo_after": result["saldo_after"]})
+
+
+@app.post("/sa/tenant/{uid}/reset-password")
+async def sa_reset_password(request: Request, uid: str,
+                             password: str = Form("")):
+    require_sa(request)
+    if len(password) < 6:
+        return RedirectResponse(f"/sa?error=password_terlalu_pendek", status_code=302)
+    db.reset_password(uid, password)
+    return RedirectResponse("/sa?ok=password_direset", status_code=302)
+
+
+@app.post("/sa/tenant/{uid}/status")
+async def sa_toggle_status(request: Request, uid: str,
+                            status: str = Form("")):
+    require_sa(request)
+    if status not in ("aktif", "nonaktif"):
+        return RedirectResponse("/sa", status_code=302)
+    db.update_user_status(uid, status)
+    return RedirectResponse("/sa?ok=status_diubah", status_code=302)
+
+
+@app.get("/sa/tenant/{uid}/adjustments", response_class=JSONResponse)
+async def sa_tenant_adjustments(request: Request, uid: str):
+    require_sa(request)
+    rows = db.list_saldo_adjustments(uid=uid, limit=50)
+    return JSONResponse(rows)
+
+
+@app.post("/sa/platform/topup/{oid}/approve", response_class=JSONResponse)
+async def sa_topup_approve(request: Request, oid: str):
+    require_sa(request)
+    order = db.approve_topup_manual_sa(oid)
+    if not order:
+        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan atau sudah diproses"})
+    agen = db.get_user(order["user_id"])
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    if agen:
+        send_wa(agen.get("nomor_wa", ""),
+                f"✅ Topup saldo Rp {order['amount']:,} telah dikonfirmasi oleh platform. Saldo Anda bertambah.",
+                token=platform_token)
+    return JSONResponse({"ok": True, "msg": f"Topup Rp {order['amount']:,} disetujui"})
+
+
+@app.post("/sa/platform/topup/{oid}/reject", response_class=JSONResponse)
+async def sa_topup_reject(request: Request, oid: str):
+    require_sa(request)
+    order = db.reject_topup_manual_sa(oid)
+    if not order:
+        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan atau sudah diproses"})
+    agen = db.get_user(order["user_id"])
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    if agen:
+        send_wa(agen.get("nomor_wa", ""),
+                f"❌ Permintaan topup Rp {order['amount']:,} ditolak platform. Hubungi admin untuk info lebih lanjut.",
+                token=platform_token)
+    return JSONResponse({"ok": True, "msg": f"Topup Rp {order['amount']:,} ditolak"})
+
+
+@app.post("/sa/platform/settings", response_class=JSONResponse)
+async def sa_platform_settings(request: Request, wa_number: str = Form(""), catatan: str = Form("")):
+    """SA simpan pengaturan platform (nomor WA, dll)."""
+    require_sa(request)
+    if wa_number:
+        db.set_platform_config("wa_number", wa_number.strip())
+    return RedirectResponse("/sa?ok=settings_saved&tab=qris", status_code=302)
+
+
+@app.post("/sa/platform/wa-setup", response_class=JSONResponse)
+async def sa_platform_wa_setup(request: Request):
+    """Buat/ambil WA session platform dan return QR code."""
+    require_sa(request)
+    token = _wa_create_user("platform", "Platform vpntunel")
+    db.set_platform_config("wa_token", token)
+    qr = _wa_get_qr(token)
+    status = _wa_session_status(token)
+    if _wa_is_logged_in(status):
+        nomor = status.get("jid", "").split(":")[0]
+        db.set_platform_config("wa_connected", "1")
+        db.set_platform_config("wa_nomor", nomor)
+        return JSONResponse({"ok": True, "connected": True, "nomor": nomor})
+    return JSONResponse({"ok": True, "connected": False, "qr": qr})
+
+
+@app.get("/sa/platform/wa-status", response_class=JSONResponse)
+async def sa_platform_wa_status(request: Request):
+    """Cek status WA platform."""
+    require_sa(request)
+    token = db.get_platform_config("wa_token")
+    if not token:
+        return JSONResponse({"connected": False})
+    s = _wa_session_status(token)
+    connected = _wa_is_logged_in(s)
+    nomor = s.get("jid", "").split(":")[0] if connected else ""
+    if connected:
+        db.set_platform_config("wa_connected", "1")
+        db.set_platform_config("wa_nomor", nomor)
+    else:
+        db.set_platform_config("wa_connected", "0")
+    return JSONResponse({"connected": connected, "nomor": nomor, "name": s.get("name", "")})
+
+
+@app.post("/sa/platform/wa-disconnect", response_class=JSONResponse)
+async def sa_platform_wa_disconnect(request: Request):
+    """Disconnect WA platform."""
+    require_sa(request)
+    token = db.get_platform_config("wa_token")
+    if token:
+        _wa_disconnect(token)
+        db.set_platform_config("wa_connected", "0")
+        db.set_platform_config("wa_nomor", "")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/sa/platform/qris-upload")
+async def sa_platform_qris_upload(request: Request, qris_file: UploadFile = File(...)):
+    """Super-admin upload QRIS platform (dipakai semua agen untuk topup)."""
+    require_sa(request)
+    import base64
+    data = await qris_file.read()
+    if len(data) > 500_000:
+        return RedirectResponse("/sa?error=File+terlalu+besar+(maks+500KB)", status_code=302)
+    b64 = base64.b64encode(data).decode()
+    ext = qris_file.filename.rsplit(".", 1)[-1].lower() if "." in qris_file.filename else "png"
+    mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+    db.set_platform_config("qris_image", f"data:{mime};base64,{b64}")
+    return RedirectResponse("/sa?ok=qris_platform_saved", status_code=302)
+
+
+@app.get("/sa/platform/topup-json", response_class=JSONResponse)
+async def sa_platform_topup_json(request: Request, status: str = "pending"):
+    require_sa(request)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    orders = con.execute(
+        "SELECT t.*, u.nama as agen_nama, u.nomor_wa as agen_wa, "
+        "i.nama as isp_nama "
+        "FROM topup_orders t "
+        "JOIN users u ON u.id=t.user_id "
+        "LEFT JOIN users i ON i.id=t.isp_id "
+        "WHERE t.tipe='manual' AND t.status=? "
+        "ORDER BY t.created_at DESC LIMIT 100",
+        (status,)
+    ).fetchall()
+    con.close()
+    return JSONResponse([dict(o) for o in orders])
+
+
+@app.get("/sa/platform/topup-requests", response_class=HTMLResponse)
+async def sa_platform_topup_requests(request: Request, status: str = "pending"):
+    """Super-admin lihat semua topup manual dari seluruh agen."""
+    require_sa(request)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    orders = con.execute(
+        "SELECT t.*, u.nama as agen_nama, u.nomor_wa as agen_wa, "
+        "i.nama as isp_nama "
+        "FROM topup_orders t "
+        "JOIN users u ON u.id=t.user_id "
+        "LEFT JOIN users i ON i.id=t.isp_id "
+        "WHERE t.tipe='manual' AND t.status=? "
+        "ORDER BY t.created_at DESC",
+        (status,)
+    ).fetchall()
+    con.close()
+    orders = [dict(o) for o in orders]
+    platform_qris = db.get_platform_config("qris_image")
+    return tpl.TemplateResponse(request, "sa_topup_requests.html", _ctx(
+        request, orders=orders, sel_status=status, platform_qris=platform_qris
+    ))
+
+
+# ── Add-Ons ───────────────────────────────────────────────────────────────────
+
+def _addon_db():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+def _vpncmd(cmd: str) -> str:
+    """Jalankan perintah vpncmd ke SoftEther server."""
+    import subprocess
+    full = (
+        f'/opt/softether/vpncmd localhost:5555 /SERVER '
+        f'/PASSWORD:vpntunnel2024 /HUB:VPNTUNEL /CMD {cmd}'
+    )
+    r = subprocess.run(full, shell=True, capture_output=True, text=True, timeout=15)
+    return r.stdout + r.stderr
+
+def _vpn_create_user(vpn_username: str, vpn_password: str) -> bool:
+    out = _vpncmd(f'UserCreate {vpn_username} /GROUP:none /REALNAME:"{vpn_username}" /NOTE:billing')
+    _vpncmd(f'UserPasswordSet {vpn_username} /PASSWORD:{vpn_password}')
+    return "successfully" in out.lower() or "completed" in out.lower()
+
+def _vpn_delete_user(vpn_username: str) -> bool:
+    out = _vpncmd(f'UserDelete {vpn_username}')
+    return "successfully" in out.lower() or "completed" in out.lower()
+
+def _vpn_user_exists(vpn_username: str) -> bool:
+    out = _vpncmd(f'UserGet {vpn_username}')
+    return "user name" in out.lower()
+
+
+@app.get("/addons", response_class=HTMLResponse)
+async def addons_page(request: Request, ok: str = "", err: str = ""):
+    user = require_login(request)
+    con = _addon_db()
+    addons = [dict(r) for r in con.execute("SELECT * FROM addons WHERE is_active=1 ORDER BY kategori, harga").fetchall()]
+    aktif = {r["addon_id"]: dict(r) for r in con.execute(
+        "SELECT * FROM tenant_addons WHERE user_id=? AND status='active'", (user["id"],)
+    ).fetchall()}
+    vpn_akun = con.execute("SELECT * FROM vpn_users WHERE user_id=?", (user["id"],)).fetchone()
+    vpn_akun = dict(vpn_akun) if vpn_akun else None
+    con.close()
+    return tpl.TemplateResponse(request, "addons.html", {
+        "request": request, "active": "addons", "user": user,
+        "addons": addons, "aktif": aktif, "vpn_akun": vpn_akun,
+        "ok": ok, "err": err,
+    })
+
+
+@app.post("/addons/{addon_id}/aktifkan", response_class=JSONResponse)
+async def addon_aktifkan(request: Request, addon_id: int):
+    user = require_login(request)
+    con = _addon_db()
+    addon = con.execute("SELECT * FROM addons WHERE id=?", (addon_id,)).fetchone()
+    if not addon:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Add-on tidak ditemukan"})
+
+    addon = dict(addon)
+    sudah = con.execute(
+        "SELECT id FROM tenant_addons WHERE user_id=? AND addon_id=? AND status='active'",
+        (user["id"], addon_id)
+    ).fetchone()
+    if sudah:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Add-on sudah aktif"})
+
+    # Cek saldo
+    saldo = con.execute("SELECT saldo FROM users WHERE id=?", (user["id"],)).fetchone()
+    if not saldo or saldo["saldo"] < addon["harga"]:
+        con.close()
+        return JSONResponse({"ok": False, "msg": f"Saldo tidak cukup. Butuh Rp {addon['harga']:,}"})
+
+    import datetime
+    now = datetime.date.today()
+    exp = now.replace(month=now.month % 12 + 1) if now.month < 12 else now.replace(year=now.year + 1, month=1)
+
+    # Potong saldo
+    con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (addon["harga"], user["id"]))
+
+    # Aktifkan add-on
+    con.execute(
+        "INSERT OR REPLACE INTO tenant_addons (user_id, addon_id, status, started_at, expires_at) VALUES (?,?,?,?,?)",
+        (user["id"], addon_id, "active", str(now), str(exp))
+    )
+
+    # Jika VPN Remote → buat akun VPN otomatis
+    if addon["code"] == "vpn_remote":
+        vpn_user = f"isp_{user['username']}"
+        vpn_pass = uuid.uuid4().hex[:10]
+        _vpn_create_user(vpn_user, vpn_pass)
+        con.execute(
+            "INSERT OR REPLACE INTO vpn_users (user_id, vpn_username, vpn_password) VALUES (?,?,?)",
+            (user["id"], vpn_user, vpn_pass)
+        )
+
+    con.commit()
+    con.close()
+    return JSONResponse({"ok": True, "msg": f"Add-on '{addon['nama']}' berhasil diaktifkan!"})
+
+
+@app.post("/addons/{addon_id}/nonaktifkan", response_class=JSONResponse)
+async def addon_nonaktifkan(request: Request, addon_id: int):
+    user = require_login(request)
+    con = _addon_db()
+    addon = con.execute("SELECT * FROM addons WHERE id=?", (addon_id,)).fetchone()
+    if not addon:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Add-on tidak ditemukan"})
+
+    con.execute(
+        "UPDATE tenant_addons SET status='cancelled' WHERE user_id=? AND addon_id=?",
+        (user["id"], addon_id)
+    )
+
+    if dict(addon)["code"] == "vpn_remote":
+        vpn = con.execute("SELECT vpn_username FROM vpn_users WHERE user_id=?", (user["id"],)).fetchone()
+        if vpn:
+            _vpn_delete_user(vpn["vpn_username"])
+            con.execute("UPDATE vpn_users SET status='inactive' WHERE user_id=?", (user["id"],))
+
+    con.commit()
+    con.close()
+    return JSONResponse({"ok": True, "msg": "Add-on dinonaktifkan"})
 
 
 if __name__ == "__main__":

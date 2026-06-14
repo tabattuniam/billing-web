@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+{% set active = "tim" %}
+{% block title %}Manajemen Tim — {{ app_name }}{% endblock %}
+{% block topbar_title %}Manajemen Tim{% endblock %}
+
+{% block content %}
+
+{% if ok == 'created' %}
+<div class="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 flex items-center gap-2">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  Akun berhasil dibuat.
+</div>
+{% endif %}
+{% if error == 'username_exists' %}
+<div class="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700 flex items-center gap-2">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+  Username sudah digunakan. Pilih username lain.
+</div>
+{% endif %}
+
+<!-- Tabs -->
+<div class="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl w-fit">
+  <button id="tab-agen-btn" onclick="showTab('agen')"
+    class="tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all bg-white text-slate-800 shadow-sm">
+    👤 Agen <span class="ml-1 text-xs text-slate-400">({{ agenlist|length }})</span>
+  </button>
+  <button id="tab-teknisi-btn" onclick="showTab('teknisi')"
+    class="tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all text-slate-500">
+    🔧 Teknisi <span class="ml-1 text-xs text-slate-400">({{ teknisi_list|length }})</span>
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════ TAB AGEN ═══════════════════════════════ -->
+<div id="pane-agen">
+
+  <div class="page-header mb-5">
+    <div>
+      <h2 class="text-base font-bold text-slate-800">{% if user.role=='admin' %}Agen{% else %}Sub Agen{% endif %}</h2>
+      <p class="text-xs text-slate-400">{{ agenlist|length }} akun terdaftar</p>
+    </div>
+    <button onclick="document.getElementById('modal-tambah-agen').classList.remove('hidden')" class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah {% if user.role=='admin' %}Agen{% else %}Sub Agen{% endif %}
+    </button>
+  </div>
+
+  {% if isp_slug %}
+  <div class="card p-4 mb-5 border-blue-100 bg-blue-50">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">Link Portal Agen</p>
+        <p class="text-sm text-blue-800 font-mono break-all" id="portal-link">https://{{ app_domain }}/beli/{{ isp_slug }}/login</p>
+      </div>
+      <button onclick="copyLink('portal-link')" class="flex-shrink-0 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        Salin Link
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for a in agenlist %}
+  {% set st = stats.get(a.id, {}) %}
+  <div class="card p-5 hover:shadow-md transition-shadow">
+    <div class="flex items-start gap-3 mb-4">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 font-bold text-lg text-white shadow-lg
+        {% if a.role=='agen' %}bg-gradient-to-br from-blue-500 to-blue-700{% else %}bg-gradient-to-br from-indigo-500 to-indigo-700{% endif %}">
+        {{ a.nama[0]|upper }}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-semibold text-slate-800 truncate">{{ a.nama }}</p>
+          {% if a.status=='aktif' %}<span class="badge-green flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
+          {% else %}<span class="badge-red flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>{% endif %}
+        </div>
+        <p class="text-xs text-slate-400 mt-0.5">@{{ a.username }} · {{ a.role.replace('_',' ')|title }}</p>
+        {% if a.nomor_wa %}<p class="text-xs text-slate-400">{{ a.nomor_wa }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2 mb-4">
+      <div class="bg-blue-50 rounded-xl p-2.5 text-center">
+        <p class="text-lg font-bold text-blue-700">{{ st.get('pppoe', 0) }}</p>
+        <p class="text-xs text-blue-400">PPPoE</p>
+      </div>
+      <div class="bg-orange-50 rounded-xl p-2.5 text-center">
+        <p class="text-lg font-bold text-orange-600">{{ st.get('voucher', 0) }}</p>
+        <p class="text-xs text-orange-400">Voucher</p>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-2.5 text-center">
+        <p class="text-sm font-bold text-slate-700">{{ (st.get('omzet', 0) / 1000)|int }}K</p>
+        <p class="text-xs text-slate-400">Omzet</p>
+      </div>
+    </div>
+
+    {% if user.role=='admin' %}
+    <div class="flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 mb-2">
+      <span class="text-xs text-emerald-600">Saldo</span>
+      <span class="font-bold text-emerald-700 text-sm">{{ a.saldo | rp }}</span>
+    </div>
+    {% if a.role in ('agen','sub_agen') %}
+    <div class="flex items-center justify-between bg-blue-50 rounded-xl px-3 py-2 mb-4">
+      <span class="text-xs text-blue-600">Komisi Voucher</span>
+      <span class="font-bold text-blue-700 text-sm">{{ a.komisi_persen or 0 }}%</span>
+    </div>
+    {% else %}<div class="mb-4"></div>{% endif %}
+    {% else %}<div class="mb-4"></div>{% endif %}
+
+    <div class="flex gap-2 flex-wrap">
+      {% if user.role=='admin' %}
+      <button onclick="openTopupAgen('{{ a.id }}','{{ a.nama | e }}')"
+        class="flex-1 text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium flex items-center justify-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Topup
+      </button>
+      {% endif %}
+      <button onclick="openEditAgen(this)" data-id="{{ a.id }}" data-nama="{{ a.nama | e }}" data-wa="{{ a.nomor_wa | e }}" data-komisi="{{ a.komisi_persen or 0 }}" data-role="{{ a.role }}"
+        class="text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        Edit
+      </button>
+      <button onclick="openResetPw('{{ a.id }}','{{ a.nama | e }}','agen')"
+        class="text-xs px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        Password
+      </button>
+      <form method="post" action="/agen/status/{{ a.id }}">
+        {% if a.status=='aktif' %}<input type="hidden" name="status" value="nonaktif">
+        <button class="text-xs px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium flex items-center gap-1.5">Nonaktif</button>
+        {% else %}<input type="hidden" name="status" value="aktif">
+        <button class="text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium flex items-center gap-1.5">Aktifkan</button>{% endif %}
+      </form>
+      <form method="post" action="/agen/hapus/{{ a.id }}" onsubmit="return confirm('Hapus akun {{ a.nama | e }}?')">
+        <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Hapus
+        </button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-span-3 card p-16 text-center">
+    <p class="text-slate-400 font-medium">Belum ada agen terdaftar</p>
+  </div>
+  {% endfor %}
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ TAB TEKNISI ═══════════════════════════ -->
+<div id="pane-teknisi" class="hidden">
+
+  <div class="page-header mb-5">
+    <div>
+      <h2 class="text-base font-bold text-slate-800">Teknisi</h2>
+      <p class="text-xs text-slate-400">{{ teknisi_list|length }} teknisi terdaftar</p>
+    </div>
+    <button onclick="document.getElementById('modal-tambah-teknisi').classList.remove('hidden')" class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah Teknisi
+    </button>
+  </div>
+
+  {% if isp_slug %}
+  <div class="mb-5 px-4 py-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center gap-3">
+    <div class="flex-1 min-w-0">
+      <p class="text-xs text-teal-600 font-medium mb-0.5">URL Login Teknisi</p>
+      <code id="url-teknisi" class="text-sm text-teal-800 font-mono">{{ app_domain }}/teknisi/{{ isp_slug }}</code>
+    </div>
+    <button onclick="copyLink('url-teknisi','https://')" class="text-xs px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-colors flex-shrink-0">Salin</button>
+  </div>
+  {% endif %}
+
+  {% if teknisi_list %}
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for t in teknisi_list %}
+  <div class="card p-5 hover:shadow-md transition-shadow">
+    <div class="flex items-start gap-3 mb-4">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 font-bold text-lg text-white bg-gradient-to-br from-teal-500 to-teal-700">
+        {{ t.nama[0]|upper }}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-semibold text-slate-800 truncate">{{ t.nama }}</p>
+          {% if t.status=='aktif' %}<span class="badge-green flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif</span>
+          {% else %}<span class="badge-red flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif</span>{% endif %}
+        </div>
+        <p class="text-xs text-slate-400 mt-0.5">@{{ t.username }} · Teknisi</p>
+        {% if t.nomor_wa %}<p class="text-xs text-slate-400">{{ t.nomor_wa }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="openEditTeknisi(this)" data-id="{{ t.id }}" data-nama="{{ t.nama | e }}" data-wa="{{ t.nomor_wa | e }}"
+        class="flex-1 text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium flex items-center justify-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        Edit
+      </button>
+      <button onclick="openResetPw('{{ t.id }}','{{ t.nama | e }}','teknisi')"
+        class="text-xs px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-medium flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        Password
+      </button>
+      <form method="post" action="/teknisi-admin/status/{{ t.id }}">
+        {% if t.status=='aktif' %}<input type="hidden" name="status" value="nonaktif">
+        <button class="text-xs px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium">Nonaktif</button>
+        {% else %}<input type="hidden" name="status" value="aktif">
+        <button class="text-xs px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium">Aktifkan</button>{% endif %}
+      </form>
+      <form method="post" action="/teknisi-admin/hapus/{{ t.id }}" onsubmit="return confirm('Hapus akun {{ t.nama | e }}?')">
+        <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Hapus
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <div class="card p-16 text-center">
+    <p class="text-slate-400 font-medium">Belum ada teknisi terdaftar</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ═══════════════════ MODALS AGEN ══════════════════════════════════════════ -->
+<div id="modal-tambah-agen" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tambah Agen</h3>
+      <button onclick="document.getElementById('modal-tambah-agen').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/agen/tambah">
+      <div class="space-y-4">
+        <div><label class="form-label">Nama Lengkap</label><input name="nama" required placeholder="Nama" class="form-input"></div>
+        <div><label class="form-label">Username</label><input name="username" required placeholder="username" class="form-input"></div>
+        <div><label class="form-label">Password</label><input name="password" required type="password" placeholder="••••••" class="form-input"></div>
+        <div><label class="form-label">No. WhatsApp</label><input name="nomor_wa" placeholder="08xxxxxxxxxx" class="form-input"></div>
+        {% if user.role=='admin' %}
+        <div><label class="form-label">Role</label>
+          <select name="role" class="form-input"><option value="agen">Agen</option><option value="sub_agen">Sub Agen</option></select>
+        </div>
+        {% else %}<input type="hidden" name="role" value="sub_agen">{% endif %}
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-tambah-agen').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Buat Akun</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-edit-agen" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Agen</h3>
+      <button onclick="document.getElementById('modal-edit-agen').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit-agen" method="post">
+      <div class="space-y-4">
+        <div><label class="form-label">Nama</label><input id="ea-nama" name="nama" required class="form-input"></div>
+        <div><label class="form-label">WhatsApp</label><input id="ea-wa" name="nomor_wa" class="form-input"></div>
+        <div id="ea-komisi-wrap"><label class="form-label">Komisi (%)</label><input id="ea-komisi" name="komisi_persen" type="number" min="0" max="100" class="form-input"></div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-edit-agen').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════ MODALS TEKNISI ═══════════════════════════════════════ -->
+<div id="modal-tambah-teknisi" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Tambah Teknisi</h3>
+      <button onclick="document.getElementById('modal-tambah-teknisi').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/teknisi-admin/tambah">
+      <div class="space-y-4">
+        <div><label class="form-label">Nama Lengkap</label><input name="nama" required placeholder="Nama teknisi" class="form-input"></div>
+        <div><label class="form-label">Username</label><input name="username" required placeholder="username" class="form-input"></div>
+        <div><label class="form-label">Password</label><input name="password" required type="password" placeholder="••••••" class="form-input"></div>
+        <div><label class="form-label">No. WhatsApp <span class="text-slate-400">(opsional)</span></label><input name="nomor_wa" placeholder="08xxxxxxxxxx" class="form-input"></div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-tambah-teknisi').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Buat Akun</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-edit-teknisi" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Teknisi</h3>
+      <button onclick="document.getElementById('modal-edit-teknisi').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit-teknisi" method="post">
+      <div class="space-y-4">
+        <div><label class="form-label">Nama</label><input id="et-nama" name="nama" required class="form-input"></div>
+        <div><label class="form-label">WhatsApp</label><input id="et-wa" name="nomor_wa" class="form-input"></div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" onclick="document.getElementById('modal-edit-teknisi').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Reset Password (shared) -->
+<div id="modal-reset" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Reset Password</h3>
+      <button onclick="document.getElementById('modal-reset').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p id="reset-label" class="text-sm text-slate-600 mb-4"></p>
+    <form id="form-reset" method="post">
+      <div class="mb-4"><label class="form-label">Password Baru</label><input name="password" required type="password" placeholder="Password baru" class="form-input"></div>
+      <div class="flex gap-3">
+        <button type="button" onclick="document.getElementById('modal-reset').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Reset</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RESET_URLS = { agen: '/agen/reset-password/', teknisi: '/teknisi-admin/reset-password/' };
+
+function showTab(tab) {
+  document.getElementById('pane-agen').classList.toggle('hidden', tab !== 'agen');
+  document.getElementById('pane-teknisi').classList.toggle('hidden', tab !== 'teknisi');
+  const activeClass = 'bg-white text-slate-800 shadow-sm';
+  const inactiveClass = 'text-slate-500';
+  ['agen','teknisi'].forEach(t => {
+    const btn = document.getElementById('tab-' + t + '-btn');
+    btn.className = 'tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all ' +
+      (t === tab ? activeClass : inactiveClass);
+  });
+  localStorage.setItem('tim_tab', tab);
+}
+
+function copyLink(elId, prefix = '') {
+  const text = prefix + document.getElementById(elId).textContent.trim();
+  navigator.clipboard.writeText(text).then(() => showToast('Link disalin!'));
+}
+
+function openEditAgen(btn) {
+  document.getElementById('ea-nama').value = btn.dataset.nama;
+  document.getElementById('ea-wa').value = btn.dataset.wa;
+  document.getElementById('ea-komisi').value = btn.dataset.komisi;
+  document.getElementById('form-edit-agen').action = '/agen/edit/' + btn.dataset.id;
+  document.getElementById('modal-edit-agen').classList.remove('hidden');
+}
+
+function openEditTeknisi(btn) {
+  document.getElementById('et-nama').value = btn.dataset.nama;
+  document.getElementById('et-wa').value = btn.dataset.wa;
+  document.getElementById('form-edit-teknisi').action = '/teknisi-admin/edit/' + btn.dataset.id;
+  document.getElementById('modal-edit-teknisi').classList.remove('hidden');
+}
+
+function openResetPw(uid, nama, tipe) {
+  document.getElementById('reset-label').textContent = 'Reset password untuk: ' + nama;
+  document.getElementById('form-reset').action = RESET_URLS[tipe] + uid;
+  document.getElementById('modal-reset').classList.remove('hidden');
+}
+
+function openTopupAgen(uid, nama) {
+  // reuse topup modal dari agen.html jika ada, atau redirect
+  if (typeof openTopup === 'function') { openTopup(uid, nama); }
+}
+
+// Restore tab dari localStorage
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('tim_tab') || 'agen';
+  showTab(saved);
+});
+</script>
+{% endblock %}

@@ -10,85 +10,122 @@
     <p class="page-sub">Riwayat perubahan saldo akun Anda</p>
   </div>
   {% if user.role == 'admin' %}
-  <div class="flex gap-2">
+  <div class="flex flex-wrap gap-2">
     <button onclick="openTarik()" class="btn-primary px-4 py-2.5">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
       Tarik Saldo
     </button>
-    <a href="/saldo/tarik-requests" class="btn-secondary px-4 py-2.5">
+    <a href="/saldo/tarik-requests" class="btn-secondary px-4 py-2.5 relative">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-      Riwayat
-    </a>
-    <a href="/saldo/topup-manual" class="btn-secondary px-4 py-2.5 relative">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-      Topup Agen
-      {% if pending_topup_count %}<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{{ pending_topup_count }}</span>{% endif %}
+      Riwayat Tarik
+      {% if stats.tarik_pending %}<span class="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{{ stats.tarik_pending }}</span>{% endif %}
     </a>
   </div>
   {% endif %}
 </div>
 
 <!-- Saldo Card -->
-<div class="card p-6 mb-6" style="background:linear-gradient(135deg,#0f172a,#1e3a8a);border:none">
-  <div class="flex items-center justify-between">
+<div class="rounded-2xl p-6 mb-6 text-white relative overflow-hidden" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 60%,#1d4ed8 100%)">
+  <div class="absolute inset-0 opacity-10" style="background:radial-gradient(circle at 80% 20%, #fff 0%, transparent 60%)"></div>
+  <div class="relative flex items-center justify-between">
     <div>
-      <p class="text-slate-400 text-sm mb-1">Total Saldo</p>
-      <p class="text-4xl font-bold text-white">{{ user.saldo | rp }}</p>
-      <p class="text-slate-400 text-xs mt-2">{{ user.nama }} · {{ user.role.replace('_',' ')|title }}</p>
+      <p class="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-2">Saldo Tersedia</p>
+      <p class="text-4xl font-black text-white tracking-tight">{{ user.saldo | rp }}</p>
+      <p class="text-blue-300 text-xs mt-2">{{ user.nama }} · {{ user.role.replace('_',' ')|title }}</p>
     </div>
-    <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background:rgba(255,255,255,0.08)">
-      <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <div class="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.1)">
+      <svg class="w-8 h-8 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     </div>
+  </div>
+  {% if stats.tarik_pending %}
+  <div class="relative mt-4 bg-orange-400/20 border border-orange-300/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
+    <svg class="w-4 h-4 text-orange-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    <p class="text-orange-200 text-xs">{{ stats.tarik_pending }} permintaan tarik saldo sedang diproses</p>
+    <a href="/saldo/tarik-requests" class="ml-auto text-orange-300 text-xs font-semibold hover:underline">Lihat →</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Stats Bulan Ini -->
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+  <div class="card p-4">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Kredit Masuk</p>
+    <p class="text-xl font-black text-emerald-600 mt-1">{{ stats.kredit | rp }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">bulan {{ sel_bulan }}</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-red-400 font-medium uppercase tracking-wide">Debit Keluar</p>
+    <p class="text-xl font-black text-red-500 mt-1">{{ stats.debit | rp }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">bulan {{ sel_bulan }}</p>
+  </div>
+  <div class="card p-4 col-span-2 sm:col-span-1">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total Mutasi</p>
+    <p class="text-xl font-black text-blue-600 mt-1">{{ stats.total_log }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">transaksi bulan ini</p>
   </div>
 </div>
 
-<!-- Mutasi -->
+<!-- Filter Bulan -->
+<form method="get" class="card p-4 mb-5 flex items-center gap-3">
+  <label class="text-sm text-gray-500 font-medium">Periode:</label>
+  <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-select !w-auto">
+  <button type="submit" class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+    Tampilkan
+  </button>
+</form>
+
+<!-- Tabel Mutasi -->
+{% if not logs %}
+<div class="card p-16 text-center">
+  <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+    <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+  </div>
+  <p class="text-slate-500 font-medium">Belum ada mutasi saldo</p>
+  <p class="text-slate-400 text-sm mt-1">untuk periode {{ sel_bulan }}</p>
+</div>
+{% else %}
 <div class="card overflow-hidden">
-  <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-    <h3 class="font-semibold text-slate-700 text-sm">Riwayat Mutasi</h3>
-    <span class="text-xs text-slate-400">{{ logs|length }} entri</span>
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="font-semibold text-gray-700 text-sm">Riwayat Mutasi</h3>
+    <span class="text-xs text-gray-400">{{ logs|length }} entri</span>
   </div>
   <div class="overflow-x-auto">
-    <table class="w-full">
-      <thead class="bg-slate-50 border-b border-slate-100">
+    <table class="w-full text-sm">
+      <thead>
         <tr>
-          <th>Tipe</th>
-          <th>Jumlah</th>
-          <th>Keterangan</th>
-          <th>Tanggal</th>
+          <th class="th">Tipe</th>
+          <th class="th">Jumlah</th>
+          <th class="th">Keterangan</th>
+          <th class="th">Tanggal</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-gray-50">
       {% for l in logs %}
-      <tr>
-        <td>
-          {% if l.tipe=='kredit' %}
-          <span class="badge-green">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+      <tr class="hover:bg-gray-50/50 transition">
+        <td class="td">
+          {% if l.tipe == 'kredit' %}
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
             Kredit
           </span>
           {% else %}
-          <span class="badge-red">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-500 border border-red-100">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
             Debit
           </span>
           {% endif %}
         </td>
-        <td>
-          <span class="font-bold text-sm {% if l.tipe=='kredit' %}text-emerald-600{% else %}text-red-600{% endif %}">
-            {% if l.tipe=='kredit' %}+{% else %}-{% endif %}{{ l.jumlah | rp }}
+        <td class="td">
+          <span class="font-bold text-base {% if l.tipe=='kredit' %}text-emerald-600{% else %}text-red-500{% endif %}">
+            {% if l.tipe=='kredit' %}+{% else %}−{% endif %}{{ l.jumlah | rp }}
           </span>
         </td>
-        <td><span class="text-sm text-slate-600">{{ l.keterangan or '—' }}</span></td>
-        <td><span class="text-xs text-slate-400">{{ l.created_at }}</span></td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="4" class="py-16 text-center">
-          <div class="flex flex-col items-center gap-2 text-slate-400">
-            <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p class="text-sm">Belum ada mutasi saldo</p>
-          </div>
+        <td class="td">
+          <span class="text-gray-600">{{ l.keterangan or '—' }}</span>
+        </td>
+        <td class="td text-xs text-gray-400">
+          {{ l.created_at | ts_date if l.created_at else '—' }}
         </td>
       </tr>
       {% endfor %}
@@ -96,6 +133,7 @@
     </table>
   </div>
 </div>
+{% endif %}
 
 {% if user.role == 'admin' %}
 <!-- Modal Tarik Saldo -->
@@ -107,21 +145,29 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
-    <div class="bg-blue-50 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+    <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-3 flex items-center justify-between">
       <span class="text-sm text-blue-600">Saldo tersedia</span>
-      <span class="font-bold text-blue-700">{{ user.saldo | rp }}</span>
+      <span class="font-bold text-blue-700 text-lg">{{ user.saldo | rp }}</span>
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-xs text-amber-800 space-y-1">
+      <div>• Minimal tarik: <b>Rp 1.000.000</b></div>
+      <div>• Biaya admin: <b>Rp 5.000</b> per transaksi (dipotong dari saldo)</div>
+      <div>• Contoh: tarik Rp 1.000.000 → saldo berkurang <b>Rp 1.005.000</b></div>
     </div>
     <div class="space-y-3">
       <div>
         <label class="form-label">Nominal Tarik (Rp)</label>
-        <input id="tk-nominal" type="number" min="10000" placeholder="Minimal Rp 10.000" class="form-input">
+        <input id="tk-nominal" type="number" min="1000000" placeholder="Minimal Rp 1.000.000" class="form-input" oninput="hitungFee()">
+        <div id="fee-info" class="mt-1 text-xs text-slate-400 hidden">
+          Total dipotong: <span id="fee-total" class="font-semibold text-slate-600"></span> (termasuk biaya admin Rp 5.000)
+        </div>
       </div>
       {% if saved_rek.bank %}
       <div class="bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between">
         <div>
           <p class="text-xs text-slate-500">Rekening tersimpan</p>
           <p class="font-semibold text-slate-800 text-sm">{{ saved_rek.bank }} — {{ saved_rek.no }}</p>
-          <p class="text-xs text-slate-500">{{ saved_rek.nama }}</p>
+          <p class="text-xs text-slate-400">{{ saved_rek.nama }}</p>
         </div>
         <button type="button" onclick="toggleRekForm()" class="text-xs text-blue-500 hover:underline">Ganti</button>
       </div>
@@ -133,16 +179,9 @@
           <label class="form-label">Bank / E-Wallet</label>
           <select id="tk-bank" class="form-select">
             <option value="">Pilih tujuan transfer</option>
-            <option {% if saved_rek.bank=='BCA' %}selected{% endif %}>BCA</option>
-            <option {% if saved_rek.bank=='BRI' %}selected{% endif %}>BRI</option>
-            <option {% if saved_rek.bank=='BNI' %}selected{% endif %}>BNI</option>
-            <option {% if saved_rek.bank=='Mandiri' %}selected{% endif %}>Mandiri</option>
-            <option {% if saved_rek.bank=='BSI' %}selected{% endif %}>BSI</option>
-            <option {% if saved_rek.bank=='Danamon' %}selected{% endif %}>Danamon</option>
-            <option {% if saved_rek.bank=='GoPay' %}selected{% endif %}>GoPay</option>
-            <option {% if saved_rek.bank=='OVO' %}selected{% endif %}>OVO</option>
-            <option {% if saved_rek.bank=='Dana' %}selected{% endif %}>Dana</option>
-            <option {% if saved_rek.bank=='ShopeePay' %}selected{% endif %}>ShopeePay</option>
+            {% for b in ['BCA','BRI','BNI','Mandiri','BSI','Danamon','GoPay','OVO','Dana','ShopeePay'] %}
+            <option {% if saved_rek.bank==b %}selected{% endif %}>{{ b }}</option>
+            {% endfor %}
           </select>
         </div>
         <div>
@@ -170,29 +209,34 @@
   </div>
 </div>
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}
 {% if user.role == 'admin' %}
 <script>
 function openTarik() { document.getElementById('modal-tarik').classList.remove('hidden'); }
-function toggleRekForm() {
-  const f = document.getElementById('rek-form');
-  f.classList.toggle('hidden');
+function hitungFee() {
+  const nominal = parseInt(document.getElementById('tk-nominal').value || 0);
+  const info = document.getElementById('fee-info');
+  if (nominal > 0) {
+    document.getElementById('fee-total').textContent = 'Rp ' + (nominal + 5000).toLocaleString('id');
+    info.classList.remove('hidden');
+  } else {
+    info.classList.add('hidden');
+  }
 }
-
+function toggleRekForm() {
+  document.getElementById('rek-form').classList.toggle('hidden');
+}
 async function submitTarik() {
   const nominal       = parseInt(document.getElementById('tk-nominal').value || 0);
   const bank_name     = (document.getElementById('tk-bank')?.value || '{{ saved_rek.bank }}').trim();
   const rekening_no   = (document.getElementById('tk-rekno')?.value || '{{ saved_rek.no }}').trim();
   const rekening_name = (document.getElementById('tk-rekname')?.value || '{{ saved_rek.nama }}').trim();
   const catatan       = document.getElementById('tk-catatan').value.trim();
-
-  if (!nominal || nominal < 10000) { showToast('Nominal minimal Rp 10.000', 'warning'); return; }
+  if (!nominal || nominal < 1000000) { showToast('Minimal tarik saldo Rp 1.000.000', 'warning'); return; }
   if (!bank_name) { showToast('Pilih bank/e-wallet tujuan', 'warning'); return; }
   if (!rekening_no) { showToast('Masukkan nomor rekening', 'warning'); return; }
-
   const btn = document.getElementById('btn-tarik');
   btn.disabled = true;
   btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...';
@@ -206,7 +250,7 @@ async function submitTarik() {
   if (data.ok) {
     showToast('Permintaan tarik saldo berhasil dibuat!', 'success');
     document.getElementById('modal-tarik').classList.add('hidden');
-    setTimeout(() => window.location.href = '/saldo/tarik-requests', 1200);
+    setTimeout(() => location.reload(), 1200);
   } else {
     showToast(data.detail || 'Gagal mengajukan', 'error');
   }

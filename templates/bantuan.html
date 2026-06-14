@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% set active = "bantuan" %}
+{% block title %}Bantuan — {{ app_name }}{% endblock %}
+{% block topbar_title %}Bantuan & Panduan{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <h1 class="page-title">Panduan Penggunaan</h1>
+    <p class="page-sub">Dokumentasi lengkap sistem billing {{ app_name }}</p>
+  </div>
+
+  <!-- Quick Nav -->
+  <div class="card p-4 mb-6">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Daftar Isi</p>
+    <div class="flex flex-wrap gap-2">
+      {% set nav_items = [
+        ('#mulai','Memulai'),('#server','Router MikroTik'),('#pppoe','PPPoE'),
+        ('#hotspot','Hotspot Voucher'),('#agen','Sistem Agen'),('#wa','WhatsApp Gateway'),
+        ('#store','Halaman Beli'),('#teknisi','Teknisi'),('#saldo','Saldo & Topup'),
+        ('#profil','Profil')
+      ] %}
+      {% for href, label in nav_items %}
+      <a href="{{ href }}" class="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium transition-colors">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── MEMULAI ─────────────────────────────────────────── -->
+  <div id="mulai" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 text-sm">🚀</span>
+      Memulai
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Setelah login, ikuti langkah awal berikut agar sistem berjalan optimal:</p>
+      <ol class="list-decimal ml-5 space-y-2">
+        <li><strong>Tambah Router MikroTik</strong> — masuk ke menu <em>Server MikroTik</em>, isi IP VPN, port API (default 8728), username, dan password router.</li>
+        <li><strong>Buat Paket</strong> — buat paket PPPoE atau Hotspot sesuai layanan yang ditawarkan (nama, kecepatan, harga, durasi).</li>
+        <li><strong>Hubungkan WhatsApp</strong> — masuk ke menu <em>WA Gateway</em>, scan QR untuk menghubungkan nomor WA notifikasi.</li>
+        <li><strong>Atur Profil & Slug</strong> — di menu <em>Profil</em>, set slug bisnis Anda (misal: <code class="bg-gray-100 px-1 rounded">jasa-net</code>) untuk URL toko publik.</li>
+        <li><strong>Bagikan Link Toko</strong> — link publik Anda: <code class="bg-gray-100 px-1 rounded">billing.vpntunel.my.id/beli/[slug]</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ── SERVER MIKROTIK ────────────────────────────────── -->
+  <div id="server" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center text-sm">🖥️</span>
+      Router MikroTik
+    </h2>
+    <div class="space-y-3 text-sm text-gray-600 leading-relaxed">
+      <p>Daftar semua router MikroTik yang terhubung ke sistem. Satu akun bisa mengelola banyak router sekaligus.</p>
+      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+        <p class="font-semibold text-gray-700">Cara menambah router:</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Isi <strong>Nama</strong> (label bebas, misal: Server Utama)</li>
+          <li>Isi <strong>VPN IP</strong> — IP lokal/VPN router yang bisa dijangkau dari server ini</li>
+          <li>Isi <strong>API Port</strong> — default MikroTik adalah <code class="bg-gray-100 px-1 rounded">8728</code></li>
+          <li>Isi <strong>Username & Password</strong> API MikroTik (buat user khusus dengan permission API di Winbox)</li>
+          <li>Isi <strong>Lokasi</strong> (opsional) sebagai keterangan</li>
+        </ul>
+      </div>
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
+        <strong>Tips:</strong> Pastikan port API MikroTik terbuka dan IP server billing masuk ke whitelist firewall MikroTik. Gunakan tombol <strong>Ping</strong> untuk mengecek koneksi.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PPPOE ───────────────────────────────────────────── -->
+  <div id="pppoe" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center text-sm">📡</span>
+      PPPoE
+    </h2>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Paket PPPoE</p>
+        <p>Buat paket layanan PPPoE (nama, kecepatan upload/download, harga bulanan). Paket bisa diimpor langsung dari profile MikroTik yang sudah ada.</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1">
+          <li>Klik <strong>Import dari MikroTik</strong> untuk mengambil daftar profile PPPoE dari router</li>
+          <li>Paket yang dibuat di sini digunakan saat mendaftarkan pelanggan baru</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Pelanggan PPPoE</p>
+        <p>Kelola semua pelanggan PPPoE: tambah, edit, suspend, aktifkan, dan push ke MikroTik.</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1">
+          <li><strong>Tambah Pelanggan</strong> — isi nama, username, password PPPoE, pilih paket & server, isi nomor WA untuk notifikasi tagihan</li>
+          <li><strong>Push ke MikroTik</strong> — membuat secret PPPoE di router secara otomatis</li>
+          <li><strong>Status Online</strong> — ikon hijau menandakan pelanggan sedang terkoneksi</li>
+          <li><strong>Import CSV</strong> — impor banyak pelanggan sekaligus lewat file CSV</li>
+          <li><strong>Tgl Bayar</strong> — tanggal jatuh tempo tiap bulan; sistem akan membuat tagihan otomatis</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Tagihan PPPoE</p>
+        <p>Sistem membuat tagihan otomatis setiap bulan. Anda juga bisa generate manual.</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1">
+          <li><strong>Generate Tagihan</strong> — buat tagihan untuk bulan tertentu</li>
+          <li><strong>Kirim Link Bayar</strong> — kirim link QRIS/transfer ke WA pelanggan</li>
+          <li><strong>Tandai Lunas</strong> — tandai tagihan yang sudah dibayar manual</li>
+          <li><strong>Reminder</strong> — kirim WA pengingat ke semua pelanggan yang belum bayar</li>
+          <li>Jika tidak bayar dan melewati jatuh tempo, pelanggan akan otomatis di-<strong>suspend</strong> (PPPoE secret dinonaktifkan)</li>
+        </ul>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+        <strong>Catatan:</strong> Suspend otomatis berjalan setiap hari pukul 03.00. Setelah pelanggan bayar dan tagihan ditandai lunas, PPPoE akan otomatis diaktifkan kembali.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HOTSPOT VOUCHER ─────────────────────────────────── -->
+  <div id="hotspot" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center text-sm">🎟️</span>
+      Hotspot Voucher
+    </h2>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Paket Hotspot</p>
+        <p>Buat paket voucher (nama, durasi, kecepatan, harga). Bisa diimpor dari profile Hotspot MikroTik yang ada.</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Generate Voucher</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Pilih <strong>Server</strong> dan <strong>Paket</strong>, tentukan jumlah voucher (maks 500 per batch)</li>
+          <li>Isi <strong>Comment/Batch</strong> sebagai label kelompok (misal: RT 01, Promo Juli)</li>
+          <li>Centang <strong>Push ke MikroTik</strong> untuk langsung membuat user hotspot di router</li>
+          <li>Kolom <strong>Tgl Generate</strong> menunjukkan kapan voucher dibuat</li>
+          <li>Badge <strong>MikroTik ✓</strong> (hijau) = sudah ada di router · <strong>Belum push</strong> (oranye) = belum</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Push Ulang ke MikroTik</p>
+        <p>Jika ada voucher yang gagal push, gunakan tombol <strong>Push ke MikroTik</strong> di filter (setelah memilih server) untuk push ulang semua yang belum masuk.</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Cetak Voucher</p>
+        <p>Tombol <strong>Cetak</strong> membuka halaman print-friendly dengan QR code tiap voucher, siap dicetak dan dijual ke pelanggan.</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Filter & Hapus</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Filter berdasarkan Server, Paket, Status (Tersedia/Dipakai/Expired), atau Comment</li>
+          <li><strong>Hapus Tersedia</strong> — hapus semua voucher tersedia di server yang dipilih (juga dihapus dari MikroTik)</li>
+          <li><strong>Hapus per Comment</strong> — hapus satu batch voucher berdasarkan label comment</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── AGEN ───────────────────────────────────────────── -->
+  <div id="agen" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-sm">👥</span>
+      Sistem Agen
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Agen adalah reseller yang bisa generate dan menjual voucher hotspot atas nama ISP. Setiap agen punya saldo yang dipotong saat generate voucher.</p>
+
+      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+        <p class="font-semibold text-gray-700">Alur Agen:</p>
+        <ol class="list-decimal ml-4 space-y-1">
+          <li>ISP tambah akun agen di menu <strong>Agen</strong> (nama, username, password, nomor WA)</li>
+          <li>Agen login di <code class="bg-gray-100 px-1 rounded">billing.vpntunel.my.id/beli/[slug]/login</code></li>
+          <li>Agen topup saldo via QRIS/transfer di panel mereka</li>
+          <li>Agen generate voucher — saldo dipotong sesuai harga paket × jumlah</li>
+          <li>Agen cetak dan jual voucher ke pelanggan akhir</li>
+        </ol>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-1">Panel Agen</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Lihat saldo & riwayat generate</li>
+          <li>Pilih paket & server, tentukan jumlah, generate voucher</li>
+          <li>Cetak voucher hasil generate (per batch/comment)</li>
+          <li>Topup saldo lewat payment gateway yang tersedia</li>
+        </ul>
+      </div>
+
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
+        <strong>Perhatian:</strong> Agen yang dinonaktifkan tidak bisa login. Saldo agen bisa diatur manual oleh ISP di menu <strong>Agen → Detail</strong>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WA GATEWAY ─────────────────────────────────────── -->
+  <div id="wa" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-sm">💬</span>
+      WhatsApp Gateway
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Sistem menggunakan WA pribadi Anda untuk mengirim notifikasi tagihan, link bayar, dan konfirmasi pembayaran ke pelanggan.</p>
+
+      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+        <p class="font-semibold text-gray-700">Cara menghubungkan WA:</p>
+        <ol class="list-decimal ml-4 space-y-1">
+          <li>Buka menu <strong>WA Gateway</strong></li>
+          <li>Klik tombol <strong>Hubungkan / Scan QR</strong></li>
+          <li>Buka WhatsApp di HP → <strong>Perangkat Tertaut → Tautkan Perangkat</strong></li>
+          <li>Scan QR yang muncul di layar</li>
+          <li>Status akan berubah menjadi <span class="text-emerald-600 font-semibold">Terhubung</span></li>
+        </ol>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-1">Template Pesan WA</p>
+        <p>Di menu <strong>Template WA</strong>, Anda bisa mengubah teks notifikasi yang dikirim ke pelanggan. Variabel yang tersedia:</p>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          {% set vars = [
+            ('{nama}','Nama pelanggan'),('{jumlah}','Nominal tagihan'),
+            ('{bulan}','Bulan tagihan'),('{link}','Link pembayaran'),
+            ('{kode}','Kode voucher'),('{durasi}','Durasi paket'),
+            ('{paket}','Nama paket'),('{expired}','Tanggal jatuh tempo')
+          ] %}
+          {% for var, desc in vars %}
+          <div class="bg-gray-50 rounded-lg p-2 flex items-center gap-2">
+            <code class="text-xs bg-white border border-gray-200 px-1.5 py-0.5 rounded font-mono text-blue-600">{{ var }}</code>
+            <span class="text-xs text-gray-500">{{ desc }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
+        <strong>Tips:</strong> Gunakan nomor WA yang tidak terlalu aktif untuk kirim notifikasi agar tidak terkena limit atau banned oleh WhatsApp. Jika QR expired, refresh halaman dan scan ulang.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HALAMAN BELI (STORE) ───────────────────────────── -->
+  <div id="store" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-pink-100 flex items-center justify-center text-sm">🛒</span>
+      Halaman Beli (Store Publik)
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Setiap ISP mendapat halaman toko publik yang bisa dibagikan ke pelanggan untuk beli voucher hotspot secara mandiri.</p>
+
+      <div class="bg-gray-50 rounded-xl p-4">
+        <p class="font-semibold text-gray-700 mb-2">URL Toko:</p>
+        <code class="text-sm text-blue-600 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg block">
+          billing.vpntunel.my.id/beli/<span class="text-orange-500">[slug-bisnis-anda]</span>
+        </code>
+        <p class="text-xs text-gray-400 mt-2">Slug diatur di menu <strong>Profil</strong>. Contoh: jika slug = <em>warnetku</em>, maka URL toko = billing.vpntunel.my.id/beli/warnetku</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-1">Alur Pembelian Pelanggan:</p>
+        <ol class="list-decimal ml-4 space-y-1">
+          <li>Pelanggan buka link toko, masukkan nomor WA</li>
+          <li>Pilih server dan paket voucher yang diinginkan</li>
+          <li>Bayar via QRIS (Tripay/Duitku) atau transfer</li>
+          <li>Sistem otomatis kirim kode voucher ke WA pelanggan setelah pembayaran terverifikasi</li>
+        </ol>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+        <strong>Riwayat Transaksi:</strong> Semua transaksi toko publik bisa dilihat di menu <strong>Transaksi</strong> pada sidebar.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TEKNISI ────────────────────────────────────────── -->
+  <div id="teknisi" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-sm">🔧</span>
+      Panel Teknisi
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Panel khusus teknisi lapangan untuk mengelola pelanggan PPPoE tanpa akses penuh ke sistem billing.</p>
+
+      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+        <p class="font-semibold text-gray-700">URL Panel Teknisi:</p>
+        <code class="text-sm text-blue-600 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg block">
+          billing.vpntunel.my.id/teknisi/<span class="text-orange-500">[slug-bisnis-anda]</span>
+        </code>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-1">Fitur Teknisi:</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Lihat daftar pelanggan PPPoE (nama, username, status online)</li>
+          <li>Tambah pelanggan baru (otomatis push ke MikroTik)</li>
+          <li>Aktifkan / Suspend pelanggan dengan satu klik</li>
+          <li>Edit data pelanggan (nama, password, paket)</li>
+          <li>Hapus pelanggan (juga dihapus dari MikroTik)</li>
+        </ul>
+      </div>
+
+      <p>Akun teknisi dikelola di menu <strong>Teknisi</strong> → <strong>Kelola Akun Teknisi</strong> di sidebar. Teknisi tidak bisa mengakses menu billing, tagihan, atau keuangan.</p>
+    </div>
+  </div>
+
+  <!-- ── SALDO & TOPUP ──────────────────────────────────── -->
+  <div id="saldo" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-yellow-100 flex items-center justify-center text-sm">💰</span>
+      Saldo & Topup
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <p>Saldo digunakan sebagai biaya layanan platform. Saldo diisi oleh administrator VPNTunel atas permintaan ISP.</p>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-1">Melihat Saldo:</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Saldo bisa dilihat di menu <strong>Saldo</strong> atau di pojok kiri atas sidebar</li>
+          <li>Riwayat pengurangan dan penambahan saldo tersedia di halaman Saldo</li>
+        </ul>
+      </div>
+
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
+        Untuk topup saldo, hubungi administrator VPNTunel melalui WhatsApp atau Telegram yang tertera di landing page.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PROFIL ─────────────────────────────────────────── -->
+  <div id="profil" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-sm">⚙️</span>
+      Profil & Pengaturan
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+      <ul class="list-disc ml-4 space-y-2">
+        <li><strong>Nama ISP</strong> — nama yang tampil di sistem dan notifikasi WA</li>
+        <li><strong>Username</strong> — digunakan untuk login</li>
+        <li><strong>Password</strong> — ubah password login di sini</li>
+        <li><strong>Nomor WA</strong> — nomor yang dihubungi admin untuk keperluan verifikasi</li>
+        <li><strong>Slug Bisnis</strong> — bagian URL toko publik Anda (hanya huruf kecil, angka, dan tanda -)</li>
+      </ul>
+
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+        <strong>Perhatian:</strong> Mengubah slug akan mengubah URL toko publik. Pastikan Anda memperbarui link yang sudah dibagikan ke pelanggan atau agen.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BANTUAN LEBIH LANJUT ───────────────────────────── -->
+  <div class="card p-6 mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
+    <h2 class="text-base font-bold text-gray-800 mb-2">Butuh Bantuan Lebih?</h2>
+    <p class="text-sm text-gray-600 mb-3">Jika ada kendala atau pertanyaan yang tidak tercakup di panduan ini, hubungi tim support VPNTunel:</p>
+    <div class="flex flex-wrap gap-3">
+      <a href="https://wa.me/6285367281448" target="_blank"
+         class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-xl transition-colors">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.849L0 24l6.344-1.486A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.647-.494-5.173-1.358l-.371-.22-3.767.883.925-3.662-.242-.38A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        WhatsApp Support
+      </a>
+      <a href="https://vpntunel.my.id" target="_blank"
+         class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl transition-colors">
+        🌐 vpntunel.my.id
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

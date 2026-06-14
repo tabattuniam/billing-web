@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+{% set active = "odp" %}
+{% block title %}ODP — {{ app_name }}{% endblock %}
+{% block topbar_title %}Manajemen ODP & ODC{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Manajemen ODP & ODC</h1>
+    <p class="page-sub">{{ odc_list|length }} ODC · {{ odp_list|length }} ODP terdaftar</p>
+  </div>
+  <div class="flex gap-2">
+    <button onclick="document.getElementById('modal-tambah-odc').classList.remove('hidden')"
+      class="btn-secondary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah ODC
+    </button>
+    <button onclick="document.getElementById('modal-tambah-odp').classList.remove('hidden')"
+      class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Tambah ODP
+    </button>
+  </div>
+</div>
+
+{% if servers|length > 1 %}
+<form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
+  <select name="server_id" class="form-select !w-auto min-w-[200px]">
+    <option value="">Semua Server</option>
+    {% for s in servers %}<option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn-primary px-4 py-2.5">Filter</button>
+  {% if sel_server %}<a href="/odp" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>{% endif %}
+</form>
+{% endif %}
+
+{% if not odc_list and not odp_list %}
+<div class="card p-16 text-center">
+  <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+    <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+  </div>
+  <p class="text-slate-500 font-medium">Belum ada ODC / ODP</p>
+  <p class="text-slate-400 text-sm mt-1">Mulai dengan menambahkan ODC, lalu ODP di bawahnya</p>
+</div>
+
+{% else %}
+
+{# ── Group ODC dengan ODP di dalamnya ── #}
+{% for odc in odc_list %}
+{% set odp_dalam = odp_list | selectattr('odc_id','eq', odc.id) | list %}
+{% set spl_loss = {'1:4': -6, '1:8': -9, '1:16': -12, '1:32': -15}.get(odc.tipe_splitter, 0) %}
+{% set daya_cabang = odc.daya_masuk_dbm + spl_loss %}
+
+<div class="mb-6">
+  <!-- ODC Card -->
+  <div class="bg-slate-800 rounded-2xl p-4 mb-3 border border-slate-700">
+    <div class="flex items-start justify-between flex-wrap gap-2">
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block"></span>
+          <span class="font-bold text-white text-base">{{ odc.nama }}</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-blue-900/60 text-blue-300 border border-blue-700 font-mono">{{ odc.tipe_splitter }}</span>
+          <span class="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-300 font-mono">
+            In: {{ odc.daya_masuk_dbm }} dBm → Out: {{ "%.1f"|format(daya_cabang) }} dBm/port
+          </span>
+        </div>
+        {% if odc.lokasi %}
+        <p class="text-slate-400 text-xs mt-1 flex items-center gap-1 ml-4">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+          {{ odc.lokasi }}
+        </p>
+        {% endif %}
+        {% if odc.lat and odc.lng %}
+        <a href="https://maps.google.com/?q={{ odc.lat }},{{ odc.lng }}" target="_blank"
+          class="ml-4 text-xs text-blue-400 hover:underline flex items-center gap-1 w-fit mt-0.5">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          Maps
+        </a>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span>{{ odp_dalam|length }} ODP</span>
+        <button onclick="openEditOdc({{ odc.id }},'{{ odc.server_id }}','{{ odc.nama|e }}','{{ odc.lokasi|e }}','{{ odc.tipe_splitter }}',{{ odc.daya_masuk_dbm }},'{{ odc.lat or '' }}','{{ odc.lng or '' }}')"
+          class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">Edit</button>
+        <form method="post" action="/odc/hapus/{{ odc.id }}" class="inline"
+          onsubmit="return confirm('Hapus ODC {{ odc.nama }}? ODP terhubung tidak ikut terhapus.')">
+          <button class="px-2 py-1 bg-red-900/40 hover:bg-red-800/60 text-red-400 rounded-lg transition">Hapus</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ODP dalam ODC ini -->
+  {% if odp_dalam %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ml-4 pl-4 border-l-2 border-slate-200">
+    {% for o in odp_dalam %}
+    {% set pct = ((o.terpakai / o.kapasitas) * 100) | int if o.kapasitas > 0 else 0 %}
+    {% set sisa = o.kapasitas - o.terpakai %}
+    <div class="card p-4">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <p class="font-bold text-gray-800 text-sm">{{ o.nama }}</p>
+            {% if pct >= 100 %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-600 font-semibold">Penuh</span>
+            {% elif pct >= 75 %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-600 font-semibold">Hampir Penuh</span>
+            {% else %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-600 font-semibold">Tersedia</span>{% endif %}
+          </div>
+          {% if o.tap_tipe %}
+          <span class="text-xs font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-0.5 inline-block">Tap {{ o.tap_tipe }}</span>
+          {% endif %}
+          {% if o.daya_odp_dbm is not none %}
+          <span class="text-xs font-mono text-slate-500 ml-1">{{ o.daya_odp_dbm }} dBm</span>
+          {% endif %}
+          {% if o.lokasi %}<p class="text-xs text-gray-400 mt-0.5">📍 {{ o.lokasi }}</p>{% endif %}
+          {% if o.lat and o.lng %}
+          <a href="https://maps.google.com/?q={{ o.lat }},{{ o.lng }}" target="_blank" class="text-xs text-blue-500 hover:underline">Maps ↗</a>
+          {% endif %}
+        </div>
+        <div class="flex gap-1 ml-1">
+          <button onclick="openEditOdp({{ o.id }},'{{ o.server_id }}','{{ o.nama|e }}','{{ o.lokasi|e }}',{{ o.kapasitas }},'{{ o.lat or '' }}','{{ o.lng or '' }}',{{ o.odc_id or 'null' }},'{{ o.tap_tipe or '' }}')"
+            class="btn-ghost px-1.5 py-1 text-xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+          <form method="post" action="/odp/hapus/{{ o.id }}" class="inline" onsubmit="return confirm('Hapus ODP {{ o.nama }}?')">
+            <button class="btn-danger px-1.5 py-1 text-xs">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+      <!-- Progress -->
+      <div class="flex justify-between text-xs text-gray-500 mb-1">
+        <span>Port</span>
+        <span class="font-bold {% if pct>=100 %}text-red-500{% elif pct>=75 %}text-amber-500{% else %}text-emerald-600{% endif %}">{{ o.terpakai }}/{{ o.kapasitas }}</span>
+      </div>
+      <div class="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+        <div class="h-1.5 rounded-full {% if pct>=100 %}bg-red-400{% elif pct>=75 %}bg-amber-400{% else %}bg-emerald-400{% endif %}" style="width:{{ [pct,100]|min }}%"></div>
+      </div>
+      <!-- Monitor Port -->
+      <button onclick="lihatPort({{ o.id }},{{ o.kapasitas }})"
+        class="w-full text-xs text-indigo-600 font-medium py-1.5 border border-indigo-100 rounded-xl hover:bg-indigo-50 transition">
+        Monitor Port ({{ sisa }} kosong)
+      </button>
+      <div id="port-grid-{{ o.id }}" class="hidden mt-2">
+        <div id="port-grid-inner-{{ o.id }}" class="grid gap-1" style="grid-template-columns:repeat(auto-fill,minmax(36px,1fr))"></div>
+        <p class="text-xs text-gray-400 mt-1.5 flex gap-3">
+          <span><span class="inline-block w-3 h-3 rounded bg-emerald-400 mr-1"></span>Kosong</span>
+          <span><span class="inline-block w-3 h-3 rounded bg-blue-500 mr-1"></span>Terpakai</span>
+        </p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="ml-6 text-sm text-slate-400 italic">Belum ada ODP di ODC ini</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{# ODP tanpa ODC #}
+{% set odp_tanpa_odc = odp_list | selectattr('odc_id', 'none') | list %}
+{% if odp_tanpa_odc %}
+<div class="mb-2 mt-6 flex items-center gap-2">
+  <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+  <p class="text-sm font-bold text-gray-400 uppercase tracking-wide">ODP Tanpa ODC</p>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+{% for o in odp_tanpa_odc %}
+{% set pct = ((o.terpakai / o.kapasitas) * 100) | int if o.kapasitas > 0 else 0 %}
+{% set sisa = o.kapasitas - o.terpakai %}
+<div class="card p-4">
+  <div class="flex items-start justify-between mb-2">
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <p class="font-bold text-gray-800 text-sm">{{ o.nama }}</p>
+        {% if pct >= 100 %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-600 font-semibold">Penuh</span>
+        {% elif pct >= 75 %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-600 font-semibold">Hampir Penuh</span>
+        {% else %}<span class="px-1.5 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-600 font-semibold">Tersedia</span>{% endif %}
+      </div>
+      {% if o.lokasi %}<p class="text-xs text-gray-400 mt-0.5">📍 {{ o.lokasi }}</p>{% endif %}
+    </div>
+    <div class="flex gap-1 ml-1">
+      <button onclick="openEditOdp({{ o.id }},'{{ o.server_id }}','{{ o.nama|e }}','{{ o.lokasi|e }}',{{ o.kapasitas }},'{{ o.lat or '' }}','{{ o.lng or '' }}',null,'')"
+        class="btn-ghost px-1.5 py-1 text-xs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      </button>
+      <form method="post" action="/odp/hapus/{{ o.id }}" class="inline" onsubmit="return confirm('Hapus ODP?')">
+        <button class="btn-danger px-1.5 py-1 text-xs"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+      </form>
+    </div>
+  </div>
+  <div class="flex justify-between text-xs text-gray-500 mb-1"><span>Port</span>
+    <span class="font-bold {% if pct>=100 %}text-red-500{% elif pct>=75 %}text-amber-500{% else %}text-emerald-600{% endif %}">{{ o.terpakai }}/{{ o.kapasitas }}</span></div>
+  <div class="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+    <div class="h-1.5 rounded-full {% if pct>=100 %}bg-red-400{% elif pct>=75 %}bg-amber-400{% else %}bg-emerald-400{% endif %}" style="width:{{ [pct,100]|min }}%"></div>
+  </div>
+  <button onclick="lihatPort({{ o.id }},{{ o.kapasitas }})"
+    class="w-full text-xs text-indigo-600 font-medium py-1.5 border border-indigo-100 rounded-xl hover:bg-indigo-50 transition">
+    Monitor Port ({{ sisa }} kosong)
+  </button>
+  <div id="port-grid-{{ o.id }}" class="hidden mt-2">
+    <div id="port-grid-inner-{{ o.id }}" class="grid gap-1" style="grid-template-columns:repeat(auto-fill,minmax(36px,1fr))"></div>
+    <p class="text-xs text-gray-400 mt-1.5 flex gap-3">
+      <span><span class="inline-block w-3 h-3 rounded bg-emerald-400 mr-1"></span>Kosong</span>
+      <span><span class="inline-block w-3 h-3 rounded bg-blue-500 mr-1"></span>Terpakai</span>
+    </p>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+
+<!-- ── Modal Tambah ODC ── -->
+<div id="modal-tambah-odc" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Tambah ODC</h3>
+      <button onclick="document.getElementById('modal-tambah-odc').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/odc/tambah" class="space-y-4">
+      <div>
+        <label class="form-label">Server MikroTik *</label>
+        <select name="server_id" required class="form-select">
+          <option value="">Pilih Server</option>
+          {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Nama ODC *</label>
+        <input name="nama" required placeholder="Contoh: ODC-TBO-001" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Lokasi / Alamat</label>
+        <input name="lokasi" placeholder="Jl. Merdeka KM 2" class="form-input">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="form-label">Tipe Splitter ODC</label>
+          <select name="tipe_splitter" class="form-select">
+            <option value="1:4">1:4 (4 cabang)</option>
+            <option value="1:8">1:8 (8 cabang)</option>
+            <option value="cascade">Cascade / Tap</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Daya Masuk (dBm)</label>
+          <input name="daya_masuk_dbm" type="number" step="0.1" value="-3" class="form-input">
+          <p class="text-xs text-gray-400 mt-1">Daya dari OLT setelah kabel feeder</p>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Koordinat GPS (opsional)</label>
+        <div class="grid grid-cols-2 gap-2">
+          <input name="lat" id="odc-add-lat" type="number" step="any" placeholder="Latitude" class="form-input">
+          <input name="lng" id="odc-add-lng" type="number" step="any" placeholder="Longitude" class="form-input">
+        </div>
+        <button type="button" onclick="ambilGPS('odc-add')" class="mt-1 text-xs text-blue-600 hover:underline">📍 Gunakan lokasi saat ini</button>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="document.getElementById('modal-tambah-odc').classList.add('hidden')" class="btn-ghost flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan ODC</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Modal Edit ODC ── -->
+<div id="modal-edit-odc" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Edit ODC</h3>
+      <button onclick="document.getElementById('modal-edit-odc').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit-odc" method="post" class="space-y-4">
+      <div>
+        <label class="form-label">Server MikroTik *</label>
+        <select id="odc-edit-server" name="server_id" required class="form-select">
+          {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Nama ODC *</label>
+        <input id="odc-edit-nama" name="nama" required class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Lokasi</label>
+        <input id="odc-edit-lokasi" name="lokasi" class="form-input">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="form-label">Tipe Splitter</label>
+          <select id="odc-edit-splitter" name="tipe_splitter" class="form-select">
+            <option value="1:4">1:4</option>
+            <option value="1:8">1:8</option>
+            <option value="cascade">Cascade</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Daya Masuk (dBm)</label>
+          <input id="odc-edit-daya" name="daya_masuk_dbm" type="number" step="0.1" class="form-input">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">GPS</label>
+        <div class="grid grid-cols-2 gap-2">
+          <input name="lat" id="odc-edit-lat" type="number" step="any" placeholder="Latitude" class="form-input">
+          <input name="lng" id="odc-edit-lng" type="number" step="any" placeholder="Longitude" class="form-input">
+        </div>
+        <button type="button" onclick="ambilGPS('odc-edit')" class="mt-1 text-xs text-blue-600 hover:underline">📍 Lokasi saat ini</button>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="document.getElementById('modal-edit-odc').classList.add('hidden')" class="btn-ghost flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Modal Tambah ODP ── -->
+<div id="modal-tambah-odp" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Tambah ODP</h3>
+      <button onclick="document.getElementById('modal-tambah-odp').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form method="post" action="/odp/tambah" class="space-y-4">
+      <div>
+        <label class="form-label">Server MikroTik *</label>
+        <select name="server_id" required class="form-select">
+          <option value="">Pilih Server</option>
+          {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">ODC Induk</label>
+        <select name="odc_id" id="odp-add-odc" class="form-select">
+          <option value="">Tanpa ODC</option>
+          {% for c in odc_list %}<option value="{{ c.id }}">{{ c.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Tipe Tap / Splitter</label>
+        <select name="tap_tipe" id="odp-add-tap" class="form-select">
+          <option value="">— Pilih —</option>
+          <option value="20/80">Tap 20/80 (ODP ambil 20%)</option>
+          <option value="30/70">Tap 30/70 (ODP ambil 30%)</option>
+          <option value="50/50">Tap 50/50</option>
+          <option value="10/90">Tap 10/90</option>
+          <option value="1:4">Splitter 1:4</option>
+          <option value="1:8">Splitter 1:8</option>
+          <option value="1:16">Splitter 1:16</option>
+        </select>
+        <p id="odp-daya-preview" class="text-xs text-indigo-600 mt-1 hidden">Estimasi daya di ODP: <b id="odp-daya-val"></b> dBm</p>
+      </div>
+      <div>
+        <label class="form-label">Nama ODP *</label>
+        <input name="nama" required placeholder="Contoh: ODP-TBO-001" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Lokasi / Alamat</label>
+        <input name="lokasi" placeholder="Contoh: Tiang depan no. 12" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Kapasitas Port *</label>
+        <select name="kapasitas" class="form-select">
+          <option value="4">4 Port</option>
+          <option value="8" selected>8 Port</option>
+          <option value="16">16 Port</option>
+          <option value="32">32 Port</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">GPS (opsional)</label>
+        <div class="grid grid-cols-2 gap-2">
+          <input name="lat" id="odp-add-lat" type="number" step="any" placeholder="Latitude" class="form-input">
+          <input name="lng" id="odp-add-lng" type="number" step="any" placeholder="Longitude" class="form-input">
+        </div>
+        <button type="button" onclick="ambilGPS('odp-add')" class="mt-1 text-xs text-blue-600 hover:underline">📍 Lokasi saat ini</button>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="document.getElementById('modal-tambah-odp').classList.add('hidden')" class="btn-ghost flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan ODP</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Modal Edit ODP ── -->
+<div id="modal-edit-odp" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-gray-900 text-lg">Edit ODP</h3>
+      <button onclick="document.getElementById('modal-edit-odp').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="form-edit-odp" method="post" class="space-y-4">
+      <div>
+        <label class="form-label">Server MikroTik *</label>
+        <select id="edit-odp-server" name="server_id" required class="form-select">
+          {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">ODC Induk</label>
+        <select id="edit-odp-odc" name="odc_id" class="form-select">
+          <option value="">Tanpa ODC</option>
+          {% for c in odc_list %}<option value="{{ c.id }}">{{ c.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Tipe Tap</label>
+        <select id="edit-odp-tap" name="tap_tipe" class="form-select">
+          <option value="">— Pilih —</option>
+          <option value="20/80">Tap 20/80</option>
+          <option value="30/70">Tap 30/70</option>
+          <option value="50/50">Tap 50/50</option>
+          <option value="10/90">Tap 10/90</option>
+          <option value="1:4">Splitter 1:4</option>
+          <option value="1:8">Splitter 1:8</option>
+          <option value="1:16">Splitter 1:16</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Nama ODP *</label>
+        <input id="edit-odp-nama" name="nama" required class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Lokasi</label>
+        <input id="edit-odp-lokasi" name="lokasi" class="form-input">
+      </div>
+      <div>
+        <label class="form-label">Kapasitas Port</label>
+        <select id="edit-odp-kapasitas" name="kapasitas" class="form-select">
+          <option value="4">4 Port</option>
+          <option value="8">8 Port</option>
+          <option value="16">16 Port</option>
+          <option value="32">32 Port</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">GPS</label>
+        <div class="grid grid-cols-2 gap-2">
+          <input name="lat" id="edit-odp-lat" type="number" step="any" placeholder="Latitude" class="form-input">
+          <input name="lng" id="edit-odp-lng" type="number" step="any" placeholder="Longitude" class="form-input">
+        </div>
+        <button type="button" onclick="ambilGPS('edit-odp')" class="mt-1 text-xs text-blue-600 hover:underline">📍 Lokasi saat ini</button>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="document.getElementById('modal-edit-odp').classList.add('hidden')" class="btn-ghost flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Port Detail -->
+<div id="modal-port" class="hidden modal-overlay" style="background:rgba(0,0,0,0.6)">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 id="modal-port-title" class="font-bold text-gray-900">Port #</h3>
+      <button onclick="document.getElementById('modal-port').classList.add('hidden')" class="text-gray-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="modal-port-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Data ODC untuk kalkulasi daya
+const ODC_DATA = {
+  {% for c in odc_list %}
+  {{ c.id }}: { splitter: "{{ c.tipe_splitter }}", daya: {{ c.daya_masuk_dbm }} },
+  {% endfor %}
+};
+const SPLITTER_LOSS = {"1:4":-6,"1:8":-9,"1:16":-12,"1:32":-15,"cascade":0};
+const TAP_LOSS = {"20/80":-7,"30/70":-5.2,"50/50":-3,"10/90":-10,"1:4":-6,"1:8":-9,"1:16":-12};
+
+function hitungDayaOdp(odc_id, tap_tipe) {
+  const odc = ODC_DATA[odc_id];
+  if (!odc || !tap_tipe) return null;
+  const spl = SPLITTER_LOSS[odc.splitter] || 0;
+  const tap = TAP_LOSS[tap_tipe] || -9;
+  return (odc.daya + spl + tap).toFixed(1);
+}
+
+// Preview daya saat pilih ODC/tap di form tambah ODP
+function updateDayaPreview() {
+  const odc_id = parseInt(document.getElementById('odp-add-odc').value);
+  const tap = document.getElementById('odp-add-tap').value;
+  const preview = document.getElementById('odp-daya-preview');
+  const val = document.getElementById('odp-daya-val');
+  const daya = hitungDayaOdp(odc_id, tap);
+  if (daya !== null) {
+    val.textContent = daya;
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
+}
+document.getElementById('odp-add-odc')?.addEventListener('change', updateDayaPreview);
+document.getElementById('odp-add-tap')?.addEventListener('change', updateDayaPreview);
+
+// Edit ODC
+function openEditOdc(id, server, nama, lokasi, splitter, daya, lat, lng) {
+  document.getElementById('form-edit-odc').action = '/odc/edit/' + id;
+  document.getElementById('odc-edit-server').value = server;
+  document.getElementById('odc-edit-nama').value = nama;
+  document.getElementById('odc-edit-lokasi').value = lokasi;
+  document.getElementById('odc-edit-splitter').value = splitter;
+  document.getElementById('odc-edit-daya').value = daya;
+  document.getElementById('odc-edit-lat').value = lat || '';
+  document.getElementById('odc-edit-lng').value = lng || '';
+  document.getElementById('modal-edit-odc').classList.remove('hidden');
+}
+
+// Edit ODP
+function openEditOdp(id, server, nama, lokasi, kapasitas, lat, lng, odc_id, tap_tipe) {
+  document.getElementById('form-edit-odp').action = '/odp/edit/' + id;
+  document.getElementById('edit-odp-server').value = server;
+  document.getElementById('edit-odp-nama').value = nama;
+  document.getElementById('edit-odp-lokasi').value = lokasi;
+  document.getElementById('edit-odp-kapasitas').value = kapasitas;
+  document.getElementById('edit-odp-lat').value = lat || '';
+  document.getElementById('edit-odp-lng').value = lng || '';
+  document.getElementById('edit-odp-odc').value = odc_id || '';
+  document.getElementById('edit-odp-tap').value = tap_tipe || '';
+  document.getElementById('modal-edit-odp').classList.remove('hidden');
+}
+
+// GPS
+function ambilGPS(prefix) {
+  if (!navigator.geolocation) { alert('GPS tidak tersedia'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    document.getElementById(prefix + '-lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById(prefix + '-lng').value = pos.coords.longitude.toFixed(6);
+  }, () => alert('Gagal ambil GPS'));
+}
+
+// Monitor Port
+const portCache = {};
+async function lihatPort(odp_id, kapasitas) {
+  const grid = document.getElementById('port-grid-' + odp_id);
+  const inner = document.getElementById('port-grid-inner-' + odp_id);
+  if (!grid.classList.contains('hidden')) { grid.classList.add('hidden'); return; }
+  inner.innerHTML = '<p class="text-xs text-gray-400">Memuat...</p>';
+  grid.classList.remove('hidden');
+  if (!portCache[odp_id]) {
+    const res = await fetch('/odp/' + odp_id + '/ports');
+    const data = await res.json();
+    portCache[odp_id] = data.ports || {};
+  }
+  const ports = portCache[odp_id];
+  let html = '';
+  for (let p = 1; p <= kapasitas; p++) {
+    const pel = ports[p];
+    if (pel) {
+      html += `<button onclick="showPortDetail(${p},'${(pel.nama||'').replace(/'/g,"\\'")}','${pel.username}')"
+        class="aspect-square flex items-center justify-center rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition">${p}</button>`;
+    } else {
+      html += `<div class="aspect-square flex items-center justify-center rounded-lg text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200">${p}</div>`;
+    }
+  }
+  inner.innerHTML = html;
+}
+
+function showPortDetail(portNo, nama, username) {
+  document.getElementById('modal-port-title').textContent = 'Port #' + portNo;
+  document.getElementById('modal-port-body').innerHTML = `
+    <div class="space-y-2">
+      <div class="bg-blue-50 rounded-xl px-4 py-3">
+        <p class="text-xs text-blue-500 font-medium">Pelanggan</p>
+        <p class="font-bold text-gray-800">${nama}</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl px-4 py-3">
+        <p class="text-xs text-gray-400 font-medium">Username PPPoE</p>
+        <p class="font-mono text-gray-700">${username}</p>
+      </div>
+    </div>`;
+  document.getElementById('modal-port').classList.remove('hidden');
+}
+</script>
+{% endblock %}

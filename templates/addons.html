@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Add-On & Fitur Tambahan{% endblock %}
+{% block header %}🛒 Add-On & Fitur Tambahan{% endblock %}
+
+{% block content %}
+{% if ok %}
+<div style="background:#dcfce7;border:1px solid #86efac;color:#15803d;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:500;">
+  ✅ {{ ok }}
+</div>
+{% endif %}
+{% if err %}
+<div style="background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:500;">
+  ❌ {{ err }}
+</div>
+{% endif %}
+
+<!-- Info Saldo -->
+<div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:12px;opacity:.8;margin-bottom:4px;">Saldo Tersedia</div>
+      <div style="font-size:24px;font-weight:700;">Rp {{ "{:,}".format(user.saldo|int) }}</div>
+    </div>
+    <div style="font-size:36px;">💰</div>
+  </div>
+  <div style="margin-top:12px;font-size:12px;opacity:.8;">
+    Saldo digunakan untuk mengaktifkan Add-On. <a href="/saldo" style="color:#bfdbfe;">Topup saldo →</a>
+  </div>
+</div>
+
+<!-- Add-on Aktif -->
+{% set ada_aktif = aktif|length > 0 %}
+{% if ada_aktif %}
+<h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">✅ Add-On Aktif</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:24px;">
+  {% for addon in addons %}
+  {% if addon.id in aktif %}
+  {% set info = aktif[addon.id] %}
+  <div class="card" style="border:2px solid #22c55e;position:relative;">
+    <div style="position:absolute;top:12px;right:12px;">
+      <span class="badge-up">● AKTIF</span>
+    </div>
+    <div style="font-size:28px;margin-bottom:8px;">{{ addon.ikon }}</div>
+    <div style="font-weight:700;font-size:15px;color:#1e293b;margin-bottom:4px;">{{ addon.nama }}</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:12px;">{{ addon.deskripsi }}</div>
+    <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">
+      Berlaku s/d: <b>{{ info.expires_at }}</b>
+    </div>
+
+    {% if addon.code == 'vpn_remote' and vpn_akun %}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;">
+      <div style="font-weight:600;color:#15803d;margin-bottom:8px;">🔐 Kredensial VPN L2TP</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="color:#64748b;padding:2px 0;">Server</td><td><code style="color:#1e293b;">103.93.162.154</code></td></tr>
+        <tr><td style="color:#64748b;padding:2px 0;">Username</td><td><code style="color:#1e293b;">{{ vpn_akun.vpn_username }}</code></td></tr>
+        <tr><td style="color:#64748b;padding:2px 0;">Password</td><td><code style="color:#1e293b;">{{ vpn_akun.vpn_password }}</code></td></tr>
+        <tr><td style="color:#64748b;padding:2px 0;">IPSec PSK</td><td><code style="color:#1e293b;">vpntunel123</code></td></tr>
+        <tr><td style="color:#64748b;padding:2px 0;">Tipe</td><td><code style="color:#1e293b;">L2TP/IPSec</code></td></tr>
+      </table>
+      <div style="margin-top:8px;padding:8px;background:#fff;border-radius:6px;font-family:monospace;font-size:11px;color:#475569;">
+        MikroTik CMD:<br>
+        /interface l2tp-client add name=vpn-tunel connect-to=103.93.162.154 user={{ vpn_akun.vpn_username }} password={{ vpn_akun.vpn_password }} use-ipsec=yes ipsec-secret=vpntunel123 disabled=no
+      </div>
+    </div>
+    {% endif %}
+
+    <button onclick="nonaktifkan({{ addon.id }}, '{{ addon.nama }}')"
+      class="btn-danger" style="width:100%;justify-content:center;">
+      Nonaktifkan
+    </button>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Add-on Tersedia -->
+<h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">💡 Add-On Tersedia</h3>
+
+{% set kategori_list = [] %}
+{% for addon in addons %}
+  {% if addon.kategori not in kategori_list %}{% set _ = kategori_list.append(addon.kategori) %}{% endif %}
+{% endfor %}
+
+{% for kat in ['jaringan','komunikasi','billing','laporan','premium'] %}
+{% set kat_addons = addons | selectattr('kategori','eq',kat) | list %}
+{% if kat_addons %}
+<div style="margin-bottom:20px;">
+  <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
+    {% if kat=='jaringan' %}🌐 Jaringan
+    {% elif kat=='komunikasi' %}💬 Komunikasi
+    {% elif kat=='billing' %}🧾 Billing
+    {% elif kat=='laporan' %}📊 Laporan
+    {% elif kat=='premium' %}⭐ Premium
+    {% else %}{{ kat }}{% endif %}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+    {% for addon in kat_addons %}
+    {% set is_aktif = addon.id in aktif %}
+    <div class="card" style="{% if is_aktif %}opacity:.6;{% endif %}position:relative;">
+      {% if is_aktif %}
+      <div style="position:absolute;top:12px;right:12px;"><span class="badge-up">● AKTIF</span></div>
+      {% endif %}
+      <div style="font-size:28px;margin-bottom:8px;">{{ addon.ikon }}</div>
+      <div style="font-weight:700;font-size:14px;color:#1e293b;margin-bottom:4px;">{{ addon.nama }}</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.5;">{{ addon.deskripsi }}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;">
+        <div>
+          <span style="font-size:18px;font-weight:700;color:#1e293b;">Rp {{ "{:,}".format(addon.harga) }}</span>
+          <span style="font-size:11px;color:#94a3b8;">/bulan</span>
+        </div>
+        {% if is_aktif %}
+        <span class="badge-up">Aktif</span>
+        {% elif user.saldo < addon.harga %}
+        <button onclick="alert('Saldo tidak cukup. Silakan topup dulu.')" class="btn-secondary">
+          Topup Dulu
+        </button>
+        {% else %}
+        <button onclick="aktifkan({{ addon.id }}, '{{ addon.nama }}', {{ addon.harga }})"
+          class="btn-primary">
+          Aktifkan
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- Modal Konfirmasi -->
+<div id="modal-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="card" style="max-width:400px;width:90%;margin:0 auto;">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;" id="modal-title">Konfirmasi</h3>
+    <p style="font-size:13px;color:#64748b;margin-bottom:20px;" id="modal-body"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="tutupModal()" class="btn-secondary">Batal</button>
+      <button id="modal-ok-btn" class="btn-primary">Ya, Aktifkan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _pendingAddonId = null;
+
+function aktifkan(id, nama, harga) {
+  _pendingAddonId = id;
+  document.getElementById('modal-title').textContent = '🛒 Aktifkan ' + nama;
+  document.getElementById('modal-body').textContent =
+    'Saldo Rp ' + harga.toLocaleString('id') + '/bulan akan dipotong. Lanjutkan?';
+  document.getElementById('modal-ok-btn').textContent = 'Ya, Aktifkan';
+  document.getElementById('modal-ok-btn').onclick = () => doAktifkan(id);
+  document.getElementById('modal-confirm').style.display = 'flex';
+}
+
+function nonaktifkan(id, nama) {
+  _pendingAddonId = id;
+  document.getElementById('modal-title').textContent = '⚠️ Nonaktifkan ' + nama;
+  document.getElementById('modal-body').textContent =
+    'Add-on akan dinonaktifkan dan akun terkait dihapus. Yakin?';
+  document.getElementById('modal-ok-btn').textContent = 'Ya, Nonaktifkan';
+  document.getElementById('modal-ok-btn').onclick = () => doNonaktifkan(id);
+  document.getElementById('modal-confirm').style.display = 'flex';
+}
+
+function tutupModal() {
+  document.getElementById('modal-confirm').style.display = 'none';
+}
+
+async function doAktifkan(id) {
+  tutupModal();
+  const res = await fetch(`/addons/${id}/aktifkan`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    location.href = '/addons?ok=' + encodeURIComponent(data.msg);
+  } else {
+    alert('❌ ' + data.msg);
+  }
+}
+
+async function doNonaktifkan(id) {
+  tutupModal();
+  const res = await fetch(`/addons/${id}/nonaktifkan`, {method:'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    location.href = '/addons?ok=' + encodeURIComponent(data.msg);
+  } else {
+    alert('❌ ' + data.msg);
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% set active = "kalkulator_odp" %}
+{% block title %}Kalkulator ODP — {{ app_name }}{% endblock %}
+{% block topbar_title %}Kalkulator ODP{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Kalkulator ODP</h1>
+    <p class="page-sub">Hitung kebutuhan ODP, kabel, dan estimasi biaya untuk area baru</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- Input Panel -->
+  <div class="space-y-4">
+
+    <!-- Target Pelanggan -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Target Pelanggan</p>
+      <div class="space-y-4">
+        <div>
+          <label class="form-label">Jumlah Target Pelanggan</label>
+          <input type="number" id="inp-pelanggan" value="50" min="1" max="10000"
+            class="form-input" oninput="hitung()">
+          <p class="text-xs text-gray-400 mt-1">Total pelanggan yang ingin dilayani di area ini</p>
+        </div>
+        <div>
+          <label class="form-label">Tipe Splitter ODP</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="cursor-pointer">
+              <input type="radio" name="splitter" value="8" class="hidden splitter-radio" onchange="hitung()">
+              <div class="splitter-opt border-2 border-gray-200 rounded-xl p-3 text-center transition hover:border-blue-300">
+                <p class="font-bold text-gray-700 text-lg">1:8</p>
+                <p class="text-xs text-gray-400">8 port</p>
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="splitter" value="16" class="hidden splitter-radio" checked onchange="hitung()">
+              <div class="splitter-opt border-2 border-blue-500 rounded-xl p-3 text-center transition bg-blue-50">
+                <p class="font-bold text-blue-600 text-lg">1:16</p>
+                <p class="text-xs text-blue-400">16 port</p>
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="splitter" value="32" class="hidden splitter-radio" onchange="hitung()">
+              <div class="splitter-opt border-2 border-gray-200 rounded-xl p-3 text-center transition hover:border-blue-300">
+                <p class="font-bold text-gray-700 text-lg">1:32</p>
+                <p class="text-xs text-gray-400">32 port</p>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Utilisasi Port (%)</label>
+          <div class="flex items-center gap-3">
+            <input type="range" id="inp-utilisasi" min="50" max="100" value="80"
+              class="flex-1 accent-blue-500" oninput="document.getElementById('val-utilisasi').textContent=this.value+'%'; hitung()">
+            <span id="val-utilisasi" class="text-sm font-bold text-blue-600 w-10">80%</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">Tidak semua port akan terisi penuh. 80% adalah standar wajar</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kabel & Jarak -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Kabel & Jarak</p>
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Jarak OLT ke Area (m)</label>
+            <input type="number" id="inp-feeder" value="500" min="0" class="form-input" oninput="hitung()">
+            <p class="text-xs text-gray-400 mt-1">Kabel feeder utama</p>
+          </div>
+          <div>
+            <label class="form-label">Jarak ODP ke Rumah (m)</label>
+            <input type="number" id="inp-drop" value="30" min="1" class="form-input" oninput="hitung()">
+            <p class="text-xs text-gray-400 mt-1">Rata-rata per pelanggan</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Jarak antar ODP (m)</label>
+            <input type="number" id="inp-antar-odp" value="100" min="0" class="form-input" oninput="hitung()">
+          </div>
+          <div>
+            <label class="form-label">Cadangan Kabel (%)</label>
+            <input type="number" id="inp-cadangan" value="15" min="0" max="50" class="form-input" oninput="hitung()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Harga & Paket -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Biaya & Pendapatan</p>
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Harga ODP (Rp)</label>
+            <input type="number" id="inp-harga-odp" value="850000" class="form-input" oninput="hitung()">
+          </div>
+          <div>
+            <label class="form-label">Harga Kabel/meter (Rp)</label>
+            <input type="number" id="inp-harga-kabel" value="4500" class="form-input" oninput="hitung()">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Biaya Pemasangan/titik (Rp)</label>
+            <input type="number" id="inp-pasang" value="200000" class="form-input" oninput="hitung()">
+            <p class="text-xs text-gray-400 mt-1">Ongkos teknisi per pelanggan</p>
+          </div>
+          <div>
+            <label class="form-label">Harga Paket/bulan (Rp)</label>
+            <input type="number" id="inp-paket" value="200000" class="form-input" oninput="hitung()">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Biaya Operasional/bulan (Rp)</label>
+          <input type="number" id="inp-opex" value="500000" class="form-input" oninput="hitung()">
+          <p class="text-xs text-gray-400 mt-1">Listrik, internet backbone, dll</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Output Panel -->
+  <div class="space-y-4">
+
+    <!-- Hasil Jaringan -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Kebutuhan Jaringan</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-blue-50 rounded-2xl p-4 text-center">
+          <p class="text-3xl font-black text-blue-600" id="out-odp">—</p>
+          <p class="text-xs text-gray-500 mt-1">ODP dibutuhkan</p>
+        </div>
+        <div class="bg-indigo-50 rounded-2xl p-4 text-center">
+          <p class="text-3xl font-black text-indigo-600" id="out-port">—</p>
+          <p class="text-xs text-gray-500 mt-1">Total port tersedia</p>
+        </div>
+        <div class="bg-emerald-50 rounded-2xl p-4 text-center">
+          <p class="text-xl font-black text-emerald-600" id="out-feeder">—</p>
+          <p class="text-xs text-gray-500 mt-1">Kabel feeder (m)</p>
+        </div>
+        <div class="bg-teal-50 rounded-2xl p-4 text-center">
+          <p class="text-xl font-black text-teal-600" id="out-drop">—</p>
+          <p class="text-xs text-gray-500 mt-1">Kabel drop (m)</p>
+        </div>
+        <div class="col-span-2 bg-gray-50 rounded-2xl p-4 text-center">
+          <p class="text-2xl font-black text-gray-700" id="out-total-kabel">—</p>
+          <p class="text-xs text-gray-500 mt-1">Total kabel semua (m)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estimasi Biaya -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Estimasi Biaya Material</p>
+      <div class="space-y-2.5">
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Perangkat ODP</span>
+          <span class="font-bold text-gray-800" id="out-biaya-odp">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Kabel fiber</span>
+          <span class="font-bold text-gray-800" id="out-biaya-kabel">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Biaya pemasangan</span>
+          <span class="font-bold text-gray-800" id="out-biaya-pasang">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 bg-orange-50 rounded-xl px-3">
+          <span class="text-sm font-bold text-orange-700">Total Investasi</span>
+          <span class="font-black text-orange-600 text-lg" id="out-total-investasi">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROI & Break Even -->
+    <div class="card p-5">
+      <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Potensi Pendapatan & ROI</p>
+      <div class="space-y-2.5">
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Pendapatan/bulan (penuh)</span>
+          <span class="font-bold text-emerald-600" id="out-revenue">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Operasional/bulan</span>
+          <span class="font-bold text-gray-500" id="out-opex">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Profit bersih/bulan</span>
+          <span class="font-bold" id="out-profit">—</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-gray-50">
+          <span class="text-sm text-gray-600">Pendapatan/tahun</span>
+          <span class="font-bold text-gray-800" id="out-revenue-year">—</span>
+        </div>
+        <div class="flex justify-between items-center py-3 bg-emerald-50 rounded-xl px-3">
+          <div>
+            <p class="text-sm font-bold text-emerald-700">Break Even Point</p>
+            <p class="text-xs text-emerald-500">Modal balik dalam</p>
+          </div>
+          <span class="font-black text-emerald-600 text-xl" id="out-bep">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ringkasan teks -->
+    <div id="ringkasan" class="card p-5 bg-gradient-to-br from-slate-800 to-slate-900 text-white hidden">
+      <p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Ringkasan Rencana</p>
+      <p id="teks-ringkasan" class="text-sm leading-relaxed text-slate-200"></p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Format Rupiah
+function rp(n) {
+  if (n >= 1e9) return 'Rp ' + (n/1e9).toFixed(1).replace(/\.0$/,'') + ' M';
+  if (n >= 1e6) return 'Rp ' + (n/1e6).toFixed(1).replace(/\.0$/,'') + ' jt';
+  return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+}
+
+function num(id) { return parseFloat(document.getElementById(id).value) || 0; }
+function set(id, val) { document.getElementById(id).textContent = val; }
+
+function hitung() {
+  const pelanggan   = num('inp-pelanggan');
+  const splitter    = parseInt(document.querySelector('.splitter-radio:checked')?.value || 16);
+  const utilisasi   = num('inp-utilisasi') / 100;
+  const feeder      = num('inp-feeder');
+  const dropPerPel  = num('inp-drop');
+  const antarOdp    = num('inp-antar-odp');
+  const cadangan    = 1 + (num('inp-cadangan') / 100);
+  const hargaOdp    = num('inp-harga-odp');
+  const hargaKabel  = num('inp-harga-kabel');
+  const biayaPasang = num('inp-pasang');
+  const hargaPaket  = num('inp-paket');
+  const opex        = num('inp-opex');
+
+  // Hitung ODP
+  const portEfektif = splitter * utilisasi;
+  const jumlahOdp   = Math.ceil(pelanggan / portEfektif);
+  const totalPort   = jumlahOdp * splitter;
+
+  // Hitung kabel
+  const kabelFeeder = feeder;
+  const kabelAntarOdp = (jumlahOdp - 1) * antarOdp;
+  const kabelDrop   = pelanggan * dropPerPel;
+  const totalKabel  = Math.round((kabelFeeder + kabelAntarOdp + kabelDrop) * cadangan);
+
+  // Biaya
+  const biayaOdp    = jumlahOdp * hargaOdp;
+  const biayaKabel  = totalKabel * hargaKabel;
+  const biayaPasangTotal = pelanggan * biayaPasang;
+  const totalInvestasi = biayaOdp + biayaKabel + biayaPasangTotal;
+
+  // Revenue
+  const revenue     = pelanggan * hargaPaket;
+  const profit      = revenue - opex;
+  const bepBulan    = profit > 0 ? Math.ceil(totalInvestasi / profit) : null;
+
+  // Set outputs
+  set('out-odp', jumlahOdp);
+  set('out-port', totalPort);
+  set('out-feeder', Math.round((kabelFeeder + kabelAntarOdp) * cadangan).toLocaleString('id-ID'));
+  set('out-drop', Math.round(kabelDrop * cadangan).toLocaleString('id-ID'));
+  set('out-total-kabel', totalKabel.toLocaleString('id-ID'));
+  set('out-biaya-odp', rp(biayaOdp));
+  set('out-biaya-kabel', rp(biayaKabel));
+  set('out-biaya-pasang', rp(biayaPasangTotal));
+  set('out-total-investasi', rp(totalInvestasi));
+  set('out-revenue', rp(revenue));
+  set('out-opex', rp(opex));
+
+  const profitEl = document.getElementById('out-profit');
+  profitEl.textContent = rp(profit);
+  profitEl.className = 'font-bold ' + (profit >= 0 ? 'text-emerald-600' : 'text-red-500');
+
+  set('out-revenue-year', rp(profit * 12));
+
+  const bepEl = document.getElementById('out-bep');
+  if (bepBulan === null) {
+    bepEl.textContent = '∞';
+    bepEl.className = 'font-black text-red-500 text-xl';
+  } else if (bepBulan <= 12) {
+    bepEl.textContent = bepBulan + ' bulan';
+    bepEl.className = 'font-black text-emerald-600 text-xl';
+  } else {
+    const thn = Math.floor(bepBulan/12);
+    const bln = bepBulan % 12;
+    bepEl.textContent = thn + ' thn' + (bln ? ' ' + bln + ' bln' : '');
+    bepEl.className = 'font-black text-amber-500 text-xl';
+  }
+
+  // Ringkasan teks
+  const ring = document.getElementById('ringkasan');
+  const txt = document.getElementById('teks-ringkasan');
+  ring.classList.remove('hidden');
+  txt.textContent = `Untuk melayani ${Math.round(pelanggan)} pelanggan menggunakan splitter 1:${splitter}, `
+    + `dibutuhkan ${jumlahOdp} ODP dengan total ${totalPort} port (utilisasi ${Math.round(utilisasi*100)}%). `
+    + `Total kabel yang diperlukan ±${totalKabel.toLocaleString('id-ID')} meter. `
+    + `Estimasi investasi awal ${rp(totalInvestasi)}, dengan potensi pendapatan ${rp(revenue)}/bulan `
+    + `dan profit bersih ${rp(profit)}/bulan. `
+    + (bepBulan ? `Modal kembali dalam ±${bepBulan} bulan.` : 'Modal belum kembali karena operasional melebihi pendapatan.');
+}
+
+// Splitter radio styling
+document.querySelectorAll('.splitter-radio').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.splitter-opt').forEach(el => {
+      el.className = 'splitter-opt border-2 border-gray-200 rounded-xl p-3 text-center transition hover:border-blue-300';
+      el.querySelector('p:first-child').className = 'font-bold text-gray-700 text-lg';
+      el.querySelector('p:last-child').className = 'text-xs text-gray-400';
+    });
+    const sel = radio.closest('label').querySelector('.splitter-opt');
+    sel.className = 'splitter-opt border-2 border-blue-500 rounded-xl p-3 text-center transition bg-blue-50';
+    sel.querySelector('p:first-child').className = 'font-bold text-blue-600 text-lg';
+    sel.querySelector('p:last-child').className = 'text-xs text-blue-400';
+  });
+});
+
+// Hitung saat load
+hitung();
+</script>
+{% endblock %}

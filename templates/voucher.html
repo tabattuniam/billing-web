@@ -4,6 +4,41 @@
 {% block topbar_title %}Voucher Hotspot{% endblock %}
 
 {% block content %}
+
+{% set ok = request.query_params.get('ok','') %}
+{% set jumlah_gen = request.query_params.get('jumlah','') %}
+{% set pushed = request.query_params.get('pushed','0') %}
+{% set failed = request.query_params.get('failed','0') %}
+
+{% if ok == 'generate_ok' %}
+<div class="mb-4 px-4 py-3 rounded-xl border flex items-center gap-3
+  {% if pushed|int > 0 %}bg-green-50 border-green-200 text-green-700
+  {% else %}bg-blue-50 border-blue-200 text-blue-700{% endif %}">
+  <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <span class="text-sm font-medium">
+    {{ jumlah_gen }} voucher berhasil dibuat.
+    {% if pushed|int > 0 %} {{ pushed }} berhasil di-push ke MikroTik.
+    {% else %} Push MikroTik tidak dipilih.{% endif %}
+  </span>
+</div>
+{% elif ok == 'generate_push_error' %}
+<div class="mb-4 px-4 py-3 rounded-xl border bg-yellow-50 border-yellow-300 text-yellow-800 flex items-start gap-3">
+  <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+  </svg>
+  <div class="text-sm">
+    <p class="font-semibold">{{ jumlah_gen }} voucher dibuat — sebagian gagal push ke MikroTik</p>
+    <p class="mt-0.5">
+      {% if pushed|int > 0 %}{{ pushed }} berhasil push. {% endif %}
+      <span class="text-red-600 font-medium">{{ failed }} voucher gagal push.</span>
+      Gunakan tombol <strong>Push Ulang</strong> di bawah untuk mencoba lagi.
+    </p>
+  </div>
+</div>
+{% endif %}
+
 <div class="page-header">
   <div>
     <h1 class="page-title">Voucher Hotspot</h1>
@@ -107,6 +142,7 @@
           <th class="th">Profile / Speed</th>
           <th class="th">Server</th>
           <th class="th">Comment</th>
+          <th class="th">Tgl Generate</th>
           <th class="th">Status</th>
           <th class="th">Aksi</th>
         </tr>
@@ -143,13 +179,33 @@
           {% endif %}
         </td>
         <td class="td">
-          {% if v.status=='tersedia' %}
-          <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Tersedia</span>
-          {% elif v.status=='dipakai' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Dipakai</span>
+          {% if v.created_at %}
+          <span class="text-xs text-slate-500">{{ v.created_at | ts_date }}</span>
           {% else %}
-          <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expired</span>
+          <span class="text-xs text-slate-300">—</span>
           {% endif %}
+        </td>
+        <td class="td">
+          <div class="flex flex-col gap-1">
+            {% if v.status=='tersedia' %}
+            <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Tersedia</span>
+            {% elif v.status=='dipakai' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Dipakai</span>
+            {% else %}
+            <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expired</span>
+            {% endif %}
+            {% if v.mt_pushed %}
+            <span class="inline-flex items-center gap-1 text-xs text-teal-600 font-medium" title="Sudah ada di MikroTik">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+              MikroTik ✓
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-xs text-orange-500 font-medium" title="Belum di-push ke MikroTik">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+              Belum push
+            </span>
+            {% endif %}
+          </div>
         </td>
         <td class="td">
           {% if v.status=='tersedia' %}

@@ -88,6 +88,8 @@ class Storage:
             con.execute("ALTER TABLE voucher_hotspot ADD COLUMN comment TEXT DEFAULT ''")
         if "agen_id" not in vh_cols:
             con.execute("ALTER TABLE voucher_hotspot ADD COLUMN agen_id TEXT DEFAULT ''")
+        if "mt_pushed" not in vh_cols:
+            con.execute("ALTER TABLE voucher_hotspot ADD COLUMN mt_pushed INTEGER DEFAULT 0")
 
         u_cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
         if "qris_image" not in u_cols:
@@ -146,7 +148,87 @@ class Storage:
         hp_cols = {r[1] for r in con.execute("PRAGMA table_info(hotspot_pelanggan)")}
         if "catatan" not in hp_cols:
             con.execute("ALTER TABLE hotspot_pelanggan ADD COLUMN catatan TEXT DEFAULT ''")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS saldo_adjustments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                amount      INTEGER NOT NULL,
+                saldo_before INTEGER NOT NULL,
+                saldo_after  INTEGER NOT NULL,
+                catatan     TEXT DEFAULT '',
+                by_sa       INTEGER DEFAULT 1,
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS odc (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL,
+                server_id       TEXT NOT NULL DEFAULT '',
+                nama            TEXT NOT NULL,
+                lokasi          TEXT DEFAULT '',
+                tipe_splitter   TEXT DEFAULT '1:4',
+                daya_masuk_dbm  REAL DEFAULT -3.0,
+                lat             REAL DEFAULT NULL,
+                lng             REAL DEFAULT NULL,
+                created_at      INTEGER NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS odp (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                server_id   TEXT NOT NULL DEFAULT '',
+                nama        TEXT NOT NULL,
+                lokasi      TEXT DEFAULT '',
+                kapasitas   INTEGER NOT NULL DEFAULT 8,
+                created_at  INTEGER NOT NULL
+            )
+        """)
+        odp_cols = {r[1] for r in con.execute("PRAGMA table_info(odp)")}
+        if "server_id" not in odp_cols:
+            con.execute("ALTER TABLE odp ADD COLUMN server_id TEXT NOT NULL DEFAULT ''")
+        if "lat" not in odp_cols:
+            con.execute("ALTER TABLE odp ADD COLUMN lat REAL DEFAULT NULL")
+        if "lng" not in odp_cols:
+            con.execute("ALTER TABLE odp ADD COLUMN lng REAL DEFAULT NULL")
+        if "odc_id" not in odp_cols:
+            con.execute("ALTER TABLE odp ADD COLUMN odc_id INTEGER DEFAULT NULL")
+        if "tap_tipe" not in odp_cols:
+            con.execute("ALTER TABLE odp ADD COLUMN tap_tipe TEXT DEFAULT ''")
+        pu_cols2 = {r[1] for r in con.execute("PRAGMA table_info(pppoe_users)")}
+        if "odp_id" not in pu_cols2:
+            con.execute("ALTER TABLE pppoe_users ADD COLUMN odp_id INTEGER DEFAULT NULL")
+        if "odp_port" not in pu_cols2:
+            con.execute("ALTER TABLE pppoe_users ADD COLUMN odp_port INTEGER DEFAULT NULL")
+
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS platform_config (
+                key     TEXT PRIMARY KEY,
+                value   TEXT NOT NULL DEFAULT '',
+                updated_at INTEGER NOT NULL DEFAULT 0
+            )
+        """)
         con.commit()
+
+    # ── Platform Config ───────────────────────────────────────────────────────
+
+    def get_platform_config(self, key: str) -> str:
+        con = self._conn()
+        row = con.execute("SELECT value FROM platform_config WHERE key=?", (key,)).fetchone()
+        con.close()
+        return row[0] if row else ""
+
+    def set_platform_config(self, key: str, value: str):
+        con = self._conn()
+        con.execute(
+            "INSERT INTO platform_config (key,value,updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, value, int(time.time()))
+        )
+        con.commit()
+        con.close()
 
     def log_activity(self, user_id: str, role: str, aksi: str, detail: str = "", ip: str = ""):
         import time as _time
@@ -558,6 +640,64 @@ class Storage:
         con.commit()
         con.close()
 
+    # ── Superadmin ────────────────────────────────────────────────────────────
+
+    def list_tenants(self) -> list[dict]:
+        con = self._conn()
+        rows = con.execute(
+            "SELECT * FROM users WHERE role='admin' ORDER BY nama"
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_tenant_stats(self, uid: str) -> dict:
+        con = self._conn()
+        pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (uid,)).fetchone()[0]
+        voucher = con.execute("SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='tersedia'", (uid,)).fetchone()[0]
+        transaksi = con.execute("SELECT COUNT(*) FROM transaksi WHERE user_id=?", (uid,)).fetchone()[0]
+        omzet   = con.execute("SELECT COALESCE(SUM(amount),0) FROM transaksi WHERE user_id=? AND status='paid'", (uid,)).fetchone()[0]
+        servers = con.execute("SELECT COUNT(*) FROM mikrotik_servers WHERE user_id=?", (uid,)).fetchone()[0]
+        agen    = con.execute("SELECT COUNT(*) FROM users WHERE parent_id=? AND role='agen'", (uid,)).fetchone()[0]
+        con.close()
+        return {
+            "pppoe": pppoe, "voucher": voucher,
+            "transaksi": transaksi, "omzet": omzet,
+            "servers": servers, "agen": agen,
+        }
+
+    def adjust_saldo_admin(self, uid: str, amount: int, catatan: str) -> dict | None:
+        """Tambah atau kurangi saldo tenant. amount bisa negatif."""
+        con = self._conn()
+        row = con.execute("SELECT saldo FROM users WHERE id=?", (uid,)).fetchone()
+        if not row:
+            con.close()
+            return None
+        saldo_before = int(row["saldo"])
+        saldo_after = max(0, saldo_before + amount)
+        con.execute("UPDATE users SET saldo=? WHERE id=?", (saldo_after, uid))
+        con.execute(
+            "INSERT INTO saldo_adjustments (user_id, amount, saldo_before, saldo_after, catatan, by_sa, created_at) VALUES (?,?,?,?,?,1,?)",
+            (uid, amount, saldo_before, saldo_after, catatan, int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return {"saldo_before": saldo_before, "saldo_after": saldo_after}
+
+    def list_saldo_adjustments(self, uid: str = "", limit: int = 50) -> list[dict]:
+        con = self._conn()
+        if uid:
+            rows = con.execute(
+                "SELECT sa.*, u.nama, u.username FROM saldo_adjustments sa LEFT JOIN users u ON u.id=sa.user_id WHERE sa.user_id=? ORDER BY sa.created_at DESC LIMIT ?",
+                (uid, limit)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT sa.*, u.nama, u.username FROM saldo_adjustments sa LEFT JOIN users u ON u.id=sa.user_id ORDER BY sa.created_at DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
     def stats_agen(self, uid: str) -> dict:
         con = self._conn()
         pppoe   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (uid,)).fetchone()[0]
@@ -664,12 +804,24 @@ class Storage:
         con.close()
         return pid
 
-    def list_pppoe_users(self, user_id: str, server_id: str = None) -> list[dict]:
+    def list_pppoe_users(self, user_id: str, server_id: str = None, odp_id: int = None) -> list[dict]:
         con = self._conn()
+        base = ("SELECT p.*, pk.nama as paket_nama, pk.kecepatan, "
+                "s.nama as server_nama, o.nama as odp_nama "
+                "FROM pppoe_users p "
+                "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+                "LEFT JOIN mikrotik_servers s ON s.id=p.server_id "
+                "LEFT JOIN odp o ON o.id=p.odp_id "
+                "WHERE p.user_id=?")
+        args: list = [user_id]
         if server_id:
-            rows = con.execute("SELECT p.*, pk.nama as paket_nama, pk.kecepatan FROM pppoe_users p LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id WHERE p.user_id=? AND p.server_id=? ORDER BY p.nama_pelanggan", (user_id, server_id)).fetchall()
-        else:
-            rows = con.execute("SELECT p.*, pk.nama as paket_nama, pk.kecepatan, s.nama as server_nama FROM pppoe_users p LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id LEFT JOIN mikrotik_servers s ON s.id=p.server_id WHERE p.user_id=? ORDER BY p.nama_pelanggan", (user_id,)).fetchall()
+            base += " AND p.server_id=?"
+            args.append(server_id)
+        if odp_id is not None:
+            base += " AND p.odp_id=?"
+            args.append(odp_id)
+        base += " ORDER BY p.nama_pelanggan"
+        rows = con.execute(base, args).fetchall()
         con.close()
         return [dict(r) for r in rows]
 
@@ -706,6 +858,161 @@ class Storage:
         con.execute("DELETE FROM pppoe_users WHERE id=?", (pid,))
         con.commit()
         con.close()
+
+    # ── ODP ───────────────────────────────────────────────────────────────────
+
+    def list_odp(self, user_id: str, server_id: str = None) -> list[dict]:
+        con = self._conn()
+        q = ("SELECT o.*, s.nama as server_nama, COUNT(p.id) as terpakai, "
+             "c.nama as odc_nama, c.tipe_splitter as odc_tipe, c.daya_masuk_dbm as odc_daya "
+             "FROM odp o "
+             "LEFT JOIN mikrotik_servers s ON s.id=o.server_id "
+             "LEFT JOIN pppoe_users p ON p.odp_id=o.id "
+             "LEFT JOIN odc c ON c.id=o.odc_id "
+             "WHERE o.user_id=?")
+        args: list = [user_id]
+        if server_id:
+            q += " AND o.server_id=?"
+            args.append(server_id)
+        q += " GROUP BY o.id ORDER BY o.server_id, o.odc_id, o.nama"
+        rows = con.execute(q, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_odp(self, odp_id: int) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM odp WHERE id=?", (odp_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    # ── ODC ───────────────────────────────────────────────────────────────────
+
+    # Tabel daya loss per tap/splitter tipe (dalam dB, negatif = loss)
+    TAP_LOSS = {
+        "20/80": (-7.0, -1.0),   # (loss ke ODP, loss lanjut ke kabel)
+        "30/70": (-5.2, -1.5),
+        "50/50": (-3.0, -3.0),
+        "10/90": (-10.0, -0.5),
+        "1:4":   (-6.0, None),
+        "1:8":   (-9.0, None),
+        "1:16":  (-12.0, None),
+        "1:32":  (-15.0, None),
+    }
+    SPLITTER_LOSS = {"1:4": -6.0, "1:8": -9.0, "1:16": -12.0, "1:32": -15.0}
+
+    def list_odc(self, user_id: str, server_id: str = None) -> list[dict]:
+        con = self._conn()
+        q = ("SELECT o.*, s.nama as server_nama, COUNT(p.id) as jumlah_odp "
+             "FROM odc o "
+             "LEFT JOIN mikrotik_servers s ON s.id=o.server_id "
+             "LEFT JOIN odp p ON p.odc_id=o.id "
+             "WHERE o.user_id=?")
+        params = [user_id]
+        if server_id:
+            q += " AND o.server_id=?"; params.append(server_id)
+        q += " GROUP BY o.id ORDER BY o.nama"
+        rows = con.execute(q, params).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_odc(self, odc_id: int) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM odc WHERE id=?", (odc_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def create_odc(self, user_id: str, server_id: str, nama: str, lokasi: str,
+                   tipe_splitter: str, daya_masuk_dbm: float,
+                   lat: float = None, lng: float = None) -> int:
+        con = self._conn()
+        cur = con.execute(
+            "INSERT INTO odc (user_id,server_id,nama,lokasi,tipe_splitter,daya_masuk_dbm,lat,lng,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, server_id, nama, lokasi, tipe_splitter, daya_masuk_dbm, lat, lng, int(time.time()))
+        )
+        con.commit()
+        oid = cur.lastrowid
+        con.close()
+        return oid
+
+    def update_odc(self, odc_id: int, server_id: str, nama: str, lokasi: str,
+                   tipe_splitter: str, daya_masuk_dbm: float,
+                   lat: float = None, lng: float = None):
+        con = self._conn()
+        con.execute(
+            "UPDATE odc SET server_id=?,nama=?,lokasi=?,tipe_splitter=?,daya_masuk_dbm=?,lat=?,lng=? WHERE id=?",
+            (server_id, nama, lokasi, tipe_splitter, daya_masuk_dbm, lat, lng, odc_id)
+        )
+        con.commit()
+        con.close()
+
+    def delete_odc(self, odc_id: int):
+        con = self._conn()
+        con.execute("UPDATE odp SET odc_id=NULL, tap_tipe='' WHERE odc_id=?", (odc_id,))
+        con.execute("DELETE FROM odc WHERE id=?", (odc_id,))
+        con.commit()
+        con.close()
+
+    def def_odp_power(self, odc: dict, tap_tipe: str) -> float | None:
+        """Hitung estimasi daya di ODP berdasarkan ODC input dan tipe tap."""
+        masuk = odc.get("daya_masuk_dbm")
+        if masuk is None:
+            return None
+        loss_odp, _ = self.TAP_LOSS.get(tap_tipe, (-9.0, None))
+        # Loss splitter ODC ke cabang
+        spl = self.SPLITTER_LOSS.get(odc.get("tipe_splitter", ""), 0)
+        return round(masuk + spl + loss_odp, 1)
+
+    # ── ODP ───────────────────────────────────────────────────────────────────
+
+    def create_odp(self, user_id: str, server_id: str, nama: str, lokasi: str, kapasitas: int,
+                   lat: float = None, lng: float = None,
+                   odc_id: int = None, tap_tipe: str = "") -> int:
+        con = self._conn()
+        cur = con.execute(
+            "INSERT INTO odp (user_id,server_id,nama,lokasi,kapasitas,lat,lng,odc_id,tap_tipe,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (user_id, server_id, nama, lokasi, kapasitas, lat, lng, odc_id, tap_tipe, int(time.time()))
+        )
+        con.commit()
+        oid = cur.lastrowid
+        con.close()
+        return oid
+
+    def update_odp(self, odp_id: int, server_id: str, nama: str, lokasi: str, kapasitas: int,
+                   lat: float = None, lng: float = None,
+                   odc_id: int = None, tap_tipe: str = ""):
+        con = self._conn()
+        con.execute(
+            "UPDATE odp SET server_id=?,nama=?,lokasi=?,kapasitas=?,lat=?,lng=?,odc_id=?,tap_tipe=? WHERE id=?",
+            (server_id, nama, lokasi, kapasitas, lat, lng, odc_id, tap_tipe, odp_id)
+        )
+        con.commit()
+        con.close()
+
+    def delete_odp(self, odp_id: int):
+        con = self._conn()
+        con.execute("UPDATE pppoe_users SET odp_id=NULL, odp_port=NULL WHERE odp_id=?", (odp_id,))
+        con.execute("DELETE FROM odp WHERE id=?", (odp_id,))
+        con.commit()
+        con.close()
+
+    def assign_odp(self, pppoe_id: int, odp_id, odp_port):
+        con = self._conn()
+        con.execute("UPDATE pppoe_users SET odp_id=?, odp_port=? WHERE id=?", (odp_id, odp_port, pppoe_id))
+        con.commit()
+        con.close()
+
+    def list_pppoe_by_odp(self, user_id: str, odp_id: int) -> list[dict]:
+        con = self._conn()
+        rows = con.execute(
+            "SELECT p.*, pk.nama as paket_nama, pk.kecepatan FROM pppoe_users p "
+            "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+            "WHERE p.user_id=? AND p.odp_id=? ORDER BY p.odp_port",
+            (user_id, odp_id)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
 
     # ── Paket Hotspot ─────────────────────────────────────────────────────────
 
@@ -761,6 +1068,23 @@ class Storage:
         con.commit()
         con.close()
         return kodes
+
+    def set_voucher_mt_pushed(self, kode: str, pushed: bool = True):
+        con = self._conn()
+        con.execute("UPDATE voucher_hotspot SET mt_pushed=? WHERE kode=?", (1 if pushed else 0, kode))
+        con.commit()
+        con.close()
+
+    def set_vouchers_mt_pushed(self, kodes: list[str], pushed: bool = True):
+        """Bulk update mt_pushed untuk list kode."""
+        if not kodes:
+            return
+        con = self._conn()
+        val = 1 if pushed else 0
+        con.executemany("UPDATE voucher_hotspot SET mt_pushed=? WHERE kode=?",
+                        [(val, k) for k in kodes])
+        con.commit()
+        con.close()
 
     def list_vouchers(self, user_id: str, server_id: str = None, status: str = None, paket_id: str = None, comment: str = None) -> list[dict]:
         con = self._conn()
@@ -1037,6 +1361,67 @@ class Storage:
         con.close()
         return row
 
+    def list_tarik_saldo_all(self) -> list[dict]:
+        """SA: list semua tarik saldo dari semua tenant ISP."""
+        con = self._conn()
+        self._ensure_tarik_saldo_table(con)
+        rows = con.execute(
+            "SELECT t.*, u.nama as isp_nama, u.nomor_wa as isp_wa "
+            "FROM tarik_saldo t JOIN users u ON u.id=t.user_id "
+            "ORDER BY t.created_at DESC LIMIT 200"
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    TARIK_FEE = 5_000
+
+    def approve_tarik_saldo_sa(self, rid: int, admin_note: str = "") -> dict | None:
+        """SA approve tarik saldo ISP: potong nominal + biaya admin Rp 5.000."""
+        con = self._conn()
+        self._ensure_tarik_saldo_table(con)
+        row = con.execute(
+            "SELECT * FROM tarik_saldo WHERE id=? AND status='pending'", (rid,)
+        ).fetchone()
+        if not row:
+            con.close()
+            return None
+        row = dict(row)
+        now = int(time.time())
+        total_potong = row["nominal"] + self.TARIK_FEE
+        con.execute("UPDATE users SET saldo=MAX(0, saldo-?) WHERE id=?", (total_potong, row["user_id"]))
+        con.execute("UPDATE tarik_saldo SET status='approved', admin_note=?, processed_at=? WHERE id=?",
+                    (admin_note, now, rid))
+        con.execute(
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
+            (row["user_id"], row["nominal"], "debit",
+             f"Tarik saldo disetujui platform — {row['bank_name']} {row['rekening_no']}", now)
+        )
+        con.execute(
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
+            (row["user_id"], self.TARIK_FEE, "debit", f"Biaya admin tarik saldo #{rid}", now)
+        )
+        con.commit()
+        con.close()
+        return row
+
+    def reject_tarik_saldo_sa(self, rid: int, admin_note: str = "") -> dict | None:
+        """SA reject tarik saldo ISP tanpa cek isp_id."""
+        con = self._conn()
+        self._ensure_tarik_saldo_table(con)
+        row = con.execute(
+            "SELECT * FROM tarik_saldo WHERE id=? AND status='pending'", (rid,)
+        ).fetchone()
+        if not row:
+            con.close()
+            return None
+        row = dict(row)
+        now = int(time.time())
+        con.execute("UPDATE tarik_saldo SET status='rejected', admin_note=?, processed_at=? WHERE id=?",
+                    (admin_note, now, rid))
+        con.commit()
+        con.close()
+        return row
+
     def count_tarik_pending(self, isp_id: str) -> int:
         con = self._conn()
         self._ensure_tarik_saldo_table(con)
@@ -1184,6 +1569,51 @@ class Storage:
         order = con.execute(
             "SELECT * FROM topup_orders WHERE id=? AND isp_id=? AND tipe='manual' AND status='pending'",
             (oid, isp_id)
+        ).fetchone()
+        if not order:
+            con.close()
+            return None
+        con.execute("UPDATE topup_orders SET status='rejected' WHERE id=?", (oid,))
+        con.commit()
+        con.close()
+        return dict(order)
+
+    def approve_topup_manual_sa(self, oid: str) -> dict | None:
+        """SA approve topup manual: agen saldo + dan ISP saldo + (platform titip ke ISP)."""
+        con = self._conn()
+        order = con.execute(
+            "SELECT * FROM topup_orders WHERE id=? AND tipe='manual' AND status='pending'",
+            (oid,)
+        ).fetchone()
+        if not order:
+            con.close()
+            return None
+        order = dict(order)
+        now = int(time.time())
+        con.execute("UPDATE topup_orders SET status='paid', paid_at=? WHERE id=?", (now, oid))
+        # Agen saldo bertambah
+        con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (order["amount"], order["user_id"]))
+        con.execute(
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
+            (order["user_id"], order["amount"], "kredit", f"Topup QRIS disetujui platform #{oid}", now)
+        )
+        # ISP saldo bertambah saat SA approve topup
+        if order.get("isp_id"):
+            con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (order["amount"], order["isp_id"]))
+            con.execute(
+                "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
+                (order["isp_id"], order["amount"], "kredit", f"Topup agen disetujui platform #{oid}", now)
+            )
+        con.commit()
+        con.close()
+        return order
+
+    def reject_topup_manual_sa(self, oid: str) -> dict | None:
+        """SA reject topup manual tanpa cek isp_id."""
+        con = self._conn()
+        order = con.execute(
+            "SELECT * FROM topup_orders WHERE id=? AND tipe='manual' AND status='pending'",
+            (oid,)
         ).fetchone()
         if not order:
             con.close()
@@ -1591,17 +2021,12 @@ class Storage:
                 return {"ok": False, "msg": "Stok voucher habis"}
             voucher = dict(voucher)
 
-            # Atomik: debit saldo + tandai voucher + catat log
+            # Atomik: debit saldo agen + tandai voucher + catat log
             con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (paket["harga"], buyer_uid))
-            con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (paket["harga"], isp_uid))
             con.execute("UPDATE voucher_hotspot SET status='dipakai', dipakai_at=? WHERE id=?", (int(time.time()), voucher["id"]))
             con.execute(
                 "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
                 (buyer_uid, paket["harga"], "debit", f"Beli voucher {paket['nama']} - {voucher['kode']}", int(time.time()))
-            )
-            con.execute(
-                "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
-                (isp_uid, paket["harga"], "kredit", f"Voucher terjual ke agen - {voucher['kode']}", int(time.time()))
             )
             con.commit()
             return {"ok": True, "kode": voucher["kode"], "paket": paket["nama"], "msg": "Berhasil"}

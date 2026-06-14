@@ -98,6 +98,19 @@
   </div>
   {% endif %}
 
+  {% if ok_msg == 'generate_push_error' and last_kodes %}
+  <div class="card p-4 border-yellow-200 bg-yellow-50">
+    <p class="text-sm font-semibold text-yellow-800">
+      ⚠ {{ last_kodes | length }} voucher digenerate, tetapi gagal push ke MikroTik. Hubungi ISP untuk push manual.
+    </p>
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      {% for k in last_kodes %}
+      <span class="font-mono text-xs bg-white border border-yellow-200 text-yellow-700 font-bold px-2 py-1 rounded-lg">{{ k }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if ok_msg == 'topup' %}
   <div class="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-sm text-emerald-700">
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,10 +441,10 @@
         </button>
         {% endfor %}
       </div>
-      {% if isp and isp.qris_image %}
+      {% if platform_qris %}
       <div class="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 font-medium flex items-center gap-2">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.24M10.07 4.26A10 10 0 1020 14H10"/></svg>
-        Bayar via QRIS ISP — konfirmasi manual
+        Bayar via QRIS — konfirmasi manual oleh ISP
       </div>
       <div class="flex gap-2">
         <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
@@ -445,15 +458,15 @@
       {% endif %}
     </div>
 
-    <!-- Step 2: Tampilkan QRIS ISP -->
+    <!-- Step 2: Tampilkan QRIS Platform -->
     <div id="topup-step2" class="hidden">
       <div class="text-center mb-3">
         <p class="text-sm text-gray-600 mb-1">Transfer sejumlah:</p>
         <p id="topup-nominal-display" class="text-2xl font-bold text-emerald-700"></p>
       </div>
-      {% if isp and isp.qris_image %}
+      {% if platform_qris %}
       <div class="flex justify-center mb-3">
-        <img src="{{ isp.qris_image }}" alt="QRIS" class="w-52 h-52 object-contain border rounded-xl p-1">
+        <img src="{{ platform_qris }}" alt="QRIS" class="w-52 h-52 object-contain border rounded-xl p-1">
       </div>
       {% endif %}
       <p class="text-xs text-center text-gray-400 mb-4">Scan QRIS di atas, lalu klik tombol di bawah setelah transfer berhasil</p>

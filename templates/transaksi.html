@@ -7,53 +7,132 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Riwayat Transaksi</h1>
-    <p class="page-sub">{{ txs|length }} transaksi terakhir</p>
+    <p class="page-sub">Semua transaksi — voucher online, tagihan PPPoE, dan lainnya</p>
   </div>
 </div>
 
+<!-- Stats -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4">
+    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Total Transaksi</p>
+    <p class="text-2xl font-black text-gray-900 mt-1">{{ stats.total }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">bulan ini</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Omzet Lunas</p>
+    <p class="text-2xl font-black text-emerald-600 mt-1">{{ stats.omzet | rp }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">{{ stats.paid }} transaksi</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-yellow-500 font-medium uppercase tracking-wide">Menunggu Bayar</p>
+    <p class="text-2xl font-black text-yellow-600 mt-1">{{ stats.pending }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">transaksi pending</p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Bulan</p>
+    <p class="text-lg font-black text-blue-600 mt-1">{{ sel_bulan }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">periode aktif</p>
+  </div>
+</div>
+
+<!-- Filter -->
+<form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
+  <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-select !w-auto">
+  <select name="tipe" class="form-select !w-auto min-w-[180px]">
+    <option value="">Semua Tipe</option>
+    <option value="hotspot_order" {% if sel_tipe=='hotspot_order' %}selected{% endif %}>Voucher Online</option>
+    <option value="tagihan_pppoe" {% if sel_tipe=='tagihan_pppoe' %}selected{% endif %}>Tagihan PPPoE</option>
+    <option value="pppoe"         {% if sel_tipe=='pppoe' %}selected{% endif %}>Tambah PPPoE</option>
+  </select>
+  <button type="submit" class="btn-primary px-4 py-2.5">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+    Filter
+  </button>
+  {% if sel_tipe %}
+  <a href="/transaksi?bulan={{ sel_bulan }}" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
+  {% endif %}
+</form>
+
+<!-- Table -->
+{% if not txs %}
+<div class="card p-16 text-center">
+  <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+    <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+  </div>
+  <p class="text-slate-500 font-medium">Belum ada transaksi</p>
+  <p class="text-slate-400 text-sm mt-1">untuk periode {{ sel_bulan }}</p>
+</div>
+{% else %}
 <div class="card overflow-hidden">
   <div class="overflow-x-auto">
-    <table class="w-full">
-      <thead class="bg-slate-50 border-b border-slate-100">
+    <table class="w-full text-sm">
+      <thead>
         <tr>
-          <th>ID Transaksi</th>
-          <th>Tipe</th>
-          <th>Keterangan</th>
-          <th>Jumlah</th>
-          <th>Status</th>
-          <th>Tanggal</th>
+          <th class="th">ID</th>
+          <th class="th">Tipe</th>
+          <th class="th">Keterangan</th>
+          <th class="th">Jumlah</th>
+          <th class="th">Status</th>
+          <th class="th">Tanggal</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-gray-50">
       {% for t in txs %}
-      <tr>
-        <td><span class="font-mono text-xs text-slate-400">{{ t.id }}</span></td>
-        <td>
-          {% if t.ref_type=='pppoe' %}
-          <span class="badge-blue">PPPoE</span>
-          {% elif t.ref_type=='voucher' %}
-          <span class="badge-orange">Voucher</span>
+      <tr class="hover:bg-gray-50/50 transition">
+        <td class="td">
+          <span class="font-mono text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded">
+            {{ t.id[:12] if t.id|length > 12 else t.id }}
+          </span>
+        </td>
+        <td class="td">
+          {% if t.tipe == 'hotspot_order' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
+            🎟 Voucher Online
+          </span>
+          {% elif t.tipe == 'tagihan_pppoe' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+            📡 Tagihan PPPoE
+          </span>
+          {% elif t.tipe == 'pppoe' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-100">
+            ➕ Tambah PPPoE
+          </span>
           {% else %}
-          <span class="badge-green">Topup</span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-500 border border-gray-100">
+            {{ t.tipe }}
+          </span>
           {% endif %}
         </td>
-        <td><span class="text-sm text-slate-600">{{ t.keterangan }}</span></td>
-        <td><span class="font-semibold text-slate-800 text-sm">{{ t.amount | rp }}</span></td>
-        <td><span class="badge-green">{{ t.status }}</span></td>
-        <td><span class="text-xs text-slate-400">{{ t.created_at }}</span></td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="6" class="py-16 text-center">
-          <div class="flex flex-col items-center gap-2 text-slate-400">
-            <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-            <p class="text-sm">Belum ada transaksi</p>
-          </div>
+        <td class="td">
+          <span class="text-gray-700">{{ t.keterangan or '—' }}</span>
+        </td>
+        <td class="td">
+          <span class="font-bold text-gray-800">{{ t.amount | rp }}</span>
+        </td>
+        <td class="td">
+          {% if t.status in ('paid', 'lunas') %}
+          <span class="badge-green">✓ Lunas</span>
+          {% elif t.status == 'pending' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-600 border border-yellow-200">⏳ Pending</span>
+          {% elif t.status in ('overdue', 'expired') %}
+          <span class="badge-red">Lewat Jatuh Tempo</span>
+          {% elif t.status == 'failed' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-500 border border-red-100">✗ Gagal</span>
+          {% else %}
+          <span class="text-xs text-gray-400">{{ t.status }}</span>
+          {% endif %}
+        </td>
+        <td class="td text-xs text-gray-400">
+          {{ t.created_at | ts_date if t.created_at else '—' }}
         </td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
+  <div class="px-5 py-3 border-t border-gray-50 text-xs text-gray-400">
+    Menampilkan {{ txs|length }} transaksi untuk periode {{ sel_bulan }}
+  </div>
 </div>
+{% endif %}
 {% endblock %}

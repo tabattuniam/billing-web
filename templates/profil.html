@@ -93,22 +93,14 @@
   </div>
   {% endif %}
 
-  <!-- QRIS Topup Manual (admin only) -->
+  <!-- QRIS Topup — dikelola platform -->
   {% if user.role == 'admin' %}
   <div class="card p-6">
-    <h3 class="font-semibold text-slate-700 mb-1">QRIS Topup Manual</h3>
-    <p class="text-xs text-slate-400 mb-4">Upload gambar QRIS Anda agar agen bisa melakukan topup manual via transfer</p>
-    <form id="form-qris" action="/pengaturan/qris-upload" method="POST" enctype="multipart/form-data">
-      {% if user.qris_image %}
-      <div class="mb-4">
-        <p class="text-xs text-slate-500 mb-2">QRIS saat ini:</p>
-        <img src="{{ user.qris_image }}" alt="QRIS" class="max-w-[200px] rounded-xl border border-slate-200">
-      </div>
-      {% endif %}
-      <label class="form-label">Upload Gambar QRIS</label>
-      <input type="file" name="qris_file" accept="image/*" class="form-input mb-3" required>
-      <button type="submit" class="btn-primary px-4 py-2">Upload QRIS</button>
-    </form>
+    <h3 class="font-semibold text-slate-700 mb-1">QRIS Topup Agen</h3>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;font-size:13px;color:#15803d;">
+      ✅ <b>QRIS topup dikelola oleh platform vpntunel.</b><br>
+      <span style="color:#64748b;font-size:12px;">Agen Anda akan melihat QRIS platform saat melakukan topup. Pembayaran dikonfirmasi langsung oleh tim vpntunel.</span>
+    </div>
   </div>
   {% endif %}
 
