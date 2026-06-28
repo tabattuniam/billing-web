@@ -6,19 +6,26 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Laporan Pendapatan</h1>
-    <p class="page-sub">Ringkasan omzet PPPoE & Voucher per bulan</p>
+    <p class="page-sub">Ringkasan omzet PPPoE & Voucher</p>
   </div>
-  <form method="get" action="/laporan" class="flex items-center gap-2">
-    <select name="tahun" onchange="this.form.submit()" class="form-select w-32">
-      {% for t in tahun_list %}
-      <option value="{{ t }}" {% if t==tahun %}selected{% endif %}>{{ t }}</option>
-      {% endfor %}
-    </select>
-  </form>
+  <!-- Tab switch -->
+  <div class="flex items-center gap-2">
+    <a href="/laporan?mode=bulanan&tahun={{ tahun }}"
+      class="px-4 py-2 rounded-lg text-sm font-semibold transition
+        {% if mode == 'bulanan' %}bg-blue-600 text-white shadow{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+      Per Bulan
+    </a>
+    <a href="/laporan?mode=harian&bulan={{ bulan }}"
+      class="px-4 py-2 rounded-lg text-sm font-semibold transition
+        {% if mode == 'harian' %}bg-blue-600 text-white shadow{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+      Per Hari
+    </a>
+  </div>
 </div>
 
-<!-- Stats bulan ini -->
+<!-- Stats ringkas (selalu tampil) -->
 <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+  {% if mode == 'bulanan' %}
   <div class="card p-4 border-l-4 border-blue-400">
     <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total Semua Pendapatan {{ tahun }}</p>
     <p class="text-2xl font-black text-blue-700 mt-1">Rp {{ "{:,}".format(total_semua).replace(",",".") }}</p>
@@ -34,6 +41,23 @@
     <p class="text-xl font-black text-indigo-700 mt-1">Rp {{ "{:,}".format(total_topup_manual).replace(",",".") }}</p>
     <p class="text-xs text-gray-400 mt-0.5">transfer langsung ke rekening</p>
   </div>
+  {% else %}
+  <div class="card p-4 border-l-4 border-blue-400">
+    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total {{ bulan }}</p>
+    <p class="text-2xl font-black text-blue-700 mt-1">Rp {{ "{:,}".format(total_harian).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">semua sumber</p>
+  </div>
+  <div class="card p-4 border-l-4 border-emerald-400">
+    <p class="text-xs text-emerald-600 font-medium uppercase tracking-wide">Total PPPoE</p>
+    <p class="text-xl font-black text-emerald-700 mt-1">Rp {{ "{:,}".format(harian | sum(attribute='omzet_pppoe')).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">tagihan lunas</p>
+  </div>
+  <div class="card p-4 border-l-4 border-violet-400">
+    <p class="text-xs text-violet-600 font-medium uppercase tracking-wide">Total Voucher</p>
+    <p class="text-xl font-black text-violet-700 mt-1">Rp {{ "{:,}".format(harian | sum(attribute='omzet_voucher')).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">hotspot online</p>
+  </div>
+  {% endif %}
 </div>
 <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
   <div class="card p-4">
@@ -53,7 +77,21 @@
   </div>
 </div>
 
-<!-- Grafik Pendapatan -->
+{% if mode == 'bulanan' %}
+<!-- ═══════════════ VIEW: PER BULAN ═══════════════ -->
+
+<!-- Filter tahun -->
+<form method="get" action="/laporan" class="flex items-center gap-2 mb-4">
+  <input type="hidden" name="mode" value="bulanan">
+  <label class="text-sm text-gray-500">Tahun:</label>
+  <select name="tahun" onchange="this.form.submit()" class="form-select w-32">
+    {% for t in tahun_list %}
+    <option value="{{ t }}" {% if t==tahun %}selected{% endif %}>{{ t }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<!-- Grafik bulanan -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
   <div class="lg:col-span-2 card p-5">
     <h3 class="text-sm font-semibold text-gray-700 mb-4">Pendapatan Per Bulan ({{ tahun }})</h3>
@@ -65,7 +103,7 @@
   </div>
 </div>
 
-<!-- Tabel Detail Per Bulan -->
+<!-- Tabel bulanan -->
 <div class="card overflow-hidden">
   <div class="px-5 py-4 border-b border-gray-100">
     <h3 class="text-sm font-semibold text-gray-700">Rekap Pendapatan Per Bulan ({{ tahun }})</h3>
@@ -90,7 +128,11 @@
         {% set ns.idx = ns.idx + 1 %}
         {% set grand = b.total + tm.total %}
         <tr class="hover:bg-gray-50 transition-colors {% if grand == 0 %}opacity-40{% endif %}">
-          <td class="td font-semibold text-gray-800">{{ b.bulan | label_bulan }}</td>
+          <td class="td font-semibold text-gray-800">
+            <a href="/laporan?mode=harian&bulan={{ b.bulan }}" class="hover:text-blue-600 transition">
+              {{ b.bulan | label_bulan }}
+            </a>
+          </td>
           <td class="td text-right text-gray-700">
             {% if b.omzet_pppoe %}Rp {{ "{:,}".format(b.omzet_pppoe).replace(",",".") }}{% else %}—{% endif %}
           </td>
@@ -132,64 +174,143 @@
     </table>
   </div>
 </div>
+
+{% else %}
+<!-- ═══════════════ VIEW: PER HARI ═══════════════ -->
+
+<!-- Filter bulan -->
+<form method="get" action="/laporan" class="flex items-center gap-2 mb-4">
+  <input type="hidden" name="mode" value="harian">
+  <label class="text-sm text-gray-500">Bulan:</label>
+  <select name="bulan" onchange="this.form.submit()" class="form-select w-44">
+    {% for b in bulan_list %}
+    <option value="{{ b }}" {% if b==bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<!-- Grafik harian -->
+<div class="card p-5 mb-5">
+  <h3 class="text-sm font-semibold text-gray-700 mb-4">Pendapatan Per Hari — {{ bulan | label_bulan }}</h3>
+  <canvas id="chartHarian" height="80"></canvas>
+</div>
+
+<!-- Tabel harian -->
+<div class="card overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <div>
+      <h3 class="text-sm font-semibold text-gray-700">Rincian Per Hari — {{ bulan | label_bulan }}</h3>
+      <p class="text-xs text-gray-400 mt-0.5">Hanya tampilkan hari yang ada transaksi</p>
+    </div>
+    <span class="text-xs text-gray-400">{{ harian | selectattr('total', '>', 0) | list | length }} hari aktif</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="th">Tanggal</th>
+          <th class="th text-right">PPPoE</th>
+          <th class="th text-right">Voucher</th>
+          <th class="th text-right bg-indigo-50 text-indigo-700">QRIS Manual</th>
+          <th class="th text-right bg-blue-50 text-blue-700">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set has_any = namespace(v=false) %}
+        {% for h in harian %}
+        {% if h.total > 0 %}
+        {% set has_any.v = true %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="td font-semibold text-gray-800">
+            {{ h.tgl }}
+            <span class="text-xs text-gray-400 ml-1">
+              {% set hari_names = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'] %}
+              {%- set dt_parts = h.tgl.split('-') -%}
+            </span>
+          </td>
+          <td class="td text-right text-gray-700">
+            {% if h.omzet_pppoe %}
+            <span class="font-medium">Rp {{ "{:,}".format(h.omzet_pppoe).replace(",",".") }}</span>
+            <span class="text-xs text-gray-400 ml-1">({{ h.lunas_pppoe }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="td text-right text-gray-700">
+            {% if h.omzet_voucher %}
+            <span class="font-medium">Rp {{ "{:,}".format(h.omzet_voucher).replace(",",".") }}</span>
+            <span class="text-xs text-gray-400 ml-1">({{ h.lunas_voucher }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="td text-right font-bold text-indigo-700 bg-indigo-50/40">
+            {% if h.omzet_topup %}Rp {{ "{:,}".format(h.omzet_topup).replace(",",".") }}{% else %}—{% endif %}
+          </td>
+          <td class="td text-right font-black text-blue-700 bg-blue-50/40">
+            Rp {{ "{:,}".format(h.total).replace(",",".") }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        {% if not has_any.v %}
+        <tr><td colspan="5" class="td text-center text-gray-400 py-8">Belum ada transaksi di bulan ini</td></tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr class="bg-gray-50 border-t-2 border-gray-200">
+          <td class="td font-bold text-gray-900">Total {{ bulan | label_bulan }}</td>
+          <td class="td text-right font-bold text-gray-700">
+            Rp {{ "{:,}".format(harian | sum(attribute='omzet_pppoe')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-bold text-gray-700">
+            Rp {{ "{:,}".format(harian | sum(attribute='omzet_voucher')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-black text-indigo-700">
+            Rp {{ "{:,}".format(harian | sum(attribute='omzet_topup')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-black text-blue-700 text-base">
+            Rp {{ "{:,}".format(total_harian).replace(",",".") }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-const BULAN_LABELS = [
-  'Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'
-];
-const DATA_PPPOE   = {{ bulanan | map(attribute='omzet_pppoe')  | list | tojson }};
-const DATA_VOUCHER = {{ bulanan | map(attribute='omzet_voucher') | list | tojson }};
+{% if mode == 'bulanan' %}
+const BULAN_LABELS   = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const DATA_PPPOE     = {{ bulanan | map(attribute='omzet_pppoe')  | list | tojson }};
+const DATA_VOUCHER   = {{ bulanan | map(attribute='omzet_voucher') | list | tojson }};
 const DATA_PELANGGAN = {{ pelanggan | map(attribute='count') | list | tojson }};
 
-// ── Chart Pendapatan ──────────────────────────────────────────────────────────
 new Chart(document.getElementById('chartPendapatan'), {
   type: 'bar',
   data: {
     labels: BULAN_LABELS,
     datasets: [
-      {
-        label: 'PPPoE',
-        data: DATA_PPPOE,
-        backgroundColor: 'rgba(37,99,235,0.85)',
-        borderRadius: 6,
-        borderSkipped: false,
-      },
-      {
-        label: 'Voucher',
-        data: DATA_VOUCHER,
-        backgroundColor: 'rgba(16,185,129,0.75)',
-        borderRadius: 6,
-        borderSkipped: false,
-      }
+      { label: 'PPPoE',   data: DATA_PPPOE,   backgroundColor: 'rgba(37,99,235,0.85)',  borderRadius: 6, borderSkipped: false },
+      { label: 'Voucher', data: DATA_VOUCHER,  backgroundColor: 'rgba(16,185,129,0.75)', borderRadius: 6, borderSkipped: false }
     ]
   },
   options: {
     responsive: true,
     plugins: {
       legend: { position: 'top', labels: { font: { size: 11 } } },
-      tooltip: {
-        callbacks: {
-          label: ctx => ` Rp ${Number(ctx.raw).toLocaleString('id-ID')}`
-        }
-      }
+      tooltip: { callbacks: { label: ctx => ` Rp ${Number(ctx.raw).toLocaleString('id-ID')}` } }
     },
     scales: {
-      x: { stacked: false, grid: { display: false } },
+      x: { grid: { display: false } },
       y: {
-        stacked: false,
-        ticks: {
-          callback: v => 'Rp ' + (v >= 1000000 ? (v/1000000).toFixed(1)+'jt' : (v/1000).toFixed(0)+'rb')
-        },
+        ticks: { callback: v => 'Rp ' + (v >= 1000000 ? (v/1000000).toFixed(1)+'jt' : (v/1000).toFixed(0)+'rb') },
         grid: { color: 'rgba(0,0,0,0.05)' }
       }
     }
   }
 });
 
-// ── Chart Pelanggan Baru ──────────────────────────────────────────────────────
 new Chart(document.getElementById('chartPelanggan'), {
   type: 'line',
   data: {
@@ -199,10 +320,8 @@ new Chart(document.getElementById('chartPelanggan'), {
       data: DATA_PELANGGAN,
       borderColor: '#6366f1',
       backgroundColor: 'rgba(99,102,241,0.1)',
-      tension: 0.4,
-      fill: true,
-      pointBackgroundColor: '#6366f1',
-      pointRadius: 4,
+      tension: 0.4, fill: true,
+      pointBackgroundColor: '#6366f1', pointRadius: 4,
     }]
   },
   options: {
@@ -217,5 +336,38 @@ new Chart(document.getElementById('chartPelanggan'), {
     }
   }
 });
+
+{% else %}
+const HARI_LABELS   = {{ harian | map(attribute='hari') | list | tojson }};
+const DATA_PPPOE_H  = {{ harian | map(attribute='omzet_pppoe')   | list | tojson }};
+const DATA_VCH_H    = {{ harian | map(attribute='omzet_voucher') | list | tojson }};
+const DATA_TOPUP_H  = {{ harian | map(attribute='omzet_topup')   | list | tojson }};
+
+new Chart(document.getElementById('chartHarian'), {
+  type: 'bar',
+  data: {
+    labels: HARI_LABELS,
+    datasets: [
+      { label: 'PPPoE',       data: DATA_PPPOE_H,  backgroundColor: 'rgba(37,99,235,0.85)',   borderRadius: 4, borderSkipped: false },
+      { label: 'Voucher',     data: DATA_VCH_H,    backgroundColor: 'rgba(139,92,246,0.75)',  borderRadius: 4, borderSkipped: false },
+      { label: 'QRIS Manual', data: DATA_TOPUP_H,  backgroundColor: 'rgba(99,102,241,0.65)',  borderRadius: 4, borderSkipped: false }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 11 } } },
+      tooltip: { callbacks: { label: ctx => ` Rp ${Number(ctx.raw).toLocaleString('id-ID')}` } }
+    },
+    scales: {
+      x: { grid: { display: false }, title: { display: true, text: 'Tanggal' } },
+      y: {
+        ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'jt' : (v/1000).toFixed(0)+'rb' },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+      }
+    }
+  }
+});
+{% endif %}
 </script>
 {% endblock %}

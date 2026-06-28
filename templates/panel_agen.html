@@ -666,16 +666,9 @@ async function prosesTopup() {
     fd.append('amount', amount);
     const res = await fetch('/panel/topup', { method: 'POST', body: fd });
     const data = await res.json();
-    if (data.ok && data.payment_url) {
-      // Duitku: redirect ke halaman pembayaran
-      window.location.href = data.payment_url;
-    } else if (data.ok && data.snap_token) {
-      // Midtrans fallback
-      snap.pay(data.snap_token, {
-        onSuccess: () => { location.href = '/panel?ok=topup'; },
-        onPending: () => { location.href = '/panel?ok=topup'; },
-        onClose:   () => { tutupTopup(); resetTopupModal(); }
-      });
+    if (data.ok) {
+      // Topup manual — konfirmasi oleh admin
+      location.href = '/panel?ok=topup_pending';
     } else {
       alert(data.msg || 'Gagal membuat transaksi');
       resetTopupModal();

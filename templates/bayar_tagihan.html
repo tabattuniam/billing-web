@@ -6,13 +6,6 @@
 <title>Bayar Tagihan Internet — {{ t.isp_nama }}</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-{% if not sukses and t.snap_token and not t.snap_token.startswith('https://') %}
-{% if mt_prod %}
-<script src="https://app.midtrans.com/snap/snap.js" data-client-key="{{ mt_client }}"></script>
-{% else %}
-<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ mt_client }}"></script>
-{% endif %}
-{% endif %}
 <style type="text/tailwindcss">
   @layer base { * { font-family: 'Inter', sans-serif; } }
   @layer components {
@@ -127,38 +120,46 @@
         <span class="text-gray-600 font-semibold">Total Tagihan</span>
         <span class="font-black text-blue-700 text-xl">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
       </div>
+      {% if mayar_enabled and mayar_fee %}
+      <div class="flex justify-between text-xs text-amber-600 mt-1">
+        <span>+ Biaya admin online</span>
+        <span class="font-semibold">Rp {{ "{:,}".format(mayar_fee).replace(",",".") }}</span>
+      </div>
+      <div class="flex justify-between text-sm font-bold text-orange-700 mt-1 pt-1 border-t border-dashed border-gray-100">
+        <span>Total bayar online</span>
+        <span>Rp {{ "{:,}".format(t.amount + mayar_fee).replace(",",".") }}</span>
+      </div>
+      {% endif %}
     </div>
   </div>
 
-  {% if t.snap_token %}
-  <!-- Ada snap token → langsung bayar -->
-  {% if t.snap_token.startswith('https://') %}
-  <!-- Duitku: redirect ke halaman pembayaran -->
-  <a href="{{ t.snap_token }}" id="btn-bayar"
-    class="btn-primary w-full text-base font-bold mb-3 no-underline">
+  <!-- Bayar Online via Mayar -->
+  {% if mayar_enabled %}
+  <a href="/bayar/tagihan/{{ t.id }}/bayar-online"
+     class="btn-primary w-full mb-3 text-base py-3.5">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
     </svg>
-    Bayar via QRIS / Transfer
+    Bayar Online Sekarang
   </a>
+  {% if mayar_fee %}
+  <p class="text-center text-xs text-amber-600 mb-3">Biaya admin Rp {{ "{:,}".format(mayar_fee).replace(",",".") }} ditanggung pelanggan</p>
   {% else %}
-  <!-- Midtrans Snap popup -->
-  <button onclick="bayarSekarang()" id="btn-bayar"
-    class="btn-primary w-full text-base font-bold mb-3">
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-    </svg>
-    Bayar via QRIS / Transfer
-  </button>
+  <p class="text-center text-xs text-gray-400 mb-3">Tanpa biaya admin tambahan</p>
   {% endif %}
-  {% else %}
-  <!-- Belum ada snap token — minta pelanggan hubungi ISP -->
-  <div class="card p-4 text-center text-sm text-gray-500 mb-3">
-    Link pembayaran belum aktif. Hubungi ISP untuk mendapatkan link bayar terbaru.
+  <p class="text-center text-xs text-gray-400 mb-4">QRIS · Transfer Bank · e-Wallet — otomatis aktif setelah bayar</p>
+  {% endif %}
+
+  <!-- Instruksi pembayaran manual -->
+  <div class="card p-4 mb-4 text-sm text-gray-600">
+    <p class="font-semibold text-gray-800 mb-2">{% if mayar_enabled %}Atau Bayar Manual:{% else %}Cara Pembayaran:{% endif %}</p>
+    <ol class="list-decimal list-inside space-y-1 text-gray-500">
+      <li>Transfer ke rekening / QRIS yang diberikan oleh ISP.</li>
+      <li>Kirim bukti transfer via WhatsApp ke ISP.</li>
+      <li>ISP akan mengkonfirmasi dalam 1×24 jam.</li>
+    </ol>
   </div>
-  {% endif %}
 
   <!-- Trust -->
   <div class="grid grid-cols-3 gap-3 mt-4">
@@ -193,40 +194,5 @@
   {% endif %}
 </div>
 
-<!-- Toast -->
-<div id="toast" class="fixed bottom-5 right-5 z-50 pointer-events-none space-y-2"></div>
-
-<script>
-const SNAP_TOKEN = "{{ t.snap_token or '' }}";
-const TID = {{ t.id }};
-
-function bayarSekarang() {
-  if (!SNAP_TOKEN || SNAP_TOKEN.startsWith('https://')) return;
-  window.snap.pay(SNAP_TOKEN, {
-    onSuccess: function() {
-      window.location.href = '/bayar/tagihan/' + TID + '/sukses';
-    },
-    onPending: function() {
-      window.location.href = '/bayar/tagihan/' + TID + '/sukses';
-    },
-    onError: function() {
-      showToast('Pembayaran gagal. Silakan coba lagi.', 'error');
-    },
-    onClose: function() {
-      showToast('Pembayaran dibatalkan.', 'warning');
-    }
-  });
-}
-
-function showToast(msg, type='success') {
-  const colors = { success:'bg-emerald-600', error:'bg-red-600', warning:'bg-amber-600', info:'bg-blue-600' };
-  const el = document.createElement('div');
-  el.className = `flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-white text-sm font-medium pointer-events-auto ${colors[type]||colors.info}`;
-  el.style.minWidth = '220px';
-  el.textContent = msg;
-  document.getElementById('toast').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
-}
-</script>
 </body>
 </html>

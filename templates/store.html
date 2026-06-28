@@ -6,11 +6,6 @@
 <title>Beli Voucher Hotspot — {{ isp.nama }}</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-{% if mt_prod %}
-<script src="https://app.midtrans.com/snap/snap.js" data-client-key="{{ mt_client }}"></script>
-{% else %}
-<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ mt_client }}"></script>
-{% endif %}
 <style type="text/tailwindcss">
   @layer base { * { font-family: 'Inter', sans-serif; } }
   @layer components {
@@ -289,7 +284,11 @@
     <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4">
       <div class="flex justify-between items-center">
         <span class="text-xs text-blue-600 font-medium" id="modal-paket-summary">Paket terpilih</span>
-        <span class="text-sm font-black text-blue-700" id="modal-harga-summary">Rp 0</span>
+        <span class="text-sm font-medium text-blue-700" id="modal-harga-summary">Rp 0</span>
+      </div>
+      <div id="modal-breakdown" class="hidden border-t border-blue-200 mt-2 pt-2 text-xs text-blue-600 space-y-0.5">
+        <div class="flex justify-between"><span>Admin gateway (~{{ mayar_fee_percent }}%)</span><span id="bd-fee">Rp 0</span></div>
+        <div class="flex justify-between font-bold text-blue-900 pt-1 border-t border-blue-100"><span>Total bayar</span><span id="bd-total">Rp 0</span></div>
       </div>
     </div>
 
@@ -419,6 +418,9 @@ function gantiServer() {
   window.location.reload();
 }
 
+const FEE_MODE = '{{ fee_mode }}';
+const MAYAR_FEE_PCT = {{ mayar_fee_percent }};
+
 function pilihPaket(el) {
   if (!_selectedServerId) {
     showToast('Pilih lokasi server terlebih dahulu.', 'warning');
@@ -428,12 +430,28 @@ function pilihPaket(el) {
   _selectedPaket = {
     id:    el.dataset.paketId,
     nama:  el.dataset.nama,
-    harga: el.dataset.harga,
+    harga: parseInt(el.dataset.harga) || 0,
   };
 
+  // Hitung breakdown jika Mode 'customer' (pelanggan tanggung fee)
+  const harga = _selectedPaket.harga;
+  const fee   = Math.round(harga * MAYAR_FEE_PCT / 100);
+  const total = (FEE_MODE === 'tenant') ? harga : (harga + fee);
+
   document.getElementById('modal-nama-paket').textContent  = 'Beli ' + _selectedPaket.nama;
-  document.getElementById('modal-paket-summary').textContent = _selectedPaket.nama;
-  document.getElementById('modal-harga-summary').textContent = rp(_selectedPaket.harga);
+  document.getElementById('modal-paket-summary').textContent = _selectedPaket.nama + ' — ' + rp(harga);
+
+  const bd = document.getElementById('modal-breakdown');
+  if (FEE_MODE === 'customer' && fee > 0) {
+    document.getElementById('bd-fee').textContent   = '+ ' + rp(fee);
+    document.getElementById('bd-total').textContent = rp(total);
+    document.getElementById('modal-harga-summary').textContent = '';
+    bd.classList.remove('hidden');
+  } else {
+    document.getElementById('modal-harga-summary').textContent = rp(harga);
+    bd.classList.add('hidden');
+  }
+
   document.getElementById('field-paket-id').value = _selectedPaket.id;
   document.getElementById('field-server-id').value = _selectedServerId;
   document.getElementById('modal-error').classList.add('hidden');
@@ -475,13 +493,6 @@ async function submitOrder(e) {
 
     if (data.payment_url) {
       window.location.href = data.payment_url;
-    } else if (data.snap_token) {
-      window.snap.pay(data.snap_token, {
-        onSuccess: function() { window.location.href = '/beli/sukses/' + data.order_id; },
-        onPending: function() { window.location.href = '/beli/sukses/' + data.order_id; },
-        onError:   function() { showToast('Pembayaran gagal. Silakan coba lagi.', 'error'); },
-        onClose:   function() { showToast('Pembayaran dibatalkan.', 'warning'); }
-      });
     } else if (data.kode) {
       document.getElementById('kode-voucher-display').textContent = data.kode;
       const mv = document.getElementById('modal-voucher');

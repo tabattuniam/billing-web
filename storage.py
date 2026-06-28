@@ -791,6 +791,24 @@ class Storage:
         con.close()
         return dict(row) if row else None
 
+    def update_paket_pppoe(self, pid: int, user_id: str, nama: str, kecepatan: str, harga: int):
+        con = self._conn()
+        con.execute(
+            "UPDATE paket_pppoe SET nama=?, kecepatan=?, harga=? WHERE id=? AND user_id=?",
+            (nama, kecepatan, harga, pid, user_id)
+        )
+        con.commit()
+        con.close()
+
+    def delete_paket_pppoe(self, pid: int, user_id: str):
+        con = self._conn()
+        con.execute(
+            "UPDATE paket_pppoe SET status='nonaktif' WHERE id=? AND user_id=?",
+            (pid, user_id)
+        )
+        con.commit()
+        con.close()
+
     # ── PPPoE Users ──────────────────────────────────────────────────────────
 
     def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0) -> int:
@@ -1088,7 +1106,7 @@ class Storage:
 
     def list_vouchers(self, user_id: str, server_id: str = None, status: str = None, paket_id: str = None, comment: str = None) -> list[dict]:
         con = self._conn()
-        q = """SELECT v.*, p.nama as paket_nama, p.durasi, p.kecepatan,
+        q = """SELECT v.*, p.nama as paket_nama, p.durasi, p.kecepatan, p.harga as paket_harga,
                       s.nama as server_nama, u.nama as agen_nama
                FROM voucher_hotspot v
                LEFT JOIN paket_hotspot p ON p.id=v.paket_id
@@ -1430,12 +1448,12 @@ class Storage:
         con.close()
         return n
 
-    def topup_saldo(self, uid: str, jumlah: int, keterangan: str = ""):
+    def topup_saldo(self, uid: str, jumlah: int, keterangan: str = "", sumber: str = "manual"):
         con = self._conn()
         con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (jumlah, uid))
         con.execute(
-            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
-            (uid, jumlah, "kredit", keterangan, int(time.time()))
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,sumber,created_at) VALUES (?,?,?,?,?,?)",
+            (uid, jumlah, "kredit", keterangan, sumber, int(time.time()))
         )
         con.commit()
         con.close()
@@ -1893,10 +1911,9 @@ class Storage:
         con.close()
         return dict(row) if row else None
 
-    def set_tagihan_snap_token(self, tid: int, snap_token: str, order_id: str):
+    def set_tagihan_snap_token(self, tid: int, snap_token: str):
         con = self._conn()
-        con.execute("UPDATE tagihan_pppoe SET snap_token=?, order_id=? WHERE id=?",
-                    (snap_token, order_id, tid))
+        con.execute("UPDATE tagihan_pppoe SET snap_token=? WHERE id=?", (snap_token, tid))
         con.commit()
         con.close()
 
@@ -2097,9 +2114,9 @@ class Storage:
         now = int(time.time())
         # Simpan voucher baru ke DB
         vid = con.execute(
-            "INSERT INTO voucher_hotspot (user_id, paket_id, kode, status, created_at, dipakai_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (order["user_id"], order["paket_id"], kode, "dipakai", now, now)
+            "INSERT INTO voucher_hotspot (user_id, server_id, paket_id, kode, status, created_at, dipakai_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (order["user_id"], order["server_id"], order["paket_id"], kode, "dipakai", now, now)
         ).lastrowid
 
         con.execute("UPDATE hotspot_orders SET status='paid', voucher_id=?, paid_at=? WHERE id=?",
@@ -2189,6 +2206,54 @@ class Storage:
                 "lunas_voucher":  voucher[1] if voucher else 0,
                 "total":          pppoe[0] + (voucher[0] if voucher else 0),
                 "unpaid":         total_unpaid,
+            })
+        con.close()
+        return result
+
+    def laporan_pendapatan_harian(self, user_id: str, tahun_bulan: str) -> list[dict]:
+        """Pendapatan PPPoE + Voucher per hari dalam satu bulan (format: YYYY-MM)."""
+        import calendar
+        con = self._conn()
+        try:
+            tahun, bulan = int(tahun_bulan[:4]), int(tahun_bulan[5:7])
+        except Exception:
+            return []
+        _, last_day = calendar.monthrange(tahun, bulan)
+        result = []
+        for d in range(1, last_day + 1):
+            ts_start = int(time.mktime((tahun, bulan, d, 0, 0, 0, 0, 0, -1)))
+            ts_end   = int(time.mktime((tahun, bulan, d, 23, 59, 59, 0, 0, -1)))
+            tgl_str  = f"{tahun_bulan}-{str(d).zfill(2)}"
+            pppoe = con.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM tagihan_pppoe "
+                "WHERE user_id=? AND status='paid' AND paid_at BETWEEN ? AND ?",
+                (user_id, ts_start, ts_end)
+            ).fetchone()
+            voucher = con.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM hotspot_orders "
+                "WHERE user_id=? AND status='paid' AND paid_at BETWEEN ? AND ?",
+                (user_id, ts_start, ts_end)
+            ).fetchone()
+            topup = con.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM topup_orders "
+                "WHERE isp_id=? AND tipe='manual' AND status='paid' AND paid_at BETWEEN ? AND ?",
+                (user_id, ts_start, ts_end)
+            ).fetchone()
+            omzet_pppoe   = pppoe[0] if pppoe else 0
+            omzet_voucher = voucher[0] if voucher else 0
+            omzet_topup   = topup[0] if topup else 0
+            total_gw      = omzet_pppoe + omzet_voucher
+            total_semua   = total_gw + omzet_topup
+            result.append({
+                "tgl":           tgl_str,
+                "hari":          d,
+                "omzet_pppoe":   omzet_pppoe,
+                "lunas_pppoe":   pppoe[1] if pppoe else 0,
+                "omzet_voucher": omzet_voucher,
+                "lunas_voucher": voucher[1] if voucher else 0,
+                "omzet_topup":   omzet_topup,
+                "total_gw":      total_gw,
+                "total":         total_semua,
             })
         con.close()
         return result

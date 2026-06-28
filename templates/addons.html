@@ -14,6 +14,15 @@
 </div>
 {% endif %}
 
+<!-- Banner Pengembangan -->
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+  <div style="font-size:24px;">🚧</div>
+  <div>
+    <div style="font-weight:700;color:#92400e;font-size:13px;">Fitur Sedang Dikembangkan</div>
+    <div style="font-size:12px;color:#b45309;margin-top:2px;">Add-on belum tersedia untuk saat ini. Kami sedang mempersiapkan fitur ini. Pantau terus pembaruan kami!</div>
+  </div>
+</div>
+
 <!-- Info Saldo -->
 <div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;">
   <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -62,6 +71,42 @@
         /interface l2tp-client add name=vpn-tunel connect-to=103.93.162.154 user={{ vpn_akun.vpn_username }} password={{ vpn_akun.vpn_password }} use-ipsec=yes ipsec-secret=vpntunel123 disabled=no
       </div>
     </div>
+
+    {% if server %}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;">
+      <div style="font-weight:600;color:#1d4ed8;margin-bottom:8px;">🖥️ Akses Remote MikroTik</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="color:#64748b;padding:3px 0;width:80px;">API</td>
+          <td><code style="color:#1e293b;">{{ server.vpn_ip }}:{{ server.api_port }}</code></td>
+        </tr>
+        {% if server.winbox_host %}
+        <tr>
+          <td style="color:#64748b;padding:3px 0;">Winbox</td>
+          <td>
+            <a href="winbox://{{ server.winbox_host }}" style="color:#2563eb;font-family:monospace;text-decoration:none;">
+              {{ server.winbox_host }} 🔗
+            </a>
+          </td>
+        </tr>
+        {% endif %}
+        {% if server.web_host %}
+        <tr>
+          <td style="color:#64748b;padding:3px 0;">Web</td>
+          <td>
+            <a href="http://{{ server.web_host }}" target="_blank" style="color:#059669;font-family:monospace;text-decoration:none;">
+              {{ server.web_host }} 🔗
+            </a>
+          </td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td style="color:#64748b;padding:3px 0;">User API</td>
+          <td><code style="color:#1e293b;">{{ server.api_user }}</code></td>
+        </tr>
+      </table>
+    </div>
+    {% endif %}
     {% endif %}
 
     <button onclick="nonaktifkan({{ addon.id }}, '{{ addon.nama }}')"
@@ -109,18 +154,9 @@
           <span style="font-size:18px;font-weight:700;color:#1e293b;">Rp {{ "{:,}".format(addon.harga) }}</span>
           <span style="font-size:11px;color:#94a3b8;">/bulan</span>
         </div>
-        {% if is_aktif %}
-        <span class="badge-up">Aktif</span>
-        {% elif user.saldo < addon.harga %}
-        <button onclick="alert('Saldo tidak cukup. Silakan topup dulu.')" class="btn-secondary">
-          Topup Dulu
+        <button disabled style="padding:6px 14px;border-radius:8px;background:#f1f5f9;color:#94a3b8;font-size:12px;font-weight:600;cursor:not-allowed;border:none;">
+          🚧 Segera Hadir
         </button>
-        {% else %}
-        <button onclick="aktifkan({{ addon.id }}, '{{ addon.nama }}', {{ addon.harga }})"
-          class="btn-primary">
-          Aktifkan
-        </button>
-        {% endif %}
       </div>
     </div>
     {% endfor %}

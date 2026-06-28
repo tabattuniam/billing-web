@@ -5,65 +5,111 @@
 
 {% block content %}
 
-<!-- Welcome -->
-<div class="mb-7">
-  <h1 class="text-2xl font-bold text-slate-900">Selamat datang, {{ user.nama }} 👋</h1>
-  <p class="text-slate-400 text-sm mt-1">Berikut ringkasan aktivitas sistem Anda hari ini.</p>
-</div>
+<!-- Hero Welcome Banner -->
+<div class="relative overflow-hidden rounded-3xl mb-7 p-6 md:p-8"
+     style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#2563eb 100%)">
+  <!-- decorative circles -->
+  <div class="absolute -top-10 -right-10 w-56 h-56 rounded-full opacity-10" style="background:rgba(255,255,255,0.3)"></div>
+  <div class="absolute -bottom-12 -left-6 w-40 h-40 rounded-full opacity-10" style="background:rgba(255,255,255,0.3)"></div>
 
-<!-- Card Toko Online -->
-{% set toko_slug = user.slug or user.username %}
-<div class="card p-5 mb-7 border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50">
-  <div class="flex items-start gap-4 flex-wrap">
-    <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-orange-200">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+  <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <p class="text-blue-200 text-sm font-medium mb-1">Selamat datang kembali 👋</p>
+      <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">{{ user.nama }}</h1>
+      <p class="text-blue-300 text-sm mt-1 capitalize">{{ user.role.replace('_',' ') }} • {{ app_name }}</p>
     </div>
-    <div class="flex-1 min-w-0">
-      <p class="font-bold text-orange-900 text-sm mb-0.5">Toko Hotspot Online</p>
-      <p class="text-xs text-orange-500 mb-3">Bagikan link ini ke pelanggan untuk beli voucher hotspot online</p>
 
-      <!-- URL display -->
-      <div class="flex items-center gap-2 flex-wrap mb-3">
-        <code id="toko-url" class="text-xs bg-white border border-orange-200 rounded-lg px-3 py-1.5 font-mono text-orange-700">{{ app_domain }}/beli/{{ toko_slug }}</code>
-        <button onclick="copyTokoUrl()" class="text-xs px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium flex items-center gap-1.5 transition-colors">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-          Salin
-        </button>
-        <a href="/beli/{{ toko_slug }}" target="_blank"
-          class="text-xs px-3 py-1.5 bg-white border border-orange-200 hover:bg-orange-50 text-orange-700 rounded-lg font-medium flex items-center gap-1.5 transition-colors">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-          Buka
-        </button>
-      </div>
-
-      <!-- Form ubah slug -->
-      <form method="post" action="/profil/slug" class="flex items-center gap-2 flex-wrap">
-        <div class="flex items-center bg-white border border-orange-200 rounded-lg overflow-hidden text-xs">
-          <span class="px-2 text-orange-300 select-none whitespace-nowrap">{{ app_domain }}/beli/</span>
-          <input name="slug" value="{{ toko_slug }}" placeholder="nama-usaha"
-            class="py-1.5 pr-3 text-orange-800 font-mono bg-transparent outline-none w-32"
-            pattern="[a-zA-Z0-9\-]+" title="Hanya huruf, angka, dan tanda -">
-        </div>
-        <button type="submit" class="text-xs px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg font-medium transition-colors">
-          Ubah URL
-        </button>
-      </form>
-      <p class="text-xs text-orange-400 mt-1">Gunakan nama usaha/ISP Anda, contoh: <code class="bg-orange-100 px-1 rounded">fujnet</code> atau <code class="bg-orange-100 px-1 rounded">wifi-barokah</code></p>
+    <!-- Saldo Box -->
+    {% if user.role != 'teknisi' %}
+    <div class="flex-shrink-0 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl px-6 py-4 text-right">
+      <p class="text-blue-200 text-xs font-medium uppercase tracking-wide">Saldo Anda</p>
+      <p class="text-3xl font-extrabold text-white mt-1">{{ user.saldo | rp }}</p>
+      <a href="/saldo" class="text-blue-300 text-xs hover:text-white mt-1 inline-block transition-colors">Kelola saldo →</a>
     </div>
+    {% endif %}
   </div>
 </div>
 
-<!-- Stat Cards -->
+<!-- Stat Cards Row -->
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
+
+  <!-- Pendapatan Bulan Ini -->
+  <div class="col-span-2 xl:col-span-2 card p-5 flex items-center gap-4 hover:shadow-lg transition-shadow"
+       style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0">
+    <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md"
+         style="background:linear-gradient(135deg,#16a34a,#22c55e)">
+      <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-xs font-semibold text-green-600 uppercase tracking-wide">Pendapatan Bulan Ini</p>
+      <p class="text-2xl font-extrabold text-green-900 mt-0.5">{{ pendapatan_bulan | rp }}</p>
+      <a href="/transaksi" class="text-xs text-green-600 hover:text-green-700 font-medium mt-0.5 inline-block">Lihat transaksi →</a>
+    </div>
+  </div>
+
+  <!-- Tagihan Belum Lunas -->
+  <div class="card p-5 hover:shadow-md transition-shadow {% if tagihan_pending > 0 %}border-red-100{% endif %}">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Tagihan Pending</p>
+        <p class="text-3xl font-bold {% if tagihan_pending > 0 %}text-red-600{% else %}text-slate-900{% endif %}">
+          {{ tagihan_pending }}
+        </p>
+      </div>
+      <div class="w-11 h-11 {% if tagihan_pending > 0 %}bg-red-50{% else %}bg-slate-50{% endif %} rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 {% if tagihan_pending > 0 %}text-red-500{% else %}text-slate-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+      </div>
+    </div>
+    <div class="mt-3 pt-3 border-t border-slate-50">
+      <a href="/pppoe/tagihan" class="text-xs {% if tagihan_pending > 0 %}text-red-500 font-semibold{% else %}text-slate-400{% endif %} hover:underline">
+        {% if tagihan_pending > 0 %}Lihat tagihan →{% else %}Tidak ada pending{% endif %}
+      </a>
+    </div>
+  </div>
+
+  <!-- Voucher Tersedia -->
+  <div class="card p-5 hover:shadow-md transition-shadow">
+    <div class="flex items-start justify-between">
+      <div>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Voucher Tersedia</p>
+        <p class="text-3xl font-bold text-slate-900">{{ stats.voucher }}</p>
+      </div>
+      <div class="w-11 h-11 bg-orange-50 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+        </svg>
+      </div>
+    </div>
+    <div class="mt-3 pt-3 border-t border-slate-50">
+      <a href="/hotspot/voucher" class="text-xs text-orange-600 font-medium hover:text-orange-700">Kelola voucher →</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Second Row Stats -->
 <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
 
   <div class="card p-5 hover:shadow-md transition-shadow">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{% if user.role=='admin' %}Total Agen{% else %}Sub Agen{% endif %}</p>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+          {% if user.role=='admin' %}Total Agen{% else %}Sub Agen{% endif %}
+        </p>
         <p class="text-3xl font-bold text-slate-900">{{ stats.agen }}</p>
       </div>
       <div class="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center">
-        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
       </div>
     </div>
     <div class="mt-3 pt-3 border-t border-slate-50">
@@ -74,26 +120,14 @@
   <div class="card p-5 hover:shadow-md transition-shadow">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Server MikroTik</p>
-        <p class="text-3xl font-bold text-slate-900">{{ stats.servers }}</p>
-      </div>
-      <div class="w-11 h-11 bg-purple-50 rounded-xl flex items-center justify-center">
-        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
-      </div>
-    </div>
-    <div class="mt-3 pt-3 border-t border-slate-50">
-      <a href="/servers" class="text-xs text-purple-600 font-medium hover:text-purple-700">Kelola server →</a>
-    </div>
-  </div>
-
-  <div class="card p-5 hover:shadow-md transition-shadow">
-    <div class="flex items-start justify-between">
-      <div>
         <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">PPPoE Aktif</p>
         <p class="text-3xl font-bold text-slate-900">{{ stats.pppoe }}</p>
+        <p class="text-xs text-slate-400 mt-0.5">dari {{ total_pppoe }} total</p>
       </div>
       <div class="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center">
-        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
       </div>
     </div>
     <div class="mt-3 pt-3 border-t border-slate-50">
@@ -104,94 +138,260 @@
   <div class="card p-5 hover:shadow-md transition-shadow">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Voucher Tersedia</p>
-        <p class="text-3xl font-bold text-slate-900">{{ stats.voucher }}</p>
+        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Server MikroTik</p>
+        <p class="text-3xl font-bold text-slate-900">{{ stats.servers }}</p>
       </div>
-      <div class="w-11 h-11 bg-orange-50 rounded-xl flex items-center justify-center">
-        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+      <div class="w-11 h-11 bg-purple-50 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+        </svg>
       </div>
     </div>
     <div class="mt-3 pt-3 border-t border-slate-50">
-      <a href="/hotspot/voucher" class="text-xs text-orange-600 font-medium hover:text-orange-700">Kelola voucher →</a>
+      <a href="/servers" class="text-xs text-purple-600 font-medium hover:text-purple-700">Kelola server →</a>
+    </div>
+  </div>
+
+  <!-- Toko Online Card -->
+  {% set toko_slug = user.slug or user.username %}
+  {% set short_link = main_domain + '/' + toko_slug %}
+  {% set full_link = app_domain + '/beli/' + toko_slug %}
+  <div class="card p-5 hover:shadow-md transition-shadow" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa">
+    <div class="flex items-start justify-between">
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-1">Toko Online</p>
+        <p class="text-sm font-bold text-orange-900 truncate">{{ short_link }}</p>
+      </div>
+      <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-2">
+        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+      </div>
+    </div>
+    <div class="mt-3 pt-3 border-t border-orange-100 flex gap-2 flex-wrap">
+      <button onclick="copyTokoUrl('{{ short_link }}')"
+        class="text-xs px-2.5 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>Salin
+      </button>
+      <a href="https://{{ short_link }}" target="_blank"
+        class="text-xs px-2.5 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg font-medium transition-colors flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+        </svg>Buka
+      </a>
+      <button onclick="toggleGantiSlug()"
+        class="text-xs px-2.5 py-1 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-lg font-medium transition-colors flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>Ganti URL
+      </button>
+    </div>
+
+    <!-- Form Ganti Slug (tersembunyi) -->
+    <div id="form-ganti-slug" class="hidden mt-3 pt-3 border-t border-orange-100">
+      <form action="/profil/slug" method="post" onsubmit="return validateSlug()">
+        <p class="text-xs text-orange-700 font-medium mb-2">Ganti URL Toko:</p>
+        <div class="flex items-center bg-white border border-orange-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-orange-400 mb-2">
+          <span class="text-xs text-orange-400 pl-3 pr-1 whitespace-nowrap select-none">{{ main_domain }}/</span>
+          <input type="text" name="slug" id="slug-input" value="{{ toko_slug }}"
+            placeholder="nama-toko"
+            class="flex-1 text-xs text-orange-900 font-semibold py-2 pr-3 bg-transparent outline-none"
+            oninput="updateSlugPreview(this.value)">
+        </div>
+        <p class="text-xs text-orange-500 mb-3">Preview: <span id="slug-preview" class="font-semibold text-orange-800">{{ short_link }}</span></p>
+        <div class="flex gap-2">
+          <button type="submit"
+            class="text-xs px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition-colors">
+            Simpan
+          </button>
+          <button type="button" onclick="toggleGantiSlug()"
+            class="text-xs px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 rounded-lg font-medium transition-colors">
+            Batal
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
 </div>
 
-<!-- Quick Actions -->
-<h3 class="text-sm font-bold text-slate-600 uppercase tracking-wide mb-4">Aksi Cepat</h3>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+<!-- Bottom Section: Quick Actions + Transaksi Terbaru -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-  <a href="/pppoe/users" class="card p-5 hover:shadow-md hover:border-blue-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 group-hover:shadow-blue-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-    </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">Tambah Pelanggan PPPoE</p>
-      <p class="text-xs text-slate-400 mt-0.5">Daftarkan pelanggan baru</p>
-    </div>
-  </a>
+  <!-- Quick Actions (2/3) -->
+  <div class="lg:col-span-2">
+    <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">Aksi Cepat</h3>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
 
-  <a href="/hotspot/voucher" class="card p-5 hover:shadow-md hover:border-orange-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-700 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200 group-hover:shadow-orange-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
-    </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-orange-700 transition-colors">Generate Voucher</p>
-      <p class="text-xs text-slate-400 mt-0.5">Buat voucher hotspot baru</p>
-    </div>
-  </a>
+      <a href="/pppoe/users" class="card p-4 hover:shadow-md hover:border-blue-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-blue-700 transition-colors leading-tight">Tambah PPPoE</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">Pelanggan baru</p>
+        </div>
+      </a>
 
-  <a href="/hotspot/voucher/print" class="card p-5 hover:shadow-md hover:border-green-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:shadow-emerald-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-    </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-emerald-700 transition-colors">Cetak Voucher</p>
-      <p class="text-xs text-slate-400 mt-0.5">Print voucher siap pakai</p>
-    </div>
-  </a>
+      <a href="/hotspot/voucher" class="card p-4 hover:shadow-md hover:border-orange-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#f97316,#ea580c)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-orange-700 transition-colors leading-tight">Generate Voucher</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">Buat hotspot baru</p>
+        </div>
+      </a>
 
-  <a href="/servers" class="card p-5 hover:shadow-md hover:border-purple-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200 group-hover:shadow-purple-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
-    </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-purple-700 transition-colors">Tambah Server</p>
-      <p class="text-xs text-slate-400 mt-0.5">Daftarkan MikroTik via VPN</p>
-    </div>
-  </a>
+      <a href="/hotspot/voucher/print" class="card p-4 hover:shadow-md hover:border-green-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#10b981,#059669)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-emerald-700 transition-colors leading-tight">Cetak Voucher</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">Print siap pakai</p>
+        </div>
+      </a>
 
-  <a href="/transaksi" class="card p-5 hover:shadow-md hover:border-cyan-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-700 rounded-2xl flex items-center justify-center shadow-lg shadow-cyan-200 group-hover:shadow-cyan-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-    </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">Riwayat Transaksi</p>
-      <p class="text-xs text-slate-400 mt-0.5">Lihat semua transaksi</p>
-    </div>
-  </a>
+      <a href="/servers" class="card p-4 hover:shadow-md hover:border-purple-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-purple-700 transition-colors leading-tight">Tambah Server</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">MikroTik via VPN</p>
+        </div>
+      </a>
 
-  {% if user.role in ('admin','agen') %}
-  <a href="/agen" class="card p-5 hover:shadow-md hover:border-indigo-200 transition-all group cursor-pointer flex items-center gap-4">
-    <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:shadow-indigo-300 transition-shadow flex-shrink-0">
-      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <a href="/pppoe/tagihan" class="card p-4 hover:shadow-md hover:border-rose-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#f43f5e,#e11d48)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-rose-700 transition-colors leading-tight">Tagihan PPPoE</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">Kelola tagihan</p>
+        </div>
+      </a>
+
+      <a href="/laporan" class="card p-4 hover:shadow-md hover:border-cyan-200 transition-all group flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm"
+             style="background:linear-gradient(135deg,#06b6d4,#0891b2)">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors leading-tight">Laporan</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate">Analitik bulanan</p>
+        </div>
+      </a>
+
     </div>
-    <div>
-      <p class="font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">{% if user.role=='admin' %}Manajemen Agen{% else %}Sub Agen{% endif %}</p>
-      <p class="text-xs text-slate-400 mt-0.5">Kelola akun reseller</p>
+  </div>
+
+  <!-- Transaksi Terbaru (1/3) -->
+  <div class="lg:col-span-1">
+    <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">Transaksi Terbaru</h3>
+    <div class="card overflow-hidden">
+      {% if transaksi_terbaru %}
+        <ul class="divide-y divide-slate-50">
+          {% for t in transaksi_terbaru %}
+          <li class="px-4 py-3 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold text-slate-700 truncate">{{ t.keterangan or '-' }}</p>
+              <p class="text-xs text-slate-400 mt-0.5">
+                {{ t.created_at | datetimeformat if t.created_at else '-' }}
+              </p>
+            </div>
+            <span class="text-xs font-bold text-emerald-600 flex-shrink-0">+{{ t.amount | rp }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-100 text-center">
+          <a href="/transaksi" class="text-xs text-blue-600 font-semibold hover:text-blue-700">Lihat semua transaksi →</a>
+        </div>
+      {% else %}
+        <div class="px-4 py-10 text-center">
+          <div class="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <p class="text-xs text-slate-400">Belum ada transaksi</p>
+        </div>
+      {% endif %}
     </div>
-  </a>
-  {% endif %}
+  </div>
 
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-function copyTokoUrl() {
-  const url = document.getElementById('toko-url').textContent.trim();
+function copyTokoUrl(url) {
   navigator.clipboard.writeText(url).then(() => showToast('Link toko disalin!'));
 }
+
+function toggleGantiSlug() {
+  const el = document.getElementById('form-ganti-slug');
+  el.classList.toggle('hidden');
+  if (!el.classList.contains('hidden')) {
+    document.getElementById('slug-input').focus();
+  }
+}
+
+function updateSlugPreview(val) {
+  const clean = val.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  document.getElementById('slug-preview').textContent = '{{ main_domain }}/' + (clean || '...');
+}
+
+function validateSlug() {
+  const val = document.getElementById('slug-input').value.trim();
+  if (!val) { showToast('URL tidak boleh kosong', 'error'); return false; }
+  return true;
+}
+
+// Feedback dari redirect setelah simpan slug
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const ok = params.get('ok');
+  const err = params.get('error');
+  if (ok === 'slug_updated') showToast('URL toko berhasil diubah!', 'success');
+  else if (err === 'slug_kosong') { showToast('URL tidak boleh kosong', 'error'); toggleGantiSlug(); }
+  else if (err === 'slug_taken') { showToast('URL sudah dipakai tenant lain', 'error'); toggleGantiSlug(); }
+  if (ok || err) history.replaceState({}, '', '/dashboard');
+})();
 </script>
 {% endblock %}

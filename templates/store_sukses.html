@@ -112,7 +112,7 @@
       </li>
       <li class="flex gap-2.5">
         <span class="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">2</span>
-        <span>Browser akan otomatis membuka halaman login, atau buka <strong>1.1.1.1</strong></span>
+        <span>Browser akan otomatis membuka halaman login hotspot</span>
       </li>
       <li class="flex gap-2.5">
         <span class="w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center flex-shrink-0 font-bold mt-0.5">3</span>
@@ -195,7 +195,7 @@ function salinKode() {
 function bagikanVoucher() {
   const kode = document.getElementById('kode-box')?.textContent.trim();
   if (!kode) return;
-  const teks = `🎟️ Voucher Hotspot {{ isp.nama if isp else '' }}\n\nKode: ${kode}\n\nCara pakai: Sambung WiFi → buka 1.1.1.1 → masukkan kode.`;
+  const teks = `🎟️ Voucher Hotspot {{ isp.nama if isp else '' }}\n\nKode: ${kode}\n\nCara pakai: Sambung WiFi → masukkan kode di halaman login hotspot.`;
   if (navigator.share) {
     navigator.share({ title: 'Voucher Hotspot', text: teks });
   } else {

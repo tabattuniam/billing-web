@@ -21,6 +21,7 @@ CFG = yaml.safe_load(_cfg_path.read_text())
 
 APP_NAME    = CFG["app"]["name"]
 APP_DOMAIN  = CFG["app"].get("domain", "billing.vpntunel.my.id")
+MAIN_DOMAIN = CFG.get("vpntunel", {}).get("domain", APP_DOMAIN)
 SECRET_KEY  = CFG["app"]["secret_key"]
 PORT        = CFG["app"].get("port", 8094)
 DB_PATH     = CFG["db_path"]
@@ -29,18 +30,14 @@ WA_TOKEN    = CFG.get("wuzapi", {}).get("token", "")
 WA_ADMIN_TOKEN   = CFG.get("wuzapi", {}).get("admin_token", "")
 WA_USERS_DB      = CFG.get("wuzapi", {}).get("users_db", "")
 PLATFORM_OWNER_WA = CFG.get("platform", {}).get("owner_wa", "")
-SA_USERNAME = CFG.get("superadmin", {}).get("username", "superadmin")
-SA_PASSWORD = CFG.get("superadmin", {}).get("password", "")
-MT_SERVER   = CFG.get("midtrans", {}).get("server_key", "")
-MT_CLIENT   = CFG.get("midtrans", {}).get("client_key", "")
-MT_PROD     = CFG.get("midtrans", {}).get("is_production", False)
-MT_BASE     = "https://app.midtrans.com" if MT_PROD else "https://app.sandbox.midtrans.com"
 
-DK_MERCHANT = CFG.get("duitku", {}).get("merchant_code", "")
-DK_API_KEY  = CFG.get("duitku", {}).get("api_key", "")
-DK_PROD     = CFG.get("duitku", {}).get("is_production", False)
-DK_METHOD   = CFG.get("duitku", {}).get("payment_method", "M2")
-DK_BASE     = "https://passport.duitku.com/webapi" if DK_PROD else "https://sandbox.duitku.com/webapi"
+MAYAR_KEY      = CFG.get("mayar", {}).get("api_key", "")
+MAYAR_WEBHOOK  = CFG.get("mayar", {}).get("webhook_token", "")
+MAYAR_BASE     = CFG.get("mayar", {}).get("base_url", "https://api.mayar.id")
+
+# Estimasi fee Mayar untuk channel QRIS (paling murah). Dipakai di Mode A
+# (pelanggan tanggung) untuk dihitung sebagai markup ke total bayar.
+MAYAR_FEE_PERCENT = 0.7  # 0.7%
 
 db  = Storage(DB_PATH)
 
@@ -71,8 +68,16 @@ def ts_date(ts) -> str:
         return str(ts)
 
 
+def datetimeformat(ts) -> str:
+    from datetime import datetime
+    try:
+        return datetime.fromtimestamp(int(ts)).strftime("%-d %b %Y %H:%M")
+    except Exception:
+        return "-"
+
 tpl.env.filters["rp"] = rp
 tpl.env.filters["ts_date"] = ts_date
+tpl.env.filters["datetimeformat"] = datetimeformat
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
@@ -123,6 +128,11 @@ def require_login(request: Request) -> dict:
         raise HTTPException(status_code=302, headers={"Location": "/login"})
     if user.get("role") in ("agen", "sub_agen"):
         raise HTTPException(status_code=302, headers={"Location": "/panel"})
+    # Tenant yang suspend karena tagihan SaaS hanya boleh akses halaman tagihan
+    if user.get("status") == "suspend_saas":
+        path = request.url.path
+        if path not in ("/tagihan-saas",) and not path.startswith("/tagihan-saas/"):
+            raise HTTPException(status_code=302, headers={"Location": "/tagihan-saas"})
     return user
 
 
@@ -142,7 +152,7 @@ def _log(request: Request, user: dict, aksi: str, detail: str = ""):
 
 def _ctx(request: Request, **kw) -> dict:
     """Build template context without 'request' (Starlette 1.x adds it automatically)."""
-    return {"app_name": APP_NAME, "app_domain": APP_DOMAIN, **kw}
+    return {"app_name": APP_NAME, "app_domain": APP_DOMAIN, "main_domain": MAIN_DOMAIN, **kw}
 
 # ── WuzAPI ────────────────────────────────────────────────────────────────────
 
@@ -244,6 +254,15 @@ def _wa_get_qr(token: str) -> str:
 def _wa_disconnect(token: str):
     try:
         requests.post(f"{WA_URL}/session/disconnect", json={},
+                      headers={"Token": token}, timeout=5)
+    except Exception:
+        pass
+
+
+def _wa_logout(token: str):
+    """Logout dari WhatsApp — hapus linked device, session berikutnya perlu QR baru."""
+    try:
+        requests.post(f"{WA_URL}/session/logout", json={},
                       headers={"Token": token}, timeout=5)
     except Exception:
         pass
@@ -465,6 +484,94 @@ scheduler.add_job(_run_auto_suspend, CronTrigger(hour=10, minute=0, timezone="As
                   id="auto_suspend", replace_existing=True)
 
 
+# ── Auto Generate Tagihan SaaS (tanggal 1 tiap bulan) ────────────────────────
+
+def _run_auto_saas_billing():
+    """Tanggal 1 jam 06:00 WIB — generate tagihan SaaS untuk semua tenant aktif."""
+    from datetime import date
+    import uuid as _uuid
+    bulan = date.today().strftime("%Y-%m")
+    con = db._conn()
+    tarif   = int(con.execute("SELECT value FROM platform_config WHERE key='saas_tarif_pppoe'").fetchone()[0] or 1000)
+    minimum = int(con.execute("SELECT value FROM platform_config WHERE key='saas_minimum'").fetchone()[0] or 25000)
+    tenants = con.execute("SELECT id FROM users WHERE role='admin' AND status='aktif'").fetchall()
+    for t in tenants:
+        uid = t[0]
+        try:
+            existing = con.execute("SELECT id FROM saas_tagihan WHERE user_id=? AND bulan=?", (uid, bulan)).fetchone()
+            if existing:
+                continue
+            n_pppoe = con.execute(
+                "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (uid,)
+            ).fetchone()[0]
+            if n_pppoe == 0:
+                continue
+            subtotal = n_pppoe * tarif
+            total    = max(subtotal, minimum)
+            tid = "SAAS-" + _uuid.uuid4().hex[:10].upper()
+            con.execute(
+                "INSERT INTO saas_tagihan (id,user_id,bulan,jumlah_pppoe,tarif_per_pppoe,subtotal,total,minimum,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (tid, uid, bulan, n_pppoe, tarif, subtotal, total, minimum, "unpaid", int(time.time()))
+            )
+            # Kirim notif WA ke ISP
+            isp = con.execute("SELECT nama, wa_number FROM users WHERE id=?", (uid,)).fetchone()
+            if isp and isp[1]:
+                tok = db.get_platform_config("wa_token") or WA_TOKEN
+                send_wa(isp[1],
+                    f"🧾 *Tagihan SaaS {bulan}*\n\n"
+                    f"Halo *{isp[0]}*,\n"
+                    f"Tagihan sewa platform bulan *{bulan}* telah diterbitkan.\n\n"
+                    f"PPPoE Aktif: *{n_pppoe} pelanggan*\n"
+                    f"Total: *Rp {total:,}*\n\n"
+                    f"Silakan bayar via menu Tagihan SaaS sebelum tanggal 10.",
+                    token=tok)
+        except Exception:
+            pass
+    con.commit()
+    con.close()
+
+scheduler.add_job(_run_auto_saas_billing,
+                  CronTrigger(day=1, hour=6, minute=0, timezone="Asia/Jakarta"),
+                  id="auto_saas_billing", replace_existing=True)
+
+
+# ── Auto Suspend Tenant SaaS Overdue (tanggal 10) ────────────────────────────
+
+def _run_auto_saas_suspend():
+    """Tanggal 10 jam 08:00 WIB — suspend tenant yang tagihan SaaS belum lunas."""
+    from datetime import date
+    bulan = date.today().strftime("%Y-%m")
+    con = db._conn()
+    # Cari tenant dengan tagihan unpaid/waiting_payment bulan ini
+    rows = con.execute("""
+        SELECT s.id AS tagihan_id, s.user_id, s.total, u.nama, u.wa_number
+        FROM saas_tagihan s JOIN users u ON u.id=s.user_id
+        WHERE s.bulan=? AND s.status IN ('unpaid','waiting_payment')
+        AND u.status='aktif'
+    """, (bulan,)).fetchall()
+    for r in rows:
+        try:
+            con.execute("UPDATE users SET status='suspend_saas' WHERE id=?", (r["user_id"],))
+            # WA notif ke ISP
+            if r["wa_number"]:
+                tok = db.get_platform_config("wa_token") or WA_TOKEN
+                send_wa(r["wa_number"],
+                    f"⚠️ *Akun Disuspend*\n\n"
+                    f"Halo *{r['nama']}*,\n"
+                    f"Akun Anda disuspend karena tagihan SaaS bulan *{bulan}* "
+                    f"sebesar *Rp {r['total']:,}* belum dilunasi.\n\n"
+                    f"Silakan lakukan pembayaran untuk mengaktifkan kembali akun.",
+                    token=tok)
+        except Exception:
+            pass
+    con.commit()
+    con.close()
+
+scheduler.add_job(_run_auto_saas_suspend,
+                  CronTrigger(day=10, hour=8, minute=0, timezone="Asia/Jakarta"),
+                  id="auto_saas_suspend", replace_existing=True)
+
+
 # ── PPPoE Online Cache ────────────────────────────────────────────────────────
 
 async def _refresh_pppoe_online():
@@ -611,7 +718,24 @@ def _to_slug(s: str) -> str:
 @app.get("/profil", response_class=HTMLResponse)
 async def profil_page(request: Request):
     user = require_login(request)
-    return tpl.TemplateResponse(request, "profil.html", _ctx(request, user=user, active="profil"))
+    # Re-read fee_mode dari DB (sessions cache mungkin stale)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute("SELECT fee_mode FROM users WHERE id=?", (user["id"],)).fetchone()
+    con.close()
+    fee_mode = (dict(row).get("fee_mode") if row else "customer") or "customer"
+    # Read platform fee config
+    try:
+        pf_small  = int(db.get_platform_config("platform_fee_small") or 300)
+        pf_large  = int(db.get_platform_config("platform_fee_large") or 700)
+        pf_thresh = int(db.get_platform_config("platform_fee_threshold") or 50000)
+    except Exception:
+        pf_small, pf_large, pf_thresh = 300, 700, 50000
+    return tpl.TemplateResponse(request, "profil.html", _ctx(
+        request, user=user, active="profil",
+        fee_mode=fee_mode, pf_small=pf_small, pf_large=pf_large, pf_thresh=pf_thresh,
+        mayar_fee_percent=MAYAR_FEE_PERCENT,
+    ))
 
 
 @app.post("/profil/update", response_class=JSONResponse)
@@ -652,6 +776,20 @@ async def profil_update(request: Request):
     return JSONResponse({"ok": True})
 
 
+@app.post("/profil/fee-mode", response_class=JSONResponse)
+async def update_fee_mode(request: Request, fee_mode: str = Form(...)):
+    user = require_login(request)
+    if user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Hanya admin ISP yang bisa ubah"})
+    fee_mode = (fee_mode or "").strip().lower()
+    if fee_mode not in ("customer", "tenant"):
+        return JSONResponse({"ok": False, "msg": "Mode tidak valid (customer atau tenant)"})
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET fee_mode=? WHERE id=?", (fee_mode, user["id"]))
+    con.commit(); con.close()
+    return JSONResponse({"ok": True, "fee_mode": fee_mode})
+
+
 @app.post("/profil/slug")
 async def update_slug(request: Request, slug: str = Form(...)):
     user = require_login(request)
@@ -670,7 +808,39 @@ async def update_slug(request: Request, slug: str = Form(...)):
 async def dashboard(request: Request):
     user = require_login(request)
     stats = db.stats(user["id"], user["role"])
-    return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, user=user, stats=stats))
+    # Data tambahan untuk dashboard
+    import calendar
+    now = int(time.time())
+    bulan_ini_start = int(time.mktime(time.localtime(now)[:2] + (1, 0, 0, 0, 0, 0, 0)))
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    iid = _isp_id(user)
+    # Pendapatan bulan ini
+    pendapatan_bulan = con.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM transaksi WHERE user_id=? AND created_at>=?",
+        (iid, bulan_ini_start)
+    ).fetchone()[0]
+    # Transaksi terbaru (5)
+    transaksi_terbaru = [dict(r) for r in con.execute(
+        "SELECT amount, keterangan, created_at FROM transaksi WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
+        (iid,)
+    ).fetchall()]
+    # Total pelanggan PPPoE
+    total_pppoe = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=?", (iid,)
+    ).fetchone()[0]
+    # Tagihan belum lunas bulan ini
+    tagihan_pending = con.execute(
+        "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND status='unpaid'", (iid,)
+    ).fetchone()[0]
+    con.close()
+    return tpl.TemplateResponse(request, "dashboard.html", _ctx(
+        request, user=user, stats=stats,
+        pendapatan_bulan=pendapatan_bulan,
+        transaksi_terbaru=transaksi_terbaru,
+        total_pppoe=total_pppoe,
+        tagihan_pending=tagihan_pending,
+    ))
 
 
 @app.get("/bantuan", response_class=HTMLResponse)
@@ -680,32 +850,45 @@ async def bantuan_page(request: Request):
 
 
 @app.get("/laporan", response_class=HTMLResponse)
-async def laporan_page(request: Request, tahun: str = ""):
+async def laporan_page(request: Request, tahun: str = "", mode: str = "bulanan", bulan: str = ""):
     user = require_login(request)
     from datetime import date
+    today = date.today()
     if not tahun:
-        tahun = str(date.today().year)
-    tahun_list = [str(date.today().year - i) for i in range(3)]
+        tahun = str(today.year)
+    if not bulan:
+        bulan = today.strftime("%Y-%m")
+    tahun_list = [str(today.year - i) for i in range(3)]
+    # Daftar bulan untuk dropdown filter harian
+    bulan_list = []
+    for y in range(today.year, today.year - 2, -1):
+        for m in range(12, 0, -1):
+            bulan_list.append(f"{y}-{str(m).zfill(2)}")
     iid = _isp_id(user)
-    bulanan        = db.laporan_pendapatan(iid, tahun)
-    pelanggan      = db.laporan_pelanggan_baru(iid, tahun)
-    topup_manual   = db.laporan_topup_agen(iid, tahun)
+    bulanan         = db.laporan_pendapatan(iid, tahun)
+    pelanggan       = db.laporan_pelanggan_baru(iid, tahun)
+    topup_manual    = db.laporan_topup_agen(iid, tahun)
     pendapatan_agen = db.laporan_pendapatan_agen(iid, tahun)
+    harian          = db.laporan_pendapatan_harian(iid, bulan) if mode == "harian" else []
     # Summary bulan ini
-    bulan_ini = date.today().strftime("%Y-%m")
+    bulan_ini = today.strftime("%Y-%m")
     stats_bln = db.stats_tagihan(iid, bulan_ini)
-    # Total setahun
-    total_tahun         = sum(b["total"] for b in bulanan)
-    total_topup_manual  = sum(t["total"] for t in topup_manual)
-    total_pend_agen     = sum(t["total"] for t in pendapatan_agen)
-    total_semua         = total_tahun + total_topup_manual
+    # Totals
+    total_tahun        = sum(b["total"] for b in bulanan)
+    total_topup_manual = sum(t["total"] for t in topup_manual)
+    total_pend_agen    = sum(t["total"] for t in pendapatan_agen)
+    total_semua        = total_tahun + total_topup_manual
+    total_harian       = sum(h["total"] for h in harian)
     return tpl.TemplateResponse(request, "laporan.html", _ctx(
         request, user=user, active="laporan",
         tahun=tahun, tahun_list=tahun_list,
+        bulan=bulan, bulan_list=bulan_list,
+        mode=mode,
         bulanan=bulanan, pelanggan=pelanggan,
         topup_manual=topup_manual, total_topup_manual=total_topup_manual,
         pendapatan_agen=pendapatan_agen, total_pend_agen=total_pend_agen,
         stats_bln=stats_bln, total_tahun=total_tahun, total_semua=total_semua,
+        harian=harian, total_harian=total_harian,
     ))
 
 # ── MikroTik Servers ──────────────────────────────────────────────────────────
@@ -722,7 +905,7 @@ async def server_tambah(
     request: Request,
     nama: str = Form(...), vpn_ip: str = Form(...),
     api_port: int = Form(8728), api_user: str = Form("admin"),
-    api_password: str = Form(""), lokasi: str = Form("")
+    api_password: str = Form(""), lokasi: str = Form(""),
 ):
     user = require_login(request)
     db.create_server(user["id"], nama, vpn_ip, api_port, api_user, api_password, lokasi)
@@ -734,7 +917,7 @@ async def server_edit(
     request: Request, sid: str,
     nama: str = Form(...), vpn_ip: str = Form(...),
     api_port: int = Form(8728), api_user: str = Form("admin"),
-    api_password: str = Form(""), lokasi: str = Form("")
+    api_password: str = Form(""), lokasi: str = Form(""),
 ):
     user = require_login(request)
     s = db.get_server(sid)
@@ -814,6 +997,33 @@ async def pppoe_paket_tambah(
     user = require_login(request)
     db.create_paket_pppoe(user["id"], nama, kecepatan, harga)
     return RedirectResponse("/pppoe/paket", status_code=302)
+
+
+@app.post("/pppoe/paket/{pid}/edit", response_class=JSONResponse)
+async def pppoe_paket_edit(request: Request, pid: int):
+    user = require_login(request)
+    body = await request.json()
+    nama      = (body.get("nama") or "").strip()
+    kecepatan = (body.get("kecepatan") or "").strip()
+    harga     = int(body.get("harga") or 0)
+    if not nama or not kecepatan or harga <= 0:
+        return JSONResponse({"ok": False, "msg": "Nama, profile, dan harga wajib diisi"})
+    p = db.get_paket_pppoe(pid)
+    if not p or p["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Paket tidak ditemukan"}, status_code=404)
+    db.update_paket_pppoe(pid, user["id"], nama, kecepatan, harga)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/pppoe/paket/{pid}/hapus", response_class=JSONResponse)
+async def pppoe_paket_hapus(request: Request, pid: int):
+    user = require_login(request)
+    p = db.get_paket_pppoe(pid)
+    if not p or p["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Paket tidak ditemukan"}, status_code=404)
+    db.delete_paket_pppoe(pid, user["id"])
+    return JSONResponse({"ok": True})
+
 
 # ── ODP ───────────────────────────────────────────────────────────────────────
 
@@ -1005,18 +1215,33 @@ async def pppoe_user_tambah(
     return RedirectResponse("/pppoe/users", status_code=302)
 
 
-@app.post("/pppoe/users/hapus/{pid}")
+@app.post("/pppoe/users/hapus/{pid}", response_class=JSONResponse)
 async def pppoe_user_hapus(request: Request, pid: int):
     user = require_login(request)
     iid = _isp_id(user)
     pu = db.get_pppoe_user(pid)
-    if pu and pu["user_id"] == iid:
-        mt = get_mt(pu["server_id"])
-        if mt:
-            mt.remove_pppoe_secret(pu["username"])
-        db.delete_pppoe_user(pid)
-        _log(request, user, "Hapus Pelanggan PPPoE", f"{pu['nama_pelanggan']} ({pu['username']})")
-    return RedirectResponse("/pppoe/users", status_code=302)
+    if not pu or pu["user_id"] != iid:
+        return JSONResponse({"ok": False, "msg": "Pelanggan tidak ditemukan"}, status_code=404)
+
+    mt_ok = False
+    mt_err = ""
+    mt = get_mt(pu["server_id"])
+    if mt:
+        mt_ok = mt.remove_pppoe_secret(pu["username"])
+        if not mt_ok:
+            mt_err = "Gagal hapus dari MikroTik — secret tidak ditemukan atau koneksi gagal"
+    else:
+        mt_err = "Tidak dapat terhubung ke router"
+
+    db.delete_pppoe_user(pid)
+    _log(request, user, "Hapus Pelanggan PPPoE", f"{pu['nama_pelanggan']} ({pu['username']}) — MT: {'ok' if mt_ok else mt_err}")
+
+    return JSONResponse({
+        "ok": True,
+        "mt_ok": mt_ok,
+        "mt_err": mt_err,
+        "nama": pu["nama_pelanggan"],
+    })
 
 
 @app.post("/pppoe/users/edit/{pid}")
@@ -1252,6 +1477,17 @@ async def wa_gateway_disconnect(request: Request):
     return JSONResponse({"ok": True})
 
 
+@app.post("/wa-gateway/logout", response_class=JSONResponse)
+async def wa_gateway_logout(request: Request):
+    """Logout dari WhatsApp dan hapus linked device — diperlukan untuk ganti nomor."""
+    user = require_login(request)
+    gw = db.get_wa_gateway(user["id"])
+    if gw and gw.get("wa_token"):
+        _wa_logout(gw["wa_token"])
+        db.update_wa_gateway_status(user["id"], "disconnected", "")
+    return JSONResponse({"ok": True})
+
+
 @app.post("/wa-gateway/test-notif", response_class=JSONResponse)
 async def wa_test_notif(request: Request):
     """Kirim WA test notifikasi ke nomor tertentu."""
@@ -1465,7 +1701,7 @@ async def tagihan_lunas(request: Request, tid: int):
 
 @app.post("/pppoe/tagihan/{tid}/kirim-link", response_class=JSONResponse)
 async def tagihan_kirim_link(request: Request, tid: int):
-    """Generate link bayar Duitku untuk tagihan, kirim via WA."""
+    """Kirim link tagihan via WA (QRIS/transfer manual)."""
     user = require_login(request)
     t = db.get_tagihan(tid)
     if not t or t["user_id"] != user["id"]:
@@ -1476,28 +1712,6 @@ async def tagihan_kirim_link(request: Request, tid: int):
         return JSONResponse({"ok": False, "msg": "Nomor WA pelanggan belum diisi"})
 
     label = _label_bulan(t["bulan"])
-    order_id = f"TGH-{tid}-{int(time.time())}"
-    return_url = f"https://{APP_DOMAIN}/bayar/tagihan/{tid}/sukses"
-    keterangan = f"Tagihan Internet {label} - {t['nama_pelanggan']}"
-
-    # Coba Duitku dulu, fallback ke Midtrans jika tidak dikonfigurasi
-    if DK_MERCHANT:
-        payment_url = _duitku_create_invoice(
-            order_id, t["amount"], t["nama_pelanggan"],
-            t["telepon"], keterangan, return_url
-        )
-        if not payment_url:
-            return JSONResponse({"ok": False, "msg": "Gagal membuat link pembayaran Duitku"})
-        db.set_tagihan_snap_token(tid, payment_url, order_id)
-    else:
-        snap_token = _mt_snap_token(
-            order_id, t["amount"], t["nama_pelanggan"], t["telepon"],
-            finish_url=return_url
-        )
-        if not snap_token:
-            return JSONResponse({"ok": False, "msg": "Gagal membuat link pembayaran"})
-        db.set_tagihan_snap_token(tid, snap_token, order_id)
-
     link = f"https://{APP_DOMAIN}/bayar/tagihan/{tid}"
     nominal = f"Rp {t['amount']:,}".replace(",", ".")
     send_wa(
@@ -1950,8 +2164,10 @@ async def saldo_page(request: Request, bulan: str = ""):
 
     logs = [l for l in logs_all if _in_bulan(l["created_at"], bulan)]
 
-    total_kredit = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
-    total_debit  = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
+    total_kredit    = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
+    total_debit     = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
+    kredit_mayar    = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "mayar")
+    kredit_qris     = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "qris_statis")
 
     saved_rek = {
         "bank": user.get("rek_bank") or "",
@@ -1971,6 +2187,7 @@ async def saldo_page(request: Request, bulan: str = ""):
         request, user=user, logs=logs, saved_rek=saved_rek,
         sel_bulan=bulan,
         stats={"kredit": total_kredit, "debit": total_debit,
+               "kredit_mayar": kredit_mayar, "kredit_qris": kredit_qris,
                "total_log": len(logs), "tarik_pending": tarik_pending},
         pending_topup_count=pending_topup_count))
 
@@ -2053,61 +2270,12 @@ async def tarik_requests_page(request: Request):
     ))
 
 
-@app.post("/sa/platform/tarik/{rid}/approve", response_class=JSONResponse)
-async def sa_tarik_approve(request: Request, rid: int):
-    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
-    body = await request.json()
-    admin_note = (body.get("note") or "").strip()
-    row = db.approve_tarik_saldo_sa(rid, admin_note)
-    if not row:
-        return JSONResponse({"ok": False, "detail": "Request tidak ditemukan atau sudah diproses"})
-    # WA notif ke ISP
-    isp = db.get_user(row["user_id"])
-    if isp and isp.get("nomor_wa"):
-        platform_token = db.get_platform_config("wa_token") or WA_TOKEN
-        send_wa(isp["nomor_wa"], (
-            f"✅ *Tarik Saldo Disetujui*\n\n"
-            f"Nominal: *Rp {row['nominal']:,}*\n"
-            f"Rekening: {row['bank_name']} — {row['rekening_no']}\n"
-            f"Dana akan ditransfer segera.\n"
-            f"{('Catatan SA: ' + admin_note) if admin_note else ''}"
-        ), token=platform_token)
-    return JSONResponse({"ok": True})
-
-
-@app.post("/sa/platform/tarik/{rid}/reject", response_class=JSONResponse)
-async def sa_tarik_reject(request: Request, rid: int):
-    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
-    body = await request.json()
-    admin_note = (body.get("note") or "").strip()
-    row = db.reject_tarik_saldo_sa(rid, admin_note)
-    if not row:
-        return JSONResponse({"ok": False, "detail": "Request tidak ditemukan atau sudah diproses"})
-    # WA notif ke ISP
-    isp = db.get_user(row["user_id"])
-    if isp and isp.get("nomor_wa"):
-        platform_token = db.get_platform_config("wa_token") or WA_TOKEN
-        send_wa(isp["nomor_wa"], (
-            f"❌ *Tarik Saldo Ditolak*\n\n"
-            f"Nominal: *Rp {row['nominal']:,}*\n"
-            f"{('Alasan: ' + admin_note) if admin_note else 'Hubungi platform untuk info lebih lanjut.'}"
-        ), token=platform_token)
-    return JSONResponse({"ok": True})
-
-
-@app.get("/sa/platform/tarik-json", response_class=JSONResponse)
-async def sa_tarik_json(request: Request):
-    if not current_sa(request): return JSONResponse({"ok": False, "detail": "Unauthorized"}, status_code=403)
-    rows = db.list_tarik_saldo_all()
-    return JSONResponse({"ok": True, "rows": rows})
-
-
 @app.post("/saldo/topup/{uid}")
 async def saldo_topup(request: Request, uid: str, jumlah: int = Form(...), keterangan: str = Form("")):
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/saldo", status_code=302)
-    db.topup_saldo(uid, jumlah, keterangan)
+    db.topup_saldo(uid, jumlah, keterangan, sumber="qris_statis")
     return RedirectResponse("/agen", status_code=302)
 
 
@@ -2476,9 +2644,68 @@ async def bayar_tagihan_page(request: Request, tid: int):
     t = db.get_tagihan(tid)
     if not t:
         return HTMLResponse("<h2>Tagihan tidak ditemukan</h2>", status_code=404)
+    con_fm = sqlite3.connect(DB_PATH)
+    con_fm.row_factory = sqlite3.Row
+    fm_row = con_fm.execute("SELECT fee_mode FROM users WHERE id=?", (t["user_id"],)).fetchone()
+    con_fm.close()
+    fee_mode  = (dict(fm_row).get("fee_mode") if fm_row else None) or "customer"
+    mayar_fee = _mayar_fee_estimate(t["amount"]) if fee_mode == "customer" else 0
     return tpl.TemplateResponse(request, "bayar_tagihan.html", _ctx(
-        request, t=t, mt_client=MT_CLIENT, mt_prod=MT_PROD
+        request, t=t,
+        mayar_enabled=bool(MAYAR_KEY),
+        mayar_fee=mayar_fee,
+        fee_mode=fee_mode,
     ))
+
+
+@app.get("/bayar/tagihan/{tid}/bayar-online", response_class=RedirectResponse)
+async def bayar_tagihan_online(request: Request, tid: int):
+    """Buat Mayar payment link untuk tagihan PPPoE dan redirect pelanggan."""
+    import logging as _logging
+    t = db.get_tagihan(tid)
+    if not t:
+        return HTMLResponse("<h2>Tagihan tidak ditemukan</h2>", status_code=404)
+    if t["status"] == "paid":
+        return RedirectResponse(f"/bayar/tagihan/{tid}", status_code=302)
+
+    # Sudah ada payment link aktif — redirect langsung
+    if t.get("snap_token") and t["snap_token"].startswith("mayar:"):
+        parts = t["snap_token"].split(":")
+        # cek status di Mayar, kalau masih unpaid re-use link
+        if len(parts) >= 2:
+            status = _mayar_get_payment_status(parts[1])
+            if status and status not in ("paid", "expired", "cancelled"):
+                # Ambil link lama - perlu buat ulang karena tidak menyimpan link
+                pass  # buat link baru di bawah
+
+    # Baca fee_mode ISP: 'customer' → pelanggan tanggung, 'tenant' → ISP tanggung
+    con_fm = sqlite3.connect(DB_PATH)
+    con_fm.row_factory = sqlite3.Row
+    fm_row = con_fm.execute("SELECT fee_mode FROM users WHERE id=?", (t["user_id"],)).fetchone()
+    con_fm.close()
+    fee_mode = (dict(fm_row).get("fee_mode") if fm_row else None) or "customer"
+
+    tagihan_amount = t["amount"]
+    mayar_fee = _mayar_fee_estimate(tagihan_amount)
+    bayar_amount = tagihan_amount + mayar_fee if fee_mode == "customer" else tagihan_amount
+
+    redirect_url = f"https://{APP_DOMAIN}/bayar/tagihan/{tid}/sukses"
+    nama = t.get("nama_pelanggan") or "Pelanggan"
+    nomor = (t.get("telepon") or "").lstrip("0").lstrip("+")
+    if nomor and not nomor.startswith("62"):
+        nomor = "62" + nomor
+    desc = f"Tagihan Internet {t.get('bulan','')} - {nama} ({t.get('isp_nama','')})"
+    order_id = f"TGHN-{tid}-{int(time.time())}"
+
+    result = _mayar_create_payment(order_id, bayar_amount, nama, nomor, desc, redirect_url)
+    if not result or not result.get("link"):
+        _logging.warning(f"[Mayar] Gagal buat payment tagihan {tid}")
+        return RedirectResponse(f"/bayar/tagihan/{tid}?err=payment_failed", status_code=302)
+
+    snap = f"mayar:{result['id']}:{result.get('transaction_id','')}"
+    db.set_tagihan_snap_token(tid, snap)
+    _logging.warning(f"[Mayar] tagihan {tid} payment created: {result['link']}")
+    return RedirectResponse(result["link"], status_code=302)
 
 
 @app.get("/bayar/tagihan/{tid}/sukses", response_class=HTMLResponse)
@@ -2486,237 +2713,182 @@ async def bayar_tagihan_sukses(request: Request, tid: int):
     t = db.get_tagihan(tid)
     if not t:
         return HTMLResponse("<h2>Tagihan tidak ditemukan</h2>", status_code=404)
-    if t["status"] != "paid" and t.get("order_id"):
-        snap = t.get("snap_token") or ""
-        if snap.startswith("https://"):
-            if _duitku_verify(t["order_id"]):
-                result = db.bayar_tagihan_by_order(t["order_id"])
-                if result:
-                    t = result
-                    _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
-        else:
-            if _mt_verify(t["order_id"]):
-                result = db.bayar_tagihan_by_order(t["order_id"])
-                if result:
-                    t = result
-                    _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
     return tpl.TemplateResponse(request, "bayar_tagihan.html", _ctx(
-        request, t=t, mt_client=MT_CLIENT, mt_prod=MT_PROD, sukses=(t["status"] == "paid")
+        request, t=t, sukses=(t["status"] == "paid")
     ))
 
 
-@app.post("/bayar/tagihan/notif")
-async def bayar_tagihan_notif(request: Request):
-    """Webhook Midtrans untuk tagihan PPPoE."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False})
-
-    order_id    = body.get("order_id", "")
-    status_code = body.get("status_code", "")
-    gross_amount = body.get("gross_amount", "")
-    sig_key     = body.get("signature_key", "")
-
-    if not order_id.startswith("TGH-"):
-        return JSONResponse({"ok": False})  # bukan tagihan PPPoE
-    if sig_key != _mt_sig(order_id, status_code, gross_amount):
-        return JSONResponse({"ok": False, "msg": "Invalid signature"})
-
-    tx_status = body.get("transaction_status", "")
-    if tx_status in ("capture", "settlement"):
-        t = db.bayar_tagihan_by_order(order_id)
-        if t:
-            # Reaktivasi PPPoE jika sebelumnya disuspend
-            _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
-            if t.get("telepon"):
-                label = _label_bulan(t["bulan"])
-                tok = _isp_wa_token(t["user_id"])
-                isp_nama = t.get("isp_nama", "")
-                nominal = f"Rp {t['amount']:,}".replace(",", ".")
-                send_wa(
-                    t["telepon"],
-                    _render_wa_template(t["user_id"], "pembayaran",
-                        nama=t["nama_pelanggan"], nominal=nominal,
-                        bulan=label, isp=isp_nama),
-                    token=tok
-                )
-    return JSONResponse({"ok": True})
-
-
-@app.post("/bayar/tagihan/duitku-notif")
-async def bayar_tagihan_duitku_notif(request: Request):
-    """Webhook Duitku untuk tagihan PPPoE."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False})
-
-    merchant_order_id = body.get("merchantOrderId", "")
-    amount            = str(body.get("amount", ""))
-    result_code       = body.get("resultCode", "")
-    sig               = body.get("signature", "")
-
-    if not merchant_order_id.startswith("TGH-"):
-        return JSONResponse({"ok": False})
-
-    if sig != _dk_sig_callback(amount, merchant_order_id):
-        return JSONResponse({"ok": False, "msg": "Invalid signature"})
-
-    if result_code == "00":
-        t = db.bayar_tagihan_by_order(merchant_order_id)
-        if t:
-            _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
-            if t.get("telepon"):
-                label   = _label_bulan(t["bulan"])
-                tok     = _isp_wa_token(t["user_id"])
-                nominal = f"Rp {t['amount']:,}".replace(",", ".")
-                send_wa(
-                    t["telepon"],
-                    _render_wa_template(t["user_id"], "pembayaran",
-                        nama=t["nama_pelanggan"], nominal=nominal,
-                        bulan=label, isp=t.get("isp_nama", "")),
-                    token=tok
-                )
-    return JSONResponse({"ok": True})
 
 
 # ── Toko Hotspot Online (Publik) ─────────────────────────────────────────────
 
-def _mt_snap_token(order_id: str, amount: int, nama: str, nomor_hp: str,
-                   finish_url: str = "") -> str | None:
-    """Buat Midtrans Snap token untuk pembayaran."""
-    if not MT_SERVER:
+
+# ── Mayar.id helpers ──────────────────────────────────────────────────────────
+
+def _mayar_create_payment(order_id: str, amount: int, nama: str, nomor_hp: str,
+                          description: str, redirect_url: str) -> dict | None:
+    """Buat payment di Mayar.id. Return dict {link, id, transaction_id} atau None."""
+    if not MAYAR_KEY:
         return None
-    import base64
-    auth = base64.b64encode(f"{MT_SERVER}:".encode()).decode()
     payload = {
-        "transaction_details": {"order_id": order_id, "gross_amount": amount},
-        "customer_details": {"first_name": nama, "phone": nomor_hp},
-        "callbacks": {
-            "finish": finish_url or f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
-        }
+        "name": (nama or "Pelanggan")[:60],
+        "email": "noreply@vpntunel.my.id",
+        "mobile": nomor_hp or "6285367281448",
+        "amount": int(amount),
+        "description": (description or "Voucher Hotspot") + f" #{order_id}",
+        "redirectUrl": redirect_url,
     }
+    import logging as _logging
     try:
         r = requests.post(
-            f"{MT_BASE}/snap/v1/transactions",
+            f"{MAYAR_BASE}/hl/v1/payment/create",
             json=payload,
-            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
-            timeout=10
+            headers={"Authorization": f"Bearer {MAYAR_KEY}", "Content-Type": "application/json"},
+            timeout=12,
         )
+        _logging.warning(f"[Mayar] create order={order_id} http={r.status_code} body={r.text[:300]}")
         data = r.json()
-        return data.get("token")
-    except Exception:
-        return None
-
-
-def _mt_verify(order_id: str) -> bool:
-    """Verifikasi status pembayaran Midtrans."""
-    if not MT_SERVER:
-        return False
-    import base64
-    auth = base64.b64encode(f"{MT_SERVER}:".encode()).decode()
-    try:
-        r = requests.get(
-            f"{MT_BASE}/v2/{order_id}/status",
-            headers={"Authorization": f"Basic {auth}"},
-            timeout=10
-        )
-        data = r.json()
-        status = data.get("transaction_status", "")
-        return status in ("capture", "settlement")
-    except Exception:
-        return False
-
-
-def _mt_sig(order_id: str, status_code: str, gross_amount: str) -> str:
-    raw = f"{order_id}{status_code}{gross_amount}{MT_SERVER}"
-    return hashlib.sha512(raw.encode()).hexdigest()
-
-
-# ── Duitku helpers ────────────────────────────────────────────────────────────
-
-def _dk_sig_create(merchant_order_id: str, amount: int) -> str:
-    raw = f"{DK_MERCHANT}{merchant_order_id}{amount}{DK_API_KEY}"
-    return hashlib.md5(raw.encode()).hexdigest()
-
-def _dk_sig_callback(amount: str, merchant_order_id: str) -> str:
-    raw = f"{DK_MERCHANT}{amount}{merchant_order_id}{DK_API_KEY}"
-    return hashlib.md5(raw.encode()).hexdigest()
-
-def _dk_sig_check(merchant_order_id: str) -> str:
-    raw = f"{DK_MERCHANT}{merchant_order_id}{DK_API_KEY}"
-    return hashlib.md5(raw.encode()).hexdigest()
-
-
-def _duitku_create_invoice(order_id: str, amount: int, nama: str,
-                           telepon: str, keterangan: str,
-                           return_url: str) -> str | None:
-    """Buat invoice Duitku. Return payment URL atau None jika gagal."""
-    if not DK_MERCHANT or not DK_API_KEY:
-        return None
-    if order_id.startswith("TOP-"):
-        callback_url = f"https://{APP_DOMAIN}/panel/topup/duitku-notif"
-    elif order_id.startswith("ORD-"):
-        callback_url = f"https://{APP_DOMAIN}/beli/duitku-notif"
-    else:
-        callback_url = f"https://{APP_DOMAIN}/bayar/tagihan/duitku-notif"
-    payload = {
-        "merchantCode":    DK_MERCHANT,
-        "paymentAmount":   amount,
-        "merchantOrderId": order_id,
-        "productDetails":  keterangan or "Tagihan Internet",
-        "customerVaName":  nama[:50],
-        "email":           "noreply@vpntunel.my.id",
-        "phoneNumber":     telepon or "",
-        "itemDetails": [{"name": keterangan or "Tagihan Internet",
-                         "price": amount, "quantity": 1}],
-        "callbackUrl":     callback_url,
-        "returnUrl":       return_url,
-        "signature":       _dk_sig_create(order_id, amount),
-        "expiryPeriod":    1440,
-        "paymentMethod":   DK_METHOD,
-    }
-    try:
-        r = requests.post(
-            f"{DK_BASE}/api/merchant/v2/inquiry",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=15
-        )
-        import logging as _logging
-        _logging.warning(f"[Duitku] HTTP {r.status_code} raw: {r.text[:500]}")
-        data = r.json()
-        _logging.warning(f"[Duitku] order={order_id} status={data.get('statusCode')} msg={data.get('statusMessage')} url={data.get('paymentUrl')}")
-        if data.get("statusCode") == "00":
-            return data.get("paymentUrl")
+        if data.get("statusCode") == 200 and data.get("data"):
+            d = data["data"]
+            return {
+                "link": d.get("link"),
+                "id": d.get("id") or d.get("paymentLinkId"),
+                "transaction_id": d.get("transaction_id") or d.get("transactionId"),
+            }
         return None
     except Exception as e:
-        import logging as _logging
-        _logging.warning(f"[Duitku] Exception: {e}")
+        _logging.warning(f"[Mayar] create error: {e}")
         return None
 
 
-def _duitku_verify(merchant_order_id: str) -> bool:
-    """Cek status transaksi Duitku. Return True jika sudah lunas."""
-    if not DK_MERCHANT or not DK_API_KEY:
-        return False
-    payload = {
-        "merchantCode":    DK_MERCHANT,
-        "merchantOrderId": merchant_order_id,
-        "signature":       _dk_sig_check(merchant_order_id),
-    }
+def _mayar_get_payment_status(payment_id: str) -> str | None:
+    """Ambil status payment dari Mayar (unpaid|paid|expired|...). Return None jika gagal."""
+    if not MAYAR_KEY or not payment_id:
+        return None
     try:
-        r = requests.post(
-            f"{DK_BASE}/api/merchant/transactionStatus",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=10
+        r = requests.get(
+            f"{MAYAR_BASE}/hl/v1/payment",
+            headers={"Authorization": f"Bearer {MAYAR_KEY}"},
+            timeout=10,
         )
         data = r.json()
-        return data.get("statusCode") == "00"
+        for item in data.get("data", []):
+            if item.get("id") == payment_id:
+                return item.get("status")
+        return None
     except Exception:
+        return None
+
+
+def _mayar_verify_payment(pay_link_id: str, tx_id: str) -> bool:
+    """Verifikasi ulang ke Mayar API bahwa payment benar-benar SUCCESS.
+    Return True hanya jika status terkonfirmasi success di sisi Mayar."""
+    import logging as _log
+    if not MAYAR_KEY:
+        return True  # Jika tidak ada key, skip verifikasi (fallback ke webhook saja)
+    try:
+        # Coba cek via paymentLinkId
+        if pay_link_id:
+            r = requests.get(
+                f"{MAYAR_BASE}/hl/v1/payment/{pay_link_id}",
+                headers={"Authorization": f"Bearer {MAYAR_KEY}"},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                d = r.json().get("data") or {}
+                status = (d.get("status") or "").lower()
+                _log.warning(f"[Mayar verify] link={pay_link_id} tx={tx_id} status={status}")
+                return status in ("success", "paid")
+        # Fallback: cari di list semua payment
+        r = requests.get(
+            f"{MAYAR_BASE}/hl/v1/payment",
+            headers={"Authorization": f"Bearer {MAYAR_KEY}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            for item in (r.json().get("data") or []):
+                if item.get("id") == pay_link_id or item.get("transactionId") == tx_id:
+                    status = (item.get("status") or "").lower()
+                    _log.warning(f"[Mayar verify-list] link={pay_link_id} tx={tx_id} status={status}")
+                    return status in ("success", "paid")
+        _log.warning(f"[Mayar verify] tidak ditemukan di API, link={pay_link_id} tx={tx_id}")
         return False
+    except Exception as e:
+        _log.warning(f"[Mayar verify] error: {e} — lanjut tanpa verifikasi")
+        return True  # Jika API error, jangan blokir webhook yang valid
+
+
+def _mayar_find_payment_by_link(link_short: str) -> dict | None:
+    """Cari payment di Mayar berdasarkan link short code (mis. cw25rjvzwd)."""
+    if not MAYAR_KEY or not link_short:
+        return None
+    try:
+        r = requests.get(
+            f"{MAYAR_BASE}/hl/v1/payment",
+            headers={"Authorization": f"Bearer {MAYAR_KEY}"},
+            timeout=10,
+        )
+        data = r.json()
+        for item in data.get("data", []):
+            if item.get("link") == link_short:
+                return item
+        return None
+    except Exception:
+        return None
+
+
+# ── Fee Mayar + Platform Commission helpers ─────────────────────────────────
+
+def _platform_fee_amount(harga: int) -> int:
+    """Komisi platform berdasarkan harga voucher.
+    < threshold (default 50k) → fee_small (300)
+    ≥ threshold              → fee_large (700)
+    """
+    try:
+        small     = int(db.get_platform_config("platform_fee_small") or 300)
+        large     = int(db.get_platform_config("platform_fee_large") or 700)
+        threshold = int(db.get_platform_config("platform_fee_threshold") or 50000)
+    except Exception:
+        small, large, threshold = 300, 700, 50000
+    return small if harga < threshold else large
+
+
+def _mayar_fee_estimate(amount: int) -> int:
+    """Estimasi fee Mayar untuk amount — baca persentase dari platform_config."""
+    try:
+        pct_str = db.get_platform_config("mayar_fee_percent")
+        pct = float(pct_str) if pct_str else MAYAR_FEE_PERCENT
+    except Exception:
+        pct = MAYAR_FEE_PERCENT
+    return int(round(amount * pct / 100))
+
+
+def _calc_order_amounts(harga: int, fee_mode: str) -> dict:
+    """Hitung jumlah bayar pelanggan + saldo masuk tenant + platform fee.
+
+    Mode 'customer' (default): pelanggan tanggung fee Mayar.
+        pelanggan_bayar = harga + mayar_fee_estimate
+        saldo_tenant    = harga - platform_fee
+    Mode 'tenant'  : tenant tanggung fee Mayar.
+        pelanggan_bayar = harga
+        saldo_tenant    = harga - mayar_fee_estimate - platform_fee
+    """
+    pf = _platform_fee_amount(harga)
+    mf = _mayar_fee_estimate(harga)
+    if fee_mode == "tenant":
+        pelanggan_bayar = harga
+        saldo_tenant    = max(0, harga - mf - pf)
+    else:  # customer (default)
+        pelanggan_bayar = harga + mf
+        saldo_tenant    = max(0, harga - pf)
+    return {
+        "harga": harga,
+        "fee_mayar_est": mf,
+        "platform_fee": pf,
+        "pelanggan_bayar": pelanggan_bayar,
+        "saldo_tenant": saldo_tenant,
+        "fee_mode": fee_mode,
+    }
 
 
 @app.get("/beli/{slug}/login", response_class=HTMLResponse)
@@ -2790,81 +2962,20 @@ async def panel_agen(request: Request):
         ok_msg=request.query_params.get("ok"),
         err_msg=request.query_params.get("error"),
         last_kodes=last_kodes, last_paket=last_paket,
-        mt_client=MT_CLIENT, mt_prod=MT_PROD,
         platform_qris=platform_qris
     ))
 
 
 @app.post("/panel/topup", response_class=JSONResponse)
 async def panel_topup(request: Request, amount: int = Form(...)):
-    """Buat order topup saldo via QRIS."""
+    """Buat order topup saldo via QRIS/transfer manual."""
     user = _require_agen(request)
     if not user:
         return JSONResponse({"ok": False, "msg": "Tidak terotorisasi"})
     if amount < 10000:
         return JSONResponse({"ok": False, "msg": "Minimal topup Rp 10.000"})
     oid = db.create_topup_order(user["id"], amount)
-    return_url = f"https://{APP_DOMAIN}/panel?ok=topup"
-    if DK_MERCHANT:
-        payment_url = _duitku_create_invoice(
-            oid, amount, user["nama"], user.get("nomor_wa", ""),
-            f"Topup Saldo Agen - {user['nama']}", return_url
-        )
-        if not payment_url:
-            return JSONResponse({"ok": False, "msg": "Gagal membuat transaksi Duitku"})
-        db.set_topup_snap_token(oid, payment_url)
-        return JSONResponse({"ok": True, "payment_url": payment_url, "order_id": oid})
-    else:
-        snap_token = _mt_snap_token(
-            oid, amount, user["nama"], user.get("nomor_wa", ""),
-            finish_url=return_url
-        )
-        if snap_token:
-            db.set_topup_snap_token(oid, snap_token)
-            return JSONResponse({"ok": True, "snap_token": snap_token, "order_id": oid})
-        return JSONResponse({"ok": False, "msg": "Gagal membuat transaksi. Cek konfigurasi Midtrans."})
-
-
-@app.post("/panel/topup/notif")
-async def panel_topup_notif(request: Request):
-    """Webhook Midtrans untuk topup saldo agen."""
-    try:
-        data = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False})
-    oid = data.get("order_id", "")
-    if not oid.startswith("TOP-"):
-        return JSONResponse({"ok": False})
-    status = data.get("transaction_status", "")
-    fraud = data.get("fraud_status", "")
-    gross = data.get("gross_amount", "0")
-    sig_recv = data.get("signature_key", "")
-    code = data.get("status_code", "200")
-    if sig_recv and sig_recv != _mt_sig(oid, code, gross):
-        return JSONResponse({"ok": False, "msg": "invalid signature"})
-    if status in ("capture", "settlement") and fraud != "challenge":
-        db.confirm_topup(oid)
-    return JSONResponse({"ok": True})
-
-
-@app.post("/panel/topup/duitku-notif")
-async def panel_topup_duitku_notif(request: Request):
-    """Webhook Duitku untuk topup saldo agen."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False})
-    oid         = body.get("merchantOrderId", "")
-    amount      = str(body.get("amount", ""))
-    result_code = body.get("resultCode", "")
-    sig         = body.get("signature", "")
-    if not oid.startswith("TOP-"):
-        return JSONResponse({"ok": False})
-    if sig != _dk_sig_callback(amount, oid):
-        return JSONResponse({"ok": False, "msg": "Invalid signature"})
-    if result_code == "00":
-        db.confirm_topup(oid)
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "order_id": oid})
 
 
 @app.get("/panel/topup/cek/{oid}", response_class=JSONResponse)
@@ -3231,7 +3342,8 @@ async def toko_page(request: Request, slug: str):
 
     return tpl.TemplateResponse(request, "store.html", _ctx(
         request, isp=isp, pakets=pakets, servers=servers_with_status,
-        slug=slug, mt_client=MT_CLIENT, mt_prod=MT_PROD,
+        slug=slug, fee_mode=(isp.get("fee_mode") or "customer"),
+        mayar_fee_percent=MAYAR_FEE_PERCENT,
     ))
 
 
@@ -3258,26 +3370,72 @@ async def toko_order(
         return JSONResponse({"ok": False, "msg": "Server MikroTik tidak dapat dihubungi, coba beberapa saat lagi."})
 
     nomor_hp = nomor_hp.strip().replace("-", "").replace(" ", "")
-    order_id = db.create_order(isp["id"], paket_id, server_id, nomor_hp, paket["harga"])
 
-    # Duitku (prioritas utama)
-    if DK_MERCHANT:
-        payment_url = _duitku_create_invoice(
-            order_id, paket["harga"], isp["nama"], nomor_hp,
-            f"Voucher Hotspot {paket['nama']}",
+    # Hitung amount sesuai fee_mode tenant
+    fee_mode = (isp.get("fee_mode") or "customer").lower()
+    amounts  = _calc_order_amounts(int(paket["harga"]), fee_mode)
+    bayar    = amounts["pelanggan_bayar"]
+
+    # Simpan order dengan amount = pelanggan_bayar (yang akan masuk ke Mayar)
+    order_id = db.create_order(isp["id"], paket_id, server_id, nomor_hp, bayar)
+
+    # ── 1. Mayar.id (prioritas utama, paling murah & sudah live) ────────────
+    if MAYAR_KEY:
+        nama_pembeli = f"{nomor_hp} ({isp['nama']})"
+        mayar_result = _mayar_create_payment(
+            order_id, bayar, nama_pembeli, nomor_hp,
+            f"Voucher Hotspot {paket['nama']} - {isp['nama']}",
             f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
         )
-        if payment_url:
-            db.set_order_snap_token(order_id, payment_url)
-            return JSONResponse({"ok": True, "payment_url": payment_url, "order_id": order_id})
+        if mayar_result and mayar_result.get("link"):
+            # Webhook Mayar kirim transactionId di data.id, list API pakai paymentLinkId.
+            # Simpan keduanya supaya webhook handler bisa match dengan reliable.
+            tok = f"mayar:{mayar_result['id']}:{mayar_result.get('transaction_id','')}"
+            db.set_order_snap_token(order_id, tok)
+            return JSONResponse({
+                "ok": True,
+                "payment_url": mayar_result["link"],
+                "order_id": order_id,
+                "gateway": "mayar",
+            })
 
-    # Fallback Midtrans
-    snap_token = _mt_snap_token(order_id, paket["harga"], isp["nama"], nomor_hp)
-    if snap_token:
-        db.set_order_snap_token(order_id, snap_token)
-        return JSONResponse({"ok": True, "snap_token": snap_token, "order_id": order_id})
+    return JSONResponse({"ok": False, "msg": "Gateway pembayaran tidak tersedia. Hubungi ISP Anda."})
 
-    return JSONResponse({"ok": False, "msg": "Gateway pembayaran tidak tersedia"})
+
+def _credit_voucher_saldo(order_id: str):
+    """Credit saldo tenant dan fee platform setelah order voucher dikonfirmasi."""
+    import logging as _log
+    try:
+        order    = db.get_order(order_id)
+        if not order:
+            return
+        paket    = db.get_paket_hotspot(order["paket_id"])
+        isp      = db.get_user(order["user_id"])
+        fee_mode = (isp.get("fee_mode") or "customer").lower() if isp else "customer"
+        amts     = _calc_order_amounts(int(paket["harga"]), fee_mode)
+        saldo_in = amts["saldo_tenant"]
+        if saldo_in > 0:
+            db.topup_saldo(order["user_id"], saldo_in,
+                           f"Voucher #{order_id} ({fee_mode}-mode, fee Rp{amts['platform_fee']})",
+                           sumber="mayar")
+            con = sqlite3.connect(DB_PATH)
+            con.execute(
+                "INSERT OR IGNORE INTO transaksi (id,user_id,ref_id,ref_type,amount,keterangan,created_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (f"TRX-{order_id[-8:]}", order["user_id"], order_id, "voucher", saldo_in,
+                 f"Voucher {paket['nama'] if paket else ''} → {order.get('nomor_hp','')}", int(time.time()))
+            )
+            con.commit(); con.close()
+        pf_amount    = amts["platform_fee"]
+        platform_uid = db.get_platform_config("platform_uid") or ""
+        if pf_amount > 0 and platform_uid:
+            db.topup_saldo(platform_uid, pf_amount,
+                           f"Fee platform voucher #{order_id} ({isp['nama'] if isp else order['user_id']})",
+                           sumber="mayar")
+        _log.warning(f"[saldo credit] {order_id}: tenant +{saldo_in}, platform_fee +{pf_amount}")
+    except Exception as e:
+        import logging as _log2
+        _log2.warning(f"[saldo credit] error {order_id}: {e}")
 
 
 def _mt_push_voucher(server_id: str, kode: str, paket: dict):
@@ -3292,81 +3450,164 @@ def _mt_push_voucher(server_id: str, kode: str, paket: dict):
     mt.add_hotspot_user(kode, kode, profile=profile, comment=comment, limit_uptime=limit_uptime)
 
 
-@app.post("/beli/notif")
-async def toko_notif(request: Request):
-    """Webhook Midtrans payment notification."""
+
+
+@app.post("/beli/mayar-notif")
+async def toko_mayar_notif(request: Request):
+    """Webhook Mayar.id untuk pembelian voucher hotspot.
+
+    Mayar mengirim event payment.received dengan body:
+    {
+      "event": "payment.received",
+      "data": {
+        "id": "<transactionId>",      # ← INI transaction id, bukan paymentLinkId
+        "transactionId": "<same>",
+        "status": "SUCCESS",           # ← uppercase
+        ...
+      }
+    }
+
+    Verifikasi: cek X-Callback-Token header sesuai webhook_token.
+    """
+    import logging as _logging
+    body_text = (await request.body()).decode("utf-8", errors="replace")
+    _logging.warning(f"[Mayar webhook] body={body_text[:500]}")
+
+    # Verify token header
+    token_hdr = (request.headers.get("X-Callback-Token") or
+                 request.headers.get("x-callback-token") or "")
+    if MAYAR_WEBHOOK and token_hdr != MAYAR_WEBHOOK:
+        _logging.warning(f"[Mayar webhook] invalid/missing token: '{token_hdr[:16]}'")
+        return JSONResponse({"ok": False, "msg": "Invalid token"}, status_code=401)
+
     try:
-        body = await request.json()
+        body = json.loads(body_text) if body_text else {}
     except Exception:
-        return JSONResponse({"ok": False})
+        body = {}
 
-    order_id      = body.get("order_id", "")
-    status_code   = body.get("status_code", "")
-    gross_amount  = body.get("gross_amount", "")
-    sig_key       = body.get("signature_key", "")
+    data       = body.get("data") or body.get("payment") or body
+    tx_id      = data.get("transactionId") or data.get("id") or ""
+    pay_link   = data.get("paymentLinkId") or ""
+    status_raw = (data.get("status") or "").lower()
 
-    if sig_key != _mt_sig(order_id, status_code, gross_amount):
-        return JSONResponse({"ok": False, "msg": "Invalid signature"})
+    if not tx_id and not pay_link:
+        return JSONResponse({"ok": False, "msg": "Missing payment id"})
 
-    tx_status = body.get("transaction_status", "")
-    if tx_status in ("capture", "settlement"):
-        voucher = db.confirm_order(order_id, mt_callback=_mt_push_voucher)
-        if voucher:
-            order = db.get_order(order_id)
-            if order and order.get("nomor_hp"):
-                paket = db.get_paket_hotspot(order["paket_id"])
-                isp = db.get_user(order["user_id"])
-                send_wa(
-                    order["nomor_hp"],
-                    f"✅ *Pembayaran Berhasil!*\n\n"
-                    f"Terima kasih sudah berlangganan *{isp['nama'] if isp else ''}*\n\n"
-                    f"📦 Paket: {paket['nama'] if paket else ''}\n"
-                    f"⏱ Durasi: {paket['durasi'] if paket else ''}\n\n"
-                    f"🎟 *Kode Voucher Kamu:*\n\n"
-                    f"  `{voucher['kode']}`\n\n"
-                    f"Masukkan kode ini di halaman login hotspot WiFi."
-                )
-    return JSONResponse({"ok": True})
+    # Hanya terima status "success" dari Mayar (status lain = belum settlement)
+    if status_raw != "success":
+        _logging.warning(f"[Mayar webhook] tx={tx_id} status={status_raw} (bukan success, skip)")
+        return JSONResponse({"ok": True, "status": status_raw})
 
+    # Cari order: snap_token format "mayar:<paymentLinkId>:<transactionId>"
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
 
-@app.post("/beli/duitku-notif")
-async def toko_duitku_notif(request: Request):
-    """Webhook Duitku untuk pembelian voucher hotspot."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False})
+    # 1. Cek hotspot_orders dulu
+    row = None
+    is_tagihan = False
+    if tx_id:
+        row = con.execute(
+            "SELECT id, snap_token FROM hotspot_orders WHERE snap_token LIKE ? AND status='pending'",
+            (f"mayar:%:{tx_id}",)
+        ).fetchone()
+    if not row and pay_link:
+        row = con.execute(
+            "SELECT id, snap_token FROM hotspot_orders WHERE snap_token LIKE ? AND status='pending'",
+            (f"mayar:{pay_link}:%",)
+        ).fetchone()
 
-    merchant_order_id = body.get("merchantOrderId", "")
-    amount            = str(body.get("amount", ""))
-    result_code       = body.get("resultCode", "")
-    sig               = body.get("signature", "")
+    # 2. Kalau tidak ada di hotspot_orders, cek tagihan_pppoe
+    tagihan_row = None
+    if not row:
+        if tx_id:
+            tagihan_row = con.execute(
+                "SELECT id, snap_token FROM tagihan_pppoe WHERE snap_token LIKE ? AND status!='paid'",
+                (f"mayar:%:{tx_id}",)
+            ).fetchone()
+        if not tagihan_row and pay_link:
+            tagihan_row = con.execute(
+                "SELECT id, snap_token FROM tagihan_pppoe WHERE snap_token LIKE ? AND status!='paid'",
+                (f"mayar:{pay_link}:%",)
+            ).fetchone()
+        if tagihan_row:
+            is_tagihan = True
+            row = tagihan_row
 
-    if not merchant_order_id.startswith("ORD-"):
-        return JSONResponse({"ok": False})
+    con.close()
+    if not row:
+        _logging.warning(f"[Mayar webhook] order not found tx={tx_id} pay_link={pay_link}")
+        return JSONResponse({"ok": True, "msg": "Order not found"})
 
-    if sig != _dk_sig_callback(amount, merchant_order_id):
-        return JSONResponse({"ok": False, "msg": "Invalid signature"})
+    order_id = row["id"]
 
-    if result_code == "00":
-        voucher = db.confirm_order(merchant_order_id, mt_callback=_mt_push_voucher)
-        if voucher:
-            order = db.get_order(merchant_order_id)
-            if order and order.get("nomor_hp"):
-                paket = db.get_paket_hotspot(order["paket_id"])
-                isp   = db.get_user(order["user_id"])
-                tok   = _isp_wa_token(order["user_id"])
-                send_wa(
-                    order["nomor_hp"],
-                    f"✅ *Pembayaran Berhasil!*\n\n"
-                    f"Terima kasih sudah berlangganan *{isp['nama'] if isp else ''}*\n\n"
-                    f"📦 Paket: {paket['nama'] if paket else ''}\n"
-                    f"⏱ Durasi: {paket['durasi'] if paket else ''}\n\n"
-                    f"🎟 *Kode Voucher Kamu:*\n\n"
-                    f"  `{voucher['kode']}`\n\n"
-                    f"Masukkan kode ini di halaman login hotspot WiFi.",
+    # Verifikasi ulang ke Mayar API sebelum confirm — pastikan benar-benar paid
+    snap = row["snap_token"] or ""
+    parts = snap.split(":")
+    link_id = parts[1] if len(parts) > 1 else pay_link
+    if not _mayar_verify_payment(link_id, tx_id):
+        _logging.warning(f"[Mayar webhook] REJECTED: verifikasi API gagal untuk order {order_id} tx={tx_id}")
+        return JSONResponse({"ok": False, "msg": "Payment not verified"}, status_code=400)
+
+    _logging.warning(f"[Mayar webhook] confirming order {order_id} is_tagihan={is_tagihan}")
+
+    if is_tagihan:
+        # ── Tagihan PPPoE dibayar via Mayar ──────────────────────────────────
+        t = db.get_tagihan(int(order_id))
+        if not t:
+            return JSONResponse({"ok": True, "msg": "Tagihan not found"})
+        isp = db.get_user(t["user_id"])
+        ok = db.bayar_tagihan(int(order_id), t["user_id"], metode="Mayar", keterangan="Bayar Online via Mayar")
+        if ok:
+            _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
+            if t.get("telepon"):
+                label    = _label_bulan(t["bulan"])
+                tok      = _isp_wa_token(t["user_id"])
+                nominal  = f"Rp {t['amount']:,}".replace(",", ".")
+                isp_nama = isp["nama"] if isp else ""
+                wa_result = send_wa(
+                    t["telepon"],
+                    _render_wa_template(t["user_id"], "pembayaran",
+                        nama=t["nama_pelanggan"], nominal=nominal,
+                        bulan=label, isp=isp_nama),
                     token=tok
                 )
+                _logging.warning(f"[Mayar webhook] WA tagihan sent to {t['telepon']}: {wa_result}")
+        return JSONResponse({"ok": True})
+
+    # ── Voucher hotspot ───────────────────────────────────────────────────────
+    voucher = db.confirm_order(order_id, mt_callback=_mt_push_voucher)
+    if not voucher:
+        _logging.warning(f"[Mayar webhook] confirm_order returned None for {order_id}")
+        return JSONResponse({"ok": True, "msg": "Already confirmed or error"})
+
+    _logging.warning(f"[Mayar webhook] voucher generated: {voucher['kode']} for {order_id}")
+    try:
+        con2 = sqlite3.connect(DB_PATH)
+        con2.execute("UPDATE voucher_hotspot SET mt_pushed=1 WHERE id=?", (voucher['id'],))
+        con2.commit(); con2.close()
+    except Exception:
+        pass
+
+    order = db.get_order(order_id)
+
+    # Credit saldo tenant + fee platform
+    _credit_voucher_saldo(order_id)
+    if order and order.get("nomor_hp"):
+        paket = db.get_paket_hotspot(order["paket_id"])
+        isp   = db.get_user(order["user_id"])
+        tok   = _isp_wa_token(order["user_id"])
+        wa_result = send_wa(
+            order["nomor_hp"],
+            f"✅ *Pembayaran Berhasil!*\n\n"
+            f"Terima kasih sudah berlangganan *{isp['nama'] if isp else ''}*\n\n"
+            f"📦 Paket: {paket['nama'] if paket else ''}\n"
+            f"⏱ Durasi: {paket['durasi'] if paket else ''}\n\n"
+            f"🎟 *Kode Voucher Kamu:*\n\n"
+            f"  `{voucher['kode']}`\n\n"
+            f"Masukkan kode ini di halaman login hotspot WiFi.",
+            token=tok
+        )
+        _logging.warning(f"[Mayar webhook] WA send to {order['nomor_hp']}: {wa_result}")
     return JSONResponse({"ok": True})
 
 
@@ -3388,327 +3629,26 @@ async def toko_sukses(request: Request, order_id: str):
         paket = db.get_paket_hotspot(order["paket_id"])
     if order.get("user_id"):
         isp = db.get_user(order["user_id"])
-    # Coba konfirmasi via Midtrans jika belum paid
-    if order["status"] == "pending" and _mt_verify(order_id):
-        voucher_raw = db.confirm_order(order_id, mt_callback=_mt_push_voucher)
-        order = db.get_order(order_id)
-        voucher = voucher_raw
+    _snap_tok = order.get("snap_token") or ""
     return tpl.TemplateResponse(request, "store_sukses.html", _ctx(
         request, order=order, voucher=voucher, paket=paket, isp=isp
     ))
 
 
 # ── Superadmin Panel ──────────────────────────────────────────────────────────
+# Pindah ke admin-web (admin.vpntunel.my.id/keuangan). Catch-all redirect supaya
+# bookmark / link lama tetap jalan ke panel konsolidasi.
 
-def _sa_hash(pw: str) -> str:
-    import hashlib
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-SA_TOKEN_COOKIE = "sa_session"
-
-def current_sa(request: Request) -> bool:
-    token = request.cookies.get(SA_TOKEN_COOKIE)
-    if not token:
-        return False
-    try:
-        val = signer.loads(token, max_age=86400 * 2)
-        return val == "superadmin"
-    except Exception:
-        return False
-
-def require_sa(request: Request):
-    if not current_sa(request):
-        raise HTTPException(status_code=302, headers={"Location": "/sa/login"})
-
-
-@app.get("/sa/login", response_class=HTMLResponse)
-async def sa_login_page(request: Request):
-    if current_sa(request):
-        return RedirectResponse("/sa", status_code=302)
-    return tpl.TemplateResponse(request, "sa_login.html", _ctx(request))
-
-
-@app.post("/sa/login")
-async def sa_login_post(request: Request,
-                        username: str = Form(""), password: str = Form("")):
-    if username == SA_USERNAME and _sa_hash(password) == _sa_hash(SA_PASSWORD):
-        token = signer.dumps("superadmin")
-        resp = RedirectResponse("/sa", status_code=302)
-        resp.set_cookie(SA_TOKEN_COOKIE, token, httponly=True, max_age=86400 * 2)
-        return resp
-    return tpl.TemplateResponse(request, "sa_login.html", _ctx(request, error="Username atau password salah"))
-
-
-@app.get("/sa/logout")
-async def sa_logout(request: Request):
-    resp = RedirectResponse("/sa/login", status_code=302)
-    resp.delete_cookie(SA_TOKEN_COOKIE)
-    return resp
-
-
-@app.get("/sa", response_class=HTMLResponse)
-async def sa_dashboard(request: Request):
-    require_sa(request)
-    tenants = db.list_tenants()
-    stats = {t["id"]: db.get_tenant_stats(t["id"]) for t in tenants}
-    adjustments = db.list_saldo_adjustments(limit=30)
-    platform_qris = db.get_platform_config("qris_image")
-    platform_wa = db.get_platform_config("wa_number")
-    pending_topup_count = 0
-    con = sqlite3.connect(DB_PATH)
-    row = con.execute("SELECT COUNT(*) FROM topup_orders WHERE tipe='manual' AND status='pending'").fetchone()
-    if row:
-        pending_topup_count = row[0]
-    con.close()
-    reg_stats = db.count_registrasi()
-    registrasi_list = db.list_registrasi()
-    tarik_list = db.list_tarik_saldo_all()
-    tarik_pending_count = sum(1 for t in tarik_list if t["status"] == "pending")
-    return tpl.TemplateResponse(request, "sa_dashboard.html", _ctx(
-        request, tenants=tenants, stats=stats, adjustments=adjustments,
-        platform_qris=platform_qris, platform_wa=platform_wa,
-        pending_topup_count=pending_topup_count,
-        registrasi_list=registrasi_list, reg_stats=reg_stats,
-        tarik_list=tarik_list, tarik_pending_count=tarik_pending_count,
-        ok=request.query_params.get("ok"), err=request.query_params.get("error")
-    ))
+@app.get("/sa")
+@app.get("/sa/{rest:path}")
+async def sa_moved_redirect(request: Request, rest: str = ""):
+    return RedirectResponse("https://admin.vpntunel.my.id/keuangan", status_code=302)
 
 
 @app.get("/registrasi")
-async def registrasi_redirect(request: Request):
-    """Shortlink dari notif WA → langsung ke SA tab registrasi."""
-    return RedirectResponse("/sa?tab=registrasi", status_code=302)
-
-
-@app.post("/sa/registrasi/{rid}/approve", response_class=JSONResponse)
-async def sa_registrasi_approve(request: Request, rid: int,
-                                 username: str = Form(...), password: str = Form(...)):
-    require_sa(request)
-    reg = db.get_registrasi(rid)
-    if not reg:
-        return JSONResponse({"ok": False, "msg": "Data tidak ditemukan"})
-    # Cek duplikat username
-    _con = sqlite3.connect(DB_PATH); _con.row_factory = sqlite3.Row
-    existing = _con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
-    _con.close()
-    if existing:
-        return JSONResponse({"ok": False, "msg": f"Username '{username}' sudah dipakai"})
-    # Buat akun tenant
-    uid = db.create_user(
-        nama=reg["nama_isp"], username=username, password=password,
-        role="admin", nomor_wa=reg["nomor_wa"]
-    )
-    # Update status registrasi
-    db.update_registrasi_status(rid, "aktif")
-    con = sqlite3.connect(DB_PATH)
-    con.execute("UPDATE tenant_registrasi SET username_tenant=?, password_tenant=? WHERE id=?",
-                (username, password, rid))
-    con.commit(); con.close()
-    # Notif WA ke ISP baru pakai WA platform
-    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
-    send_wa(reg["nomor_wa"],
-            f"✅ *Akun ISP Anda Sudah Aktif!*\n\n"
-            f"Nama ISP: *{reg['nama_isp']}*\n"
-            f"Username: *{username}*\n"
-            f"Password: *{password}*\n\n"
-            f"Login di: https://billing.vpntunel.my.id/login",
-            token=platform_token)
-    return JSONResponse({"ok": True, "msg": f"Akun {username} berhasil dibuat dan diaktifkan"})
-
-
-@app.post("/sa/registrasi/{rid}/tolak", response_class=JSONResponse)
-async def sa_registrasi_tolak(request: Request, rid: int):
-    require_sa(request)
-    reg = db.get_registrasi(rid)
-    if not reg:
-        return JSONResponse({"ok": False, "msg": "Data tidak ditemukan"})
-    db.update_registrasi_status(rid, "ditolak")
-    send_wa(reg["nomor_wa"],
-            f"❌ Maaf, pendaftaran ISP *{reg['nama_isp']}* ditolak. "
-            f"Hubungi admin vpntunel untuk info lebih lanjut.")
-    return JSONResponse({"ok": True})
-
-
-@app.post("/sa/tenant/{uid}/adjust-saldo", response_class=JSONResponse)
-async def sa_adjust_saldo(request: Request, uid: str,
-                          amount: int = Form(0), catatan: str = Form("")):
-    require_sa(request)
-    if amount == 0:
-        return JSONResponse({"ok": False, "msg": "Jumlah tidak boleh 0"})
-    result = db.adjust_saldo_admin(uid, amount, catatan)
-    if not result:
-        return JSONResponse({"ok": False, "msg": "Tenant tidak ditemukan"})
-    return JSONResponse({"ok": True, "saldo_before": result["saldo_before"], "saldo_after": result["saldo_after"]})
-
-
-@app.post("/sa/tenant/{uid}/reset-password")
-async def sa_reset_password(request: Request, uid: str,
-                             password: str = Form("")):
-    require_sa(request)
-    if len(password) < 6:
-        return RedirectResponse(f"/sa?error=password_terlalu_pendek", status_code=302)
-    db.reset_password(uid, password)
-    return RedirectResponse("/sa?ok=password_direset", status_code=302)
-
-
-@app.post("/sa/tenant/{uid}/status")
-async def sa_toggle_status(request: Request, uid: str,
-                            status: str = Form("")):
-    require_sa(request)
-    if status not in ("aktif", "nonaktif"):
-        return RedirectResponse("/sa", status_code=302)
-    db.update_user_status(uid, status)
-    return RedirectResponse("/sa?ok=status_diubah", status_code=302)
-
-
-@app.get("/sa/tenant/{uid}/adjustments", response_class=JSONResponse)
-async def sa_tenant_adjustments(request: Request, uid: str):
-    require_sa(request)
-    rows = db.list_saldo_adjustments(uid=uid, limit=50)
-    return JSONResponse(rows)
-
-
-@app.post("/sa/platform/topup/{oid}/approve", response_class=JSONResponse)
-async def sa_topup_approve(request: Request, oid: str):
-    require_sa(request)
-    order = db.approve_topup_manual_sa(oid)
-    if not order:
-        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan atau sudah diproses"})
-    agen = db.get_user(order["user_id"])
-    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
-    if agen:
-        send_wa(agen.get("nomor_wa", ""),
-                f"✅ Topup saldo Rp {order['amount']:,} telah dikonfirmasi oleh platform. Saldo Anda bertambah.",
-                token=platform_token)
-    return JSONResponse({"ok": True, "msg": f"Topup Rp {order['amount']:,} disetujui"})
-
-
-@app.post("/sa/platform/topup/{oid}/reject", response_class=JSONResponse)
-async def sa_topup_reject(request: Request, oid: str):
-    require_sa(request)
-    order = db.reject_topup_manual_sa(oid)
-    if not order:
-        return JSONResponse({"ok": False, "msg": "Order tidak ditemukan atau sudah diproses"})
-    agen = db.get_user(order["user_id"])
-    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
-    if agen:
-        send_wa(agen.get("nomor_wa", ""),
-                f"❌ Permintaan topup Rp {order['amount']:,} ditolak platform. Hubungi admin untuk info lebih lanjut.",
-                token=platform_token)
-    return JSONResponse({"ok": True, "msg": f"Topup Rp {order['amount']:,} ditolak"})
-
-
-@app.post("/sa/platform/settings", response_class=JSONResponse)
-async def sa_platform_settings(request: Request, wa_number: str = Form(""), catatan: str = Form("")):
-    """SA simpan pengaturan platform (nomor WA, dll)."""
-    require_sa(request)
-    if wa_number:
-        db.set_platform_config("wa_number", wa_number.strip())
-    return RedirectResponse("/sa?ok=settings_saved&tab=qris", status_code=302)
-
-
-@app.post("/sa/platform/wa-setup", response_class=JSONResponse)
-async def sa_platform_wa_setup(request: Request):
-    """Buat/ambil WA session platform dan return QR code."""
-    require_sa(request)
-    token = _wa_create_user("platform", "Platform vpntunel")
-    db.set_platform_config("wa_token", token)
-    qr = _wa_get_qr(token)
-    status = _wa_session_status(token)
-    if _wa_is_logged_in(status):
-        nomor = status.get("jid", "").split(":")[0]
-        db.set_platform_config("wa_connected", "1")
-        db.set_platform_config("wa_nomor", nomor)
-        return JSONResponse({"ok": True, "connected": True, "nomor": nomor})
-    return JSONResponse({"ok": True, "connected": False, "qr": qr})
-
-
-@app.get("/sa/platform/wa-status", response_class=JSONResponse)
-async def sa_platform_wa_status(request: Request):
-    """Cek status WA platform."""
-    require_sa(request)
-    token = db.get_platform_config("wa_token")
-    if not token:
-        return JSONResponse({"connected": False})
-    s = _wa_session_status(token)
-    connected = _wa_is_logged_in(s)
-    nomor = s.get("jid", "").split(":")[0] if connected else ""
-    if connected:
-        db.set_platform_config("wa_connected", "1")
-        db.set_platform_config("wa_nomor", nomor)
-    else:
-        db.set_platform_config("wa_connected", "0")
-    return JSONResponse({"connected": connected, "nomor": nomor, "name": s.get("name", "")})
-
-
-@app.post("/sa/platform/wa-disconnect", response_class=JSONResponse)
-async def sa_platform_wa_disconnect(request: Request):
-    """Disconnect WA platform."""
-    require_sa(request)
-    token = db.get_platform_config("wa_token")
-    if token:
-        _wa_disconnect(token)
-        db.set_platform_config("wa_connected", "0")
-        db.set_platform_config("wa_nomor", "")
-    return JSONResponse({"ok": True})
-
-
-@app.post("/sa/platform/qris-upload")
-async def sa_platform_qris_upload(request: Request, qris_file: UploadFile = File(...)):
-    """Super-admin upload QRIS platform (dipakai semua agen untuk topup)."""
-    require_sa(request)
-    import base64
-    data = await qris_file.read()
-    if len(data) > 500_000:
-        return RedirectResponse("/sa?error=File+terlalu+besar+(maks+500KB)", status_code=302)
-    b64 = base64.b64encode(data).decode()
-    ext = qris_file.filename.rsplit(".", 1)[-1].lower() if "." in qris_file.filename else "png"
-    mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
-    db.set_platform_config("qris_image", f"data:{mime};base64,{b64}")
-    return RedirectResponse("/sa?ok=qris_platform_saved", status_code=302)
-
-
-@app.get("/sa/platform/topup-json", response_class=JSONResponse)
-async def sa_platform_topup_json(request: Request, status: str = "pending"):
-    require_sa(request)
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    orders = con.execute(
-        "SELECT t.*, u.nama as agen_nama, u.nomor_wa as agen_wa, "
-        "i.nama as isp_nama "
-        "FROM topup_orders t "
-        "JOIN users u ON u.id=t.user_id "
-        "LEFT JOIN users i ON i.id=t.isp_id "
-        "WHERE t.tipe='manual' AND t.status=? "
-        "ORDER BY t.created_at DESC LIMIT 100",
-        (status,)
-    ).fetchall()
-    con.close()
-    return JSONResponse([dict(o) for o in orders])
-
-
-@app.get("/sa/platform/topup-requests", response_class=HTMLResponse)
-async def sa_platform_topup_requests(request: Request, status: str = "pending"):
-    """Super-admin lihat semua topup manual dari seluruh agen."""
-    require_sa(request)
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    orders = con.execute(
-        "SELECT t.*, u.nama as agen_nama, u.nomor_wa as agen_wa, "
-        "i.nama as isp_nama "
-        "FROM topup_orders t "
-        "JOIN users u ON u.id=t.user_id "
-        "LEFT JOIN users i ON i.id=t.isp_id "
-        "WHERE t.tipe='manual' AND t.status=? "
-        "ORDER BY t.created_at DESC",
-        (status,)
-    ).fetchall()
-    con.close()
-    orders = [dict(o) for o in orders]
-    platform_qris = db.get_platform_config("qris_image")
-    return tpl.TemplateResponse(request, "sa_topup_requests.html", _ctx(
-        request, orders=orders, sel_status=status, platform_qris=platform_qris
-    ))
+async def registrasi_moved_redirect(request: Request):
+    """Shortlink dari notif WA → admin.vpntunel.my.id/registrasi."""
+    return RedirectResponse("https://admin.vpntunel.my.id/registrasi", status_code=302)
 
 
 # ── Add-Ons ───────────────────────────────────────────────────────────────────
@@ -3753,9 +3693,12 @@ async def addons_page(request: Request, ok: str = "", err: str = ""):
     vpn_akun = con.execute("SELECT * FROM vpn_users WHERE user_id=?", (user["id"],)).fetchone()
     vpn_akun = dict(vpn_akun) if vpn_akun else None
     con.close()
+    servers = db.list_servers(user["id"])
+    server = servers[0] if servers else None
     return tpl.TemplateResponse(request, "addons.html", {
         "request": request, "active": "addons", "user": user,
         "addons": addons, "aktif": aktif, "vpn_akun": vpn_akun,
+        "server": server,
         "ok": ok, "err": err,
     })
 
@@ -3835,6 +3778,107 @@ async def addon_nonaktifkan(request: Request, addon_id: int):
     con.commit()
     con.close()
     return JSONResponse({"ok": True, "msg": "Add-on dinonaktifkan"})
+
+
+# ── Route: Tagihan SaaS (tenant view) ────────────────────────────────────────
+
+@app.post("/tagihan-saas/{tagihan_id}/bayar-saldo", response_class=JSONResponse)
+async def tagihan_saas_bayar_saldo(request: Request, tagihan_id: str):
+    user = require_login(request)
+    con = db._conn()
+    row = con.execute("SELECT * FROM saas_tagihan WHERE id=? AND user_id=?", (tagihan_id, user["id"])).fetchone()
+    if not row:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    row = dict(row)
+    if row["status"] != "unpaid":
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Tagihan sudah tidak perlu dibayar"})
+    if user["saldo"] < row["total"]:
+        con.close()
+        return JSONResponse({"ok": False, "msg": f"Saldo tidak cukup. Saldo Anda: Rp {user['saldo']:,}, tagihan: Rp {row['total']:,}"})
+    now_ts = int(time.time())
+    platform_uid = db.get_platform_config("platform_uid") or ""
+    isp_nama = user.get("nama") or user["username"]
+    con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (row["total"], user["id"]))
+    con.execute(
+        "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,sumber,created_at) VALUES (?,?,?,?,?,?)",
+        (user["id"], row["total"], "debit", f"Biaya SaaS bulan {row['bulan']}", "platform", now_ts)
+    )
+    # Credit ke platform owner
+    if platform_uid:
+        con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (row["total"], platform_uid))
+        con.execute(
+            "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,sumber,created_at) VALUES (?,?,?,?,?,?)",
+            (platform_uid, row["total"], "kredit", f"Fee SaaS {row['bulan']} ({isp_nama})", "saas", now_ts)
+        )
+    con.execute("UPDATE saas_tagihan SET status='paid', metode_bayar='saldo', paid_at=? WHERE id=?",
+                (now_ts, tagihan_id))
+    # Reaktivasi jika sudah tidak ada tagihan unpaid
+    if user.get("status") == "suspend_saas":
+        sisa = con.execute(
+            "SELECT COUNT(*) FROM saas_tagihan WHERE user_id=? AND status IN ('unpaid','waiting_payment')", (user["id"],)
+        ).fetchone()[0]
+        if sisa == 0:
+            con.execute("UPDATE users SET status='aktif' WHERE id=?", (user["id"],))
+    con.commit()
+    con.close()
+    return JSONResponse({"ok": True, "msg": "Tagihan berhasil dilunasi dari saldo"})
+
+
+@app.post("/tagihan-saas/{tagihan_id}/bayar-qris", response_class=JSONResponse)
+async def tagihan_saas_bayar_qris(request: Request, tagihan_id: str):
+    user = require_login(request)
+    con = db._conn()
+    row = con.execute("SELECT * FROM saas_tagihan WHERE id=? AND user_id=?", (tagihan_id, user["id"])).fetchone()
+    if not row:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    row = dict(row)
+    if row["status"] not in ("unpaid",):
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Tagihan sudah tidak perlu dibayar"})
+    # Set status waiting_payment agar admin tahu ada QRIS pending
+    con.execute("UPDATE saas_tagihan SET status='waiting_payment', metode_bayar='qris', paid_at=NULL WHERE id=?",
+                (tagihan_id,))
+    con.commit()
+    con.close()
+    # Notif WA ke platform SA
+    sa_wa = db.get_platform_config("wa_number") or PLATFORM_OWNER_WA
+    platform_token = db.get_platform_config("wa_token") or WA_TOKEN
+    msg = (f"💳 *[SaaS] Konfirmasi Pembayaran QRIS*\n\n"
+           f"ISP: *{user.get('nama', user['username'])}*\n"
+           f"Tagihan: *{row['bulan']}*\n"
+           f"Nominal: *Rp {row['total']:,}*\n\n"
+           f"Cek panel admin → Tagihan SaaS untuk konfirmasi.")
+    if sa_wa:
+        send_wa(sa_wa, msg, token=platform_token)
+    return JSONResponse({"ok": True, "msg": "Konfirmasi terkirim. Tagihan akan diverifikasi oleh platform."})
+
+
+@app.get("/tagihan-saas", response_class=HTMLResponse)
+async def tagihan_saas_page(request: Request):
+    user = require_login(request)
+    con = db._conn()
+    tagihan = con.execute(
+        "SELECT * FROM saas_tagihan WHERE user_id=? ORDER BY bulan DESC", (user["id"],)
+    ).fetchall()
+    tagihan = [dict(r) for r in tagihan]
+    tarif   = int(db.get_platform_config("saas_tarif_pppoe") or 1000)
+    minimum = int(db.get_platform_config("saas_minimum") or 25000)
+    n_pppoe = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (user["id"],)
+    ).fetchone()[0]
+    subtotal = n_pppoe * tarif
+    estimasi = max(subtotal, minimum) if n_pppoe > 0 else 0
+    con.close()
+    platform_qris = db.get_platform_config("qris_image")
+    return tpl.TemplateResponse(request, "tagihan_saas.html", {
+        "request": request, "user": user,
+        "tagihan": tagihan, "n_pppoe": n_pppoe,
+        "tarif": tarif, "minimum": minimum, "estimasi": estimasi,
+        "platform_qris": platform_qris,
+    })
 
 
 if __name__ == "__main__":

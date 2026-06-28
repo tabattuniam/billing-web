@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% set active = "saldo" %}
 {% block title %}Saldo — {{ app_name }}{% endblock %}
-{% block topbar_title %}Saldo & Mutasi{% endblock %}
+{% block topbar_title %}Saldo{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-title">Saldo & Mutasi</h1>
-    <p class="page-sub">Riwayat perubahan saldo akun Anda</p>
+    <h1 class="page-title">Saldo</h1>
+    <p class="page-sub">Riwayat dan rekonsiliasi saldo akun Anda</p>
   </div>
   {% if user.role == 'admin' %}
   <div class="flex flex-wrap gap-2">
@@ -31,7 +31,7 @@
     <div>
       <p class="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-2">Saldo Tersedia</p>
       <p class="text-4xl font-black text-white tracking-tight">{{ user.saldo | rp }}</p>
-      <p class="text-blue-300 text-xs mt-2">{{ user.nama }} · {{ user.role.replace('_',' ')|title }}</p>
+      <p class="text-blue-300 text-xs mt-2">{{ user.nama }}</p>
     </div>
     <div class="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.1)">
       <svg class="w-8 h-8 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -46,24 +46,34 @@
   {% endif %}
 </div>
 
-<!-- Stats Bulan Ini -->
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-  <div class="card p-4">
-    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Kredit Masuk</p>
-    <p class="text-xl font-black text-emerald-600 mt-1">{{ stats.kredit | rp }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">bulan {{ sel_bulan }}</p>
-  </div>
-  <div class="card p-4">
-    <p class="text-xs text-red-400 font-medium uppercase tracking-wide">Debit Keluar</p>
-    <p class="text-xl font-black text-red-500 mt-1">{{ stats.debit | rp }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">bulan {{ sel_bulan }}</p>
-  </div>
-  <div class="card p-4 col-span-2 sm:col-span-1">
-    <p class="text-xs text-blue-500 font-medium uppercase tracking-wide">Total Mutasi</p>
-    <p class="text-xl font-black text-blue-600 mt-1">{{ stats.total_log }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">transaksi bulan ini</p>
+<!-- Rekonsiliasi Sumber Saldo Bulan Ini -->
+{% if stats.kredit_mayar or stats.kredit_qris %}
+<div class="card p-4 mb-5">
+  <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Saldo Masuk Bulan {{ sel_bulan }}</p>
+  <div class="grid grid-cols-2 gap-3">
+    <div class="flex items-center gap-3 bg-blue-50 rounded-xl p-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      </div>
+      <div>
+        <p class="text-xs text-blue-500 font-medium">Dari Mayar</p>
+        <p class="text-lg font-black text-blue-700">{{ stats.kredit_mayar | rp }}</p>
+        <p class="text-xs text-gray-400">Voucher online</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 bg-emerald-50 rounded-xl p-3">
+      <div class="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+      </div>
+      <div>
+        <p class="text-xs text-emerald-500 font-medium">Dari QRIS Statis</p>
+        <p class="text-lg font-black text-emerald-700">{{ stats.kredit_qris | rp }}</p>
+        <p class="text-xs text-gray-400">Topup agen</p>
+      </div>
+    </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Filter Bulan -->
 <form method="get" class="card p-4 mb-5 flex items-center gap-3">
@@ -75,62 +85,52 @@
   </button>
 </form>
 
-<!-- Tabel Mutasi -->
+<!-- Riwayat Transaksi -->
 {% if not logs %}
 <div class="card p-16 text-center">
   <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
     <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
   </div>
-  <p class="text-slate-500 font-medium">Belum ada mutasi saldo</p>
+  <p class="text-slate-500 font-medium">Belum ada transaksi</p>
   <p class="text-slate-400 text-sm mt-1">untuk periode {{ sel_bulan }}</p>
 </div>
 {% else %}
 <div class="card overflow-hidden">
   <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-    <h3 class="font-semibold text-gray-700 text-sm">Riwayat Mutasi</h3>
-    <span class="text-xs text-gray-400">{{ logs|length }} entri</span>
+    <h3 class="font-semibold text-gray-700 text-sm">Riwayat Transaksi</h3>
+    <span class="text-xs text-gray-400">{{ logs|length }} transaksi</span>
   </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr>
-          <th class="th">Tipe</th>
-          <th class="th">Jumlah</th>
-          <th class="th">Keterangan</th>
-          <th class="th">Tanggal</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-      {% for l in logs %}
-      <tr class="hover:bg-gray-50/50 transition">
-        <td class="td">
-          {% if l.tipe == 'kredit' %}
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-            Kredit
-          </span>
-          {% else %}
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-500 border border-red-100">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-            Debit
-          </span>
-          {% endif %}
-        </td>
-        <td class="td">
-          <span class="font-bold text-base {% if l.tipe=='kredit' %}text-emerald-600{% else %}text-red-500{% endif %}">
-            {% if l.tipe=='kredit' %}+{% else %}−{% endif %}{{ l.jumlah | rp }}
-          </span>
-        </td>
-        <td class="td">
-          <span class="text-gray-600">{{ l.keterangan or '—' }}</span>
-        </td>
-        <td class="td text-xs text-gray-400">
-          {{ l.created_at | ts_date if l.created_at else '—' }}
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="divide-y divide-gray-50">
+  {% for l in logs %}
+  <div class="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50/50 transition">
+    <!-- Ikon -->
+    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+      {% if l.tipe == 'kredit' %}bg-emerald-50{% else %}bg-red-50{% endif %}">
+      {% if l.tipe == 'kredit' %}
+      <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+      {% else %}
+      <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+      {% endif %}
+    </div>
+    <!-- Keterangan + Sumber -->
+    <div class="flex-1 min-w-0">
+      <p class="text-sm text-gray-700 truncate">{{ l.keterangan or '—' }}</p>
+      <div class="flex items-center gap-1.5 mt-0.5">
+        <span class="text-xs text-gray-400">{{ l.created_at | ts_date if l.created_at else '—' }}</span>
+        {% if l.sumber == 'mayar' %}
+        <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-500">Mayar</span>
+        {% elif l.sumber == 'qris_statis' %}
+        <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-500">QRIS</span>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Jumlah -->
+    <p class="font-bold text-sm flex-shrink-0
+      {% if l.tipe == 'kredit' %}text-emerald-600{% else %}text-red-500{% endif %}">
+      {% if l.tipe == 'kredit' %}+{% else %}−{% endif %}{{ l.jumlah | rp }}
+    </p>
+  </div>
+  {% endfor %}
   </div>
 </div>
 {% endif %}

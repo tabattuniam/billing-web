@@ -93,14 +93,33 @@
   </div>
   {% endif %}
 
-  <!-- QRIS Topup — dikelola platform -->
+  <!-- Fee Mode Setting (admin only) -->
   {% if user.role == 'admin' %}
   <div class="card p-6">
-    <h3 class="font-semibold text-slate-700 mb-1">QRIS Topup Agen</h3>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;font-size:13px;color:#15803d;">
-      ✅ <b>QRIS topup dikelola oleh platform vpntunel.</b><br>
-      <span style="color:#64748b;font-size:12px;">Agen Anda akan melihat QRIS platform saat melakukan topup. Pembayaran dikonfirmasi langsung oleh tim vpntunel.</span>
+    <h3 class="font-semibold text-slate-700 mb-1">Mode Admin Fee Voucher Online</h3>
+    <p class="text-xs text-slate-500 mb-4">Pilih siapa yang menanggung fee gateway pembayaran (Mayar) saat pelanggan beli voucher dari toko online Anda.</p>
+
+    <div class="mb-4 p-3 rounded-xl" style="background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;color:#64748b;">
+      ℹ️ Platform vpntunel <b>selalu</b> memotong komisi dari saldo Anda: <b>Rp {{ "{:,}".format(pf_small).replace(",",".") }}</b> (voucher &lt; Rp {{ "{:,}".format(pf_thresh).replace(",",".") }}) atau <b>Rp {{ "{:,}".format(pf_large).replace(",",".") }}</b> (≥ Rp {{ "{:,}".format(pf_thresh).replace(",",".") }}).
     </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label style="border:2px solid {% if fee_mode == 'customer' %}#7c3aed{% else %}#e2e8f0{% endif %};border-radius:12px;padding:14px;cursor:pointer;background:{% if fee_mode == 'customer' %}#faf5ff{% else %}#fff{% endif %};">
+        <input type="radio" name="feemode" value="customer" {% if fee_mode == 'customer' %}checked{% endif %} onchange="ubahFeeMode('customer')" style="accent-color:#7c3aed;">
+        <span class="font-bold text-violet-700 ml-2">Pelanggan Tanggung</span>
+        <p class="text-xs text-slate-600 mt-2 ml-6">Pelanggan bayar = harga voucher + fee Mayar (~{{ mayar_fee_percent }}%).<br>Saldo Anda masuk penuh dikurangi komisi platform saja.</p>
+        <p class="text-xs text-violet-600 mt-2 ml-6 font-semibold">Contoh paket Rp 5.000 → pelanggan bayar ~Rp 5.035, saldo masuk Rp {{ 5000 - pf_small }}</p>
+      </label>
+
+      <label style="border:2px solid {% if fee_mode == 'tenant' %}#0891b2{% else %}#e2e8f0{% endif %};border-radius:12px;padding:14px;cursor:pointer;background:{% if fee_mode == 'tenant' %}#ecfeff{% else %}#fff{% endif %};">
+        <input type="radio" name="feemode" value="tenant" {% if fee_mode == 'tenant' %}checked{% endif %} onchange="ubahFeeMode('tenant')" style="accent-color:#0891b2;">
+        <span class="font-bold text-cyan-700 ml-2">Saya Tanggung</span>
+        <p class="text-xs text-slate-600 mt-2 ml-6">Pelanggan bayar = harga voucher persis.<br>Fee Mayar dipotong dari saldo Anda + komisi platform.</p>
+        <p class="text-xs text-cyan-700 mt-2 ml-6 font-semibold">Contoh paket Rp 5.000 → pelanggan bayar Rp 5.000, saldo masuk ~Rp {{ 5000 - 35 - pf_small }}</p>
+      </label>
+    </div>
+
+    <p class="text-xs text-slate-400 mt-3" id="fee-status">Mode aktif: <span class="font-bold text-slate-700">{{ 'Pelanggan Tanggung' if fee_mode == 'customer' else 'Saya Tanggung' }}</span></p>
   </div>
   {% endif %}
 
@@ -120,6 +139,19 @@
 function togglePw(id, eyeId) {
   const el = document.getElementById(id);
   el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function ubahFeeMode(mode) {
+  const fd = new FormData();
+  fd.append('fee_mode', mode);
+  const r = await fetch('/profil/fee-mode', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (d.ok) {
+    showToast('Mode fee diubah ke "' + (mode === 'customer' ? 'Pelanggan Tanggung' : 'Saya Tanggung') + '"', 'success');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    showToast(d.msg || 'Gagal ubah mode', 'error');
+  }
 }
 
 async function simpanProfil() {

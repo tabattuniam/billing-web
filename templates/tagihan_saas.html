@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% set active = "tagihan_saas" %}
+{% block title %}Tagihan SaaS — {{ app_name }}{% endblock %}
+{% block topbar_title %}Tagihan SaaS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Tagihan SaaS</h1>
+    <p class="page-sub">Biaya sewa platform billing per bulan</p>
+  </div>
+</div>
+
+{% if user.status == 'suspend_saas' %}
+<div class="mb-5 bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex gap-3 items-start">
+  <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+  </svg>
+  <div>
+    <p class="font-bold text-red-700">Akun Anda sedang disuspend</p>
+    <p class="text-sm text-red-600 mt-0.5">Akun disuspend karena ada tagihan SaaS yang belum dilunasi. Selesaikan pembayaran untuk mengaktifkan kembali akun Anda.</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Info Card -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="card p-5">
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">PPPoE Aktif</p>
+    <p class="text-3xl font-extrabold text-gray-800">{{ n_pppoe }}</p>
+    <p class="text-xs text-gray-400 mt-1">pelanggan</p>
+  </div>
+  <div class="card p-5">
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Tarif</p>
+    <p class="text-2xl font-extrabold text-violet-600">{{ tarif | rp }}</p>
+    <p class="text-xs text-gray-400 mt-1">per pelanggan / bulan</p>
+  </div>
+  <div class="card p-5 {% if estimasi > 0 %}border-violet-200{% endif %}">
+    <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Estimasi Bulan Ini</p>
+    {% if estimasi > 0 %}
+    <p class="text-2xl font-extrabold text-violet-700">{{ estimasi | rp }}</p>
+    <p class="text-xs text-gray-400 mt-1">
+      {% if n_pppoe * tarif < minimum %}Minimum {{ minimum | rp }}
+      {% else %}{{ n_pppoe }} × {{ tarif | rp }}{% endif %}
+    </p>
+    {% else %}
+    <p class="text-2xl font-extrabold text-gray-300">—</p>
+    <p class="text-xs text-gray-400 mt-1">Tidak ada PPPoE aktif</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- History Tagihan -->
+<div class="card overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100">
+    <h2 class="font-bold text-gray-800 text-sm">Riwayat Tagihan</h2>
+  </div>
+  {% if tagihan %}
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr>
+          <th class="th">Bulan</th>
+          <th class="th text-right">PPPoE</th>
+          <th class="th text-right">Total</th>
+          <th class="th text-center">Status</th>
+          <th class="th text-right">Tanggal Bayar</th>
+          <th class="th"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tg in tagihan %}
+        <tr id="row-{{ tg.id }}" class="hover:bg-gray-50">
+          <td class="td font-semibold text-gray-800">{{ tg.bulan }}</td>
+          <td class="td text-right text-gray-600">{{ tg.jumlah_pppoe }}</td>
+          <td class="td text-right font-bold text-violet-700">{{ tg.total | rp }}</td>
+          <td class="td text-center">
+            {% if tg.status == 'paid' %}
+            <span class="badge badge-green">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Lunas{% if tg.metode_bayar %} · {{ tg.metode_bayar | upper }}{% endif %}
+            </span>
+            {% elif tg.status == 'waived' %}
+            <span class="badge badge-blue">Dibebaskan</span>
+            {% elif tg.status == 'waiting_payment' %}
+            <span class="badge badge-orange">Menunggu Verifikasi QRIS</span>
+            {% else %}
+            <span class="badge badge-red">Belum Bayar</span>
+            {% endif %}
+          </td>
+          <td class="td text-right text-gray-400 text-xs">
+            {{ tg.paid_at | datetimeformat if tg.paid_at else '—' }}
+          </td>
+          <td class="td text-right">
+            {% if tg.status == 'unpaid' %}
+            <button onclick="bukaBayar('{{ tg.id }}', '{{ tg.bulan }}', {{ tg.total }})"
+              class="btn-primary px-3 py-1.5 text-xs">Bayar</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="px-5 py-12 text-center">
+    <svg class="w-10 h-10 text-gray-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+    </svg>
+    <p class="text-gray-400 text-sm">Belum ada tagihan SaaS.</p>
+    <p class="text-gray-300 text-xs mt-1">Tagihan akan muncul di sini setiap bulan.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mt-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
+  <strong>Cara kerja:</strong> Tagihan dihitung per pelanggan PPPoE aktif × Rp {{ tarif | rp }}.
+  Minimum Rp {{ minimum | rp }}/bulan. Bayar via saldo platform atau transfer QRIS.
+</div>
+
+<!-- Modal Pilihan Bayar -->
+<div id="modal-bayar" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div>
+        <h3 class="font-bold text-gray-800">Bayar Tagihan SaaS</h3>
+        <p id="modal-bulan" class="text-xs text-gray-400 mt-0.5"></p>
+      </div>
+      <button onclick="tutupModal()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="p-6">
+      <p class="text-sm text-gray-600 mb-1">Total Tagihan</p>
+      <p id="modal-total" class="text-3xl font-extrabold text-violet-700 mb-5"></p>
+
+      <!-- Pilihan metode -->
+      <div class="space-y-3">
+        <!-- Bayar Saldo -->
+        <button id="btn-saldo" onclick="bayarSaldo()"
+          class="w-full flex items-center gap-4 border-2 border-gray-200 hover:border-violet-400 rounded-xl px-4 py-3.5 text-left transition group">
+          <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-100">
+            <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="font-semibold text-gray-800 text-sm">Bayar dengan Saldo</p>
+            <p class="text-xs text-gray-400">Saldo Anda: <span id="modal-saldo" class="font-semibold text-gray-600">{{ user.saldo | rp }}</span></p>
+          </div>
+        </button>
+
+        <!-- Bayar QRIS -->
+        <button id="btn-qris" onclick="tampilQris()"
+          class="w-full flex items-center gap-4 border-2 border-gray-200 hover:border-emerald-400 rounded-xl px-4 py-3.5 text-left transition group">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5V16M4.5 4.5h3v3h-3v-3zm9 0h3v3h-3v-3zm-9 9h3v3h-3v-3z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="font-semibold text-gray-800 text-sm">Transfer via QRIS</p>
+            <p class="text-xs text-gray-400">Scan QR → konfirmasi → admin verifikasi</p>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- QRIS Section (hidden awalnya) -->
+    <div id="section-qris" class="hidden border-t border-gray-100 px-6 py-5">
+      <p class="text-sm font-semibold text-gray-700 mb-3 text-center">Scan QRIS berikut sejumlah <span id="qris-nominal" class="text-violet-700"></span></p>
+      {% if platform_qris %}
+      <img src="{{ platform_qris }}" alt="QRIS Platform" class="w-52 h-52 mx-auto rounded-xl border border-gray-200 object-contain mb-4">
+      {% else %}
+      <div class="w-52 h-52 mx-auto rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center mb-4">
+        <p class="text-xs text-gray-400 text-center">QRIS belum dikonfigurasi<br>oleh platform</p>
+      </div>
+      {% endif %}
+      <p class="text-xs text-gray-500 text-center mb-4">Setelah transfer, klik tombol di bawah untuk konfirmasi. Admin akan memverifikasi pembayaran Anda.</p>
+      <button onclick="konfirmasiQris()"
+        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl py-3 text-sm transition">
+        Saya Sudah Transfer
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _tagId = null, _tagTotal = 0;
+
+function rp(n) { return 'Rp ' + Number(n).toLocaleString('id-ID'); }
+
+function _toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = `fixed bottom-5 right-5 z-[9999] px-4 py-3 rounded-xl text-sm font-semibold shadow-lg
+    ${type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function bukaBayar(id, bulan, total) {
+  _tagId = id; _tagTotal = total;
+  document.getElementById('modal-bulan').textContent = 'Tagihan bulan ' + bulan;
+  document.getElementById('modal-total').textContent = rp(total);
+  document.getElementById('qris-nominal').textContent = rp(total);
+  document.getElementById('section-qris').classList.add('hidden');
+  document.getElementById('modal-bayar').classList.remove('hidden');
+}
+
+function tutupModal() {
+  document.getElementById('modal-bayar').classList.add('hidden');
+  document.getElementById('section-qris').classList.add('hidden');
+}
+
+function tampilQris() {
+  document.getElementById('section-qris').classList.remove('hidden');
+  document.getElementById('section-qris').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function bayarSaldo() {
+  const btn = document.getElementById('btn-saldo');
+  btn.disabled = true;
+  btn.classList.add('opacity-60');
+  const res = await fetch(`/tagihan-saas/${_tagId}/bayar-saldo`, { method: 'POST' });
+  const d = await res.json();
+  if (d.ok) {
+    tutupModal();
+    _toast(d.msg, 'success');
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    _toast(d.msg || 'Gagal bayar', 'error');
+    btn.disabled = false;
+    btn.classList.remove('opacity-60');
+  }
+}
+
+async function konfirmasiQris() {
+  const res = await fetch(`/tagihan-saas/${_tagId}/bayar-qris`, { method: 'POST' });
+  const d = await res.json();
+  if (d.ok) {
+    tutupModal();
+    _toast(d.msg, 'success');
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    _toast(d.msg || 'Gagal konfirmasi', 'error');
+  }
+}
+</script>
+{% endblock %}
