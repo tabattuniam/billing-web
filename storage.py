@@ -202,6 +202,10 @@ class Storage:
             con.execute("ALTER TABLE pppoe_users ADD COLUMN odp_id INTEGER DEFAULT NULL")
         if "odp_port" not in pu_cols2:
             con.execute("ALTER TABLE pppoe_users ADD COLUMN odp_port INTEGER DEFAULT NULL")
+        if "tgl_mulai" not in pu_cols2:
+            # Default: pakai created_at untuk data lama
+            con.execute("ALTER TABLE pppoe_users ADD COLUMN tgl_mulai INTEGER DEFAULT NULL")
+            con.execute("UPDATE pppoe_users SET tgl_mulai=created_at WHERE tgl_mulai IS NULL")
 
         con.execute("""
             CREATE TABLE IF NOT EXISTS platform_config (
@@ -811,11 +815,13 @@ class Storage:
 
     # ── PPPoE Users ──────────────────────────────────────────────────────────
 
-    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0) -> int:
+    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0, tgl_mulai=None) -> int:
+        now = int(time.time())
+        tgl_mulai = tgl_mulai or now
         con = self._conn()
         cur = con.execute(
-            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, int(time.time()))
+            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at,tgl_mulai) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, now, tgl_mulai)
         )
         con.commit()
         pid = cur.lastrowid
@@ -850,17 +856,17 @@ class Storage:
         return dict(row) if row else None
 
     def update_pppoe_user(self, pid: int, nama_pelanggan: str, telepon: str, alamat: str, tgl_bayar: int,
-                          username: str = None, password: str = None):
+                          username: str = None, password: str = None, tgl_mulai: int = None):
         con = self._conn()
         if username and password:
             con.execute(
-                "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=?, username=?, password=? WHERE id=?",
-                (nama_pelanggan, telepon, alamat, tgl_bayar, username, password, pid)
+                "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=?, username=?, password=?, tgl_mulai=COALESCE(?,tgl_mulai) WHERE id=?",
+                (nama_pelanggan, telepon, alamat, tgl_bayar, username, password, tgl_mulai, pid)
             )
         else:
             con.execute(
-                "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=? WHERE id=?",
-                (nama_pelanggan, telepon, alamat, tgl_bayar, pid)
+                "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=?, tgl_mulai=COALESCE(?,tgl_mulai) WHERE id=?",
+                (nama_pelanggan, telepon, alamat, tgl_bayar, tgl_mulai, pid)
             )
         con.commit()
         con.close()
@@ -1101,6 +1107,54 @@ class Storage:
         val = 1 if pushed else 0
         con.executemany("UPDATE voucher_hotspot SET mt_pushed=? WHERE kode=?",
                         [(val, k) for k in kodes])
+        con.commit()
+        con.close()
+
+    def vouchers_pending_mt_push(self) -> list[dict]:
+        """Voucher on-demand yang sudah terjual tapi belum ter-push ke MikroTik."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT v.id, v.kode, v.server_id, v.paket_id, v.user_id,
+                   o.nomor_hp, o.id AS order_id
+            FROM voucher_hotspot v
+            LEFT JOIN hotspot_orders o ON o.voucher_id = v.id
+            WHERE v.status = 'terjual' AND (v.mt_pushed = 0 OR v.mt_pushed IS NULL)
+            ORDER BY v.created_at ASC
+        """).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def vouchers_active_for_sync(self) -> list[dict]:
+        """Semua voucher aktif (terjual/dipakai, mt_pushed=1) yang perlu disync dengan MikroTik."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT v.id, v.kode, v.server_id, v.user_id, v.status,
+                   s.vpn_ip, s.api_port, s.api_user, s.api_password
+            FROM voucher_hotspot v
+            JOIN mikrotik_servers s ON s.id = v.server_id
+            WHERE v.status IN ('terjual', 'dipakai') AND v.mt_pushed = 1
+            ORDER BY v.server_id, v.created_at ASC
+        """).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def mark_voucher_dipakai(self, kode: str):
+        """Tandai voucher sebagai dipakai setelah pelanggan login di MikroTik."""
+        con = self._conn()
+        con.execute(
+            "UPDATE voucher_hotspot SET status='dipakai', dipakai_at=? WHERE kode=? AND status='terjual'",
+            (int(time.time()), kode)
+        )
+        con.commit()
+        con.close()
+
+    def mark_voucher_expired(self, kode: str):
+        """Tandai voucher sebagai expired — tidak ditemukan di MikroTik (sudah habis dipakai)."""
+        con = self._conn()
+        con.execute(
+            "UPDATE voucher_hotspot SET status='expired' WHERE kode=? AND status IN ('terjual','dipakai')",
+            (kode,)
+        )
         con.commit()
         con.close()
 
@@ -2091,9 +2145,9 @@ class Storage:
         con.commit()
         con.close()
 
-    def confirm_order(self, order_id: str, mt_callback=None) -> dict | None:
+    def confirm_order(self, order_id: str) -> dict | None:
         """Tandai order paid, generate voucher baru on-demand, return voucher.
-        mt_callback(server_id, kode, paket) dipanggil untuk push ke MikroTik."""
+        MT push dilakukan di luar fungsi ini agar hasilnya bisa dicek."""
         import uuid as _uuid
         con = self._conn()
         order = con.execute("SELECT * FROM hotspot_orders WHERE id=? AND status='pending'",
@@ -2108,15 +2162,14 @@ class Storage:
         while con.execute("SELECT id FROM voucher_hotspot WHERE kode=?", (kode,)).fetchone():
             kode = _uuid.uuid4().hex[:8].upper()
 
-        paket = con.execute("SELECT * FROM paket_hotspot WHERE id=?", (order["paket_id"],)).fetchone()
-        paket = dict(paket) if paket else {}
-
         now = int(time.time())
-        # Simpan voucher baru ke DB
+        # status='terjual': sudah dibayar, belum dipakai pelanggan
+        # dipakai_at=NULL; akan diset saat pelanggan pertama login (cek uptime MT)
+        # mt_pushed=0 dulu; retry job set ke 1 setelah MT push berhasil
         vid = con.execute(
-            "INSERT INTO voucher_hotspot (user_id, server_id, paket_id, kode, status, created_at, dipakai_at) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (order["user_id"], order["server_id"], order["paket_id"], kode, "dipakai", now, now)
+            "INSERT INTO voucher_hotspot (user_id, server_id, paket_id, kode, status, mt_pushed, created_at, dipakai_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (order["user_id"], order["server_id"], order["paket_id"], kode, "terjual", 0, now, None)
         ).lastrowid
 
         con.execute("UPDATE hotspot_orders SET status='paid', voucher_id=?, paid_at=? WHERE id=?",
@@ -2124,15 +2177,8 @@ class Storage:
         con.commit()
         con.close()
 
-        # Push ke MikroTik (opsional, via callback)
-        if mt_callback:
-            try:
-                mt_callback(order["server_id"], kode, paket)
-            except Exception:
-                pass
-
         return {"id": vid, "kode": kode, "paket_id": order["paket_id"],
-                "user_id": order["user_id"], "status": "dipakai"}
+                "user_id": order["user_id"], "status": "terjual"}
 
     def cari_voucher_by_nomor(self, isp_uid: str, nomor_hp: str) -> list[dict]:
         """Cari voucher yang sudah dibeli berdasarkan nomor HP."""
@@ -2483,3 +2529,122 @@ class Storage:
             result.append({"bulan": bulan_str, "count": count})
         con.close()
         return result
+
+    def jatuh_tempo_mendatang(self, user_id: str, hari: int = 7) -> list[dict]:
+        """Pelanggan aktif yang tgl_bayar jatuh dalam N hari ke depan."""
+        import datetime
+        con = self._conn()
+        today = datetime.date.today()
+        target_days = set()
+        for delta in range(0, hari + 1):
+            d = today + datetime.timedelta(days=delta)
+            target_days.add(d.day)
+        placeholders = ",".join("?" * len(target_days))
+        rows = con.execute(f"""
+            SELECT p.id, p.nama_pelanggan, p.username, p.telepon, p.tgl_bayar,
+                   pk.nama AS paket_nama, pk.harga,
+                   t.status AS tagihan_status
+            FROM pppoe_users p
+            LEFT JOIN paket_pppoe pk ON pk.id = p.paket_id
+            LEFT JOIN tagihan_pppoe t ON t.pppoe_id = p.id AND t.bulan = ?
+            WHERE p.user_id = ? AND p.status = 'aktif'
+              AND p.tgl_bayar IN ({placeholders})
+              AND (t.status IS NULL OR t.status IN ('unpaid','overdue'))
+            ORDER BY p.tgl_bayar ASC
+        """, (today.strftime("%Y-%m"), user_id, *list(target_days))).fetchall()
+        con.close()
+        result = []
+        for r in rows:
+            d = dict(r)
+            # hitung sisa hari
+            tgl = r["tgl_bayar"]
+            today_day = today.day
+            if tgl >= today_day:
+                sisa = tgl - today_day
+            else:
+                import calendar
+                _, last = calendar.monthrange(today.year, today.month)
+                sisa = (last - today_day) + tgl
+            d["sisa_hari"] = sisa
+            result.append(d)
+        return result
+
+    def pelanggan_overdue_list(self, user_id: str, bulan: str) -> list[dict]:
+        """Pelanggan dengan tagihan overdue pada bulan tertentu."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT p.id, p.nama_pelanggan, p.username, p.telepon, p.tgl_bayar,
+                   pk.nama AS paket_nama, pk.harga,
+                   t.id AS tagihan_id, t.amount, t.bulan
+            FROM tagihan_pppoe t
+            JOIN pppoe_users p ON p.id = t.pppoe_id
+            LEFT JOIN paket_pppoe pk ON pk.id = p.paket_id
+            WHERE t.user_id = ? AND t.bulan = ? AND t.status = 'overdue'
+            ORDER BY p.tgl_bayar ASC
+        """, (user_id, bulan)).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def pelanggan_nonaktif(self, user_id: str) -> list[dict]:
+        """Pelanggan yang berstatus nonaktif (churn)."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT p.id, p.nama_pelanggan, p.username, p.telepon, p.tgl_bayar,
+                   pk.nama AS paket_nama, pk.harga, p.created_at
+            FROM pppoe_users p
+            LEFT JOIN paket_pppoe pk ON pk.id = p.paket_id
+            WHERE p.user_id = ? AND p.status = 'nonaktif'
+            ORDER BY p.created_at DESC
+        """, (user_id,)).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def pertumbuhan_pelanggan(self, user_id: str) -> list[dict]:
+        """Pelanggan aktif yang mulai berlangganan per bulan (12 bulan terakhir)."""
+        import calendar, datetime
+        con = self._conn()
+        today = datetime.date.today()
+        result = []
+        for i in range(11, -1, -1):
+            month = today.month - i
+            year = today.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            bulan_str = f"{year}-{str(month).zfill(2)}"
+            _, last_day = calendar.monthrange(year, month)
+            ts_start = int(time.mktime((year, month, 1, 0, 0, 0, 0, 0, -1)))
+            ts_end   = int(time.mktime((year, month, last_day, 23, 59, 59, 0, 0, -1)))
+            aktif = con.execute(
+                "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND tgl_mulai BETWEEN ? AND ?",
+                (user_id, ts_start, ts_end)
+            ).fetchone()[0]
+            result.append({"bulan": bulan_str, "aktif": aktif})
+        con.close()
+        return result
+
+    def summary_monitoring(self, user_id: str, bulan: str) -> dict:
+        """Ringkasan monitoring: total, aktif, nonaktif, overdue, jatuh tempo hari ini."""
+        import datetime
+        con = self._conn()
+        total   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=?", (user_id,)).fetchone()[0]
+        aktif   = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (user_id,)).fetchone()[0]
+        nonaktif = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='nonaktif'", (user_id,)).fetchone()[0]
+        overdue = con.execute(
+            "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='overdue'",
+            (user_id, bulan)
+        ).fetchone()[0]
+        today_day = datetime.date.today().day
+        jatuh_hari_ini = con.execute(
+            "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif' AND tgl_bayar=?",
+            (user_id, today_day)
+        ).fetchone()[0]
+        omzet = con.execute(
+            "SELECT COALESCE(SUM(amount),0) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status='paid'",
+            (user_id, bulan)
+        ).fetchone()[0]
+        con.close()
+        return {
+            "total": total, "aktif": aktif, "nonaktif": nonaktif,
+            "overdue": overdue, "jatuh_hari_ini": jatuh_hari_ini, "omzet": omzet
+        }

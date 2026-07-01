@@ -12,7 +12,7 @@
 
 {% if ok == 'generate_ok' %}
 <div class="mb-4 px-4 py-3 rounded-xl border flex items-center gap-3
-  {% if pushed|int > 0 %}bg-green-50 border-green-200 text-green-700
+  {% if pushed|int > 0 %}bg-emerald-50 border-emerald-200 text-emerald-700
   {% else %}bg-blue-50 border-blue-200 text-blue-700{% endif %}">
   <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -24,203 +24,300 @@
   </span>
 </div>
 {% elif ok == 'generate_push_error' %}
-<div class="mb-4 px-4 py-3 rounded-xl border bg-yellow-50 border-yellow-300 text-yellow-800 flex items-start gap-3">
-  <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div class="mb-4 px-4 py-3 rounded-xl border bg-amber-50 border-amber-200 text-amber-800 flex items-start gap-3">
+  <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
   </svg>
   <div class="text-sm">
     <p class="font-semibold">{{ jumlah_gen }} voucher dibuat — sebagian gagal push ke MikroTik</p>
-    <p class="mt-0.5">
-      {% if pushed|int > 0 %}{{ pushed }} berhasil push. {% endif %}
+    <p class="mt-0.5">{% if pushed|int > 0 %}{{ pushed }} berhasil push. {% endif %}
       <span class="text-red-600 font-medium">{{ failed }} voucher gagal push.</span>
-      Gunakan tombol <strong>Push Ulang</strong> di bawah untuk mencoba lagi.
+      Gunakan tombol <strong>Push Ulang</strong> untuk mencoba lagi.
     </p>
   </div>
 </div>
 {% endif %}
 
+<!-- Header -->
 <div class="page-header">
   <div>
     <h1 class="page-title">Voucher Hotspot</h1>
-    <p class="page-sub">{{ vouchers|length }} voucher ditemukan</p>
+    <p class="page-sub">Kelola stok dan status voucher hotspot</p>
   </div>
   <div class="flex gap-2">
     <a href="/hotspot/voucher/print{% if sel_server %}?server_id={{ sel_server }}{% endif %}" target="_blank"
-      class="btn-secondary px-4 py-2.5">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+      class="btn-secondary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+      </svg>
       Cetak
     </a>
     <button onclick="document.getElementById('modal-generate').classList.remove('hidden')"
-      class="btn-primary px-4 py-2.5">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      class="btn-primary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
       Generate Voucher
     </button>
   </div>
 </div>
 
-<!-- Filter -->
-<form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
-  <select name="server_id" class="form-select !w-auto min-w-[170px]">
-    <option value="">Semua Server</option>
-    {% for s in servers %}
-    <option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>
-    {% endfor %}
-  </select>
-  <select name="paket_id" class="form-select !w-auto min-w-[170px]">
-    <option value="">Semua Paket</option>
-    {% for p in pakets %}
-    <option value="{{ p.id }}" {% if sel_paket==p.id|string %}selected{% endif %}>{{ p.nama }}</option>
-    {% endfor %}
-  </select>
-  <select name="status" class="form-select !w-auto min-w-[140px]">
-    <option value="">Semua Status</option>
-    <option value="tersedia" {% if sel_status=='tersedia' %}selected{% endif %}>Tersedia</option>
-    <option value="dipakai"  {% if sel_status=='dipakai'  %}selected{% endif %}>Dipakai</option>
-    <option value="expired"  {% if sel_status=='expired'  %}selected{% endif %}>Expired</option>
-  </select>
-  <select name="comment" class="form-select !w-auto min-w-[200px]">
-    <option value="">Semua Comment</option>
-    {% for cd in (comments_detail if comments_detail is defined else []) %}
-    <option value="{{ cd.comment }}" {% if sel_comment==cd.comment %}selected{% endif %}>
-      {{ cd.comment }}{% if cd.paket_nama %} · {{ cd.paket_nama }}{% endif %} [{{ cd.stok }} sisa]{% if cd.agen_nama %} ({{ cd.agen_nama }}){% endif %}
-    </option>
-    {% endfor %}
-  </select>
-  <button type="submit" class="btn-primary px-4 py-2.5">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
-    Filter
-  </button>
-  {% if sel_server or sel_status or sel_paket or sel_comment %}
-  <a href="/hotspot/voucher" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
-  {% endif %}
-  {% if sel_server %}
-  <button type="button" onclick="pushKeMikrotik('{{ sel_server }}','{{ sel_comment }}')"
-    class="text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium flex items-center gap-2 transition-colors">
-    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-    Push ke MikroTik
-  </button>
-  <form method="post" action="/hotspot/voucher/hapus" class="ml-auto" onsubmit="return confirm('Hapus semua voucher tersedia di server ini?')">
-    <input type="hidden" name="server_id" value="{{ sel_server }}">
-    <input type="hidden" name="status" value="tersedia">
-    <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-2 transition-colors">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-      Hapus Tersedia
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+  <a href="?status=tersedia{% if sel_server %}&server_id={{ sel_server }}{% endif %}"
+     class="card p-4 flex items-center gap-3 hover:shadow-md transition group {% if sel_status=='tersedia' %}ring-2 ring-emerald-400{% endif %}">
+    <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition">
+      <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-emerald-600">{{ stats_v.tersedia }}</p>
+      <p class="text-xs text-gray-400">Tersedia</p>
+    </div>
+  </a>
+  <a href="?status=terjual{% if sel_server %}&server_id={{ sel_server }}{% endif %}"
+     class="card p-4 flex items-center gap-3 hover:shadow-md transition group {% if sel_status=='terjual' %}ring-2 ring-amber-400{% endif %}">
+    <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition">
+      <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-amber-600">{{ stats_v.terjual }}</p>
+      <p class="text-xs text-gray-400">Terjual</p>
+    </div>
+  </a>
+  <a href="?status=dipakai{% if sel_server %}&server_id={{ sel_server }}{% endif %}"
+     class="card p-4 flex items-center gap-3 hover:shadow-md transition group {% if sel_status=='dipakai' %}ring-2 ring-blue-400{% endif %}">
+    <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition">
+      <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-blue-600">{{ stats_v.dipakai }}</p>
+      <p class="text-xs text-gray-400">Dipakai</p>
+    </div>
+  </a>
+  <a href="?status=expired{% if sel_server %}&server_id={{ sel_server }}{% endif %}"
+     class="card p-4 flex items-center gap-3 hover:shadow-md transition group {% if sel_status=='expired' %}ring-2 ring-red-400{% endif %}">
+    <div class="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 transition">
+      <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-red-500">{{ stats_v.expired }}</p>
+      <p class="text-xs text-gray-400">Expired</p>
+    </div>
+  </a>
+</div>
+
+<!-- Filter Bar -->
+<div class="card p-4 mb-5">
+  <form method="get" class="flex items-center gap-3 flex-wrap">
+    <select name="server_id" class="form-select !w-auto min-w-[160px]" onchange="this.form.submit()">
+      <option value="">Semua Server</option>
+      {% for s in servers %}
+      <option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>
+      {% endfor %}
+    </select>
+    <select name="paket_id" class="form-select !w-auto min-w-[160px]">
+      <option value="">Semua Paket</option>
+      {% for p in pakets %}
+      <option value="{{ p.id }}" {% if sel_paket==p.id|string %}selected{% endif %}>{{ p.nama }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="form-select !w-auto min-w-[170px]">
+      <option value="">Semua Status</option>
+      <option value="tersedia" {% if sel_status=='tersedia' %}selected{% endif %}>Tersedia</option>
+      <option value="terjual"  {% if sel_status=='terjual'  %}selected{% endif %}>Terjual (belum dipakai)</option>
+      <option value="dipakai"  {% if sel_status=='dipakai'  %}selected{% endif %}>Dipakai</option>
+      <option value="expired"  {% if sel_status=='expired'  %}selected{% endif %}>Expired</option>
+    </select>
+    <select name="comment" class="form-select !w-auto min-w-[190px]">
+      <option value="">Semua Batch / Comment</option>
+      {% for cd in (comments_detail if comments_detail is defined else []) %}
+      <option value="{{ cd.comment }}" {% if sel_comment==cd.comment %}selected{% endif %}>
+        {{ cd.comment }}{% if cd.paket_nama %} · {{ cd.paket_nama }}{% endif %} [{{ cd.stok }} sisa]{% if cd.agen_nama %} — {{ cd.agen_nama }}{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn-primary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+      </svg>
+      Filter
     </button>
+    {% if sel_server or sel_status or sel_paket or sel_comment %}
+    <a href="/hotspot/voucher" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
+    {% endif %}
+
+    <!-- Aksi bulk (muncul jika filter server aktif) -->
+    {% if sel_server %}
+    <div class="ml-auto flex gap-2">
+      <button type="button" onclick="pushKeMikrotik('{{ sel_server }}','{{ sel_comment }}')"
+        class="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        Push ke MikroTik
+      </button>
+      <form method="post" action="/hotspot/voucher/hapus"
+        onsubmit="return confirm('Hapus semua voucher tersedia di server ini?')">
+        <input type="hidden" name="server_id" value="{{ sel_server }}">
+        <input type="hidden" name="status" value="tersedia">
+        <button class="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          Hapus Tersedia
+        </button>
+      </form>
+    </div>
+    {% endif %}
+    {% if sel_comment %}
+    {% set _cd = comments_detail | selectattr('comment', 'equalto', sel_comment) | first if comments_detail is defined else None %}
+    <form method="post" action="/hotspot/voucher/hapus-comment" class="{% if not sel_server %}ml-auto{% endif %}"
+      onsubmit="return confirm('Hapus semua voucher tersedia dengan comment {{ sel_comment }}?')">
+      <input type="hidden" name="comment" value="{{ sel_comment }}">
+      <input type="hidden" name="status" value="tersedia">
+      <button class="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+        Hapus "{{ sel_comment }}"{% if _cd and _cd.agen_nama %} · {{ _cd.agen_nama }}{% endif %}
+      </button>
+    </form>
+    {% endif %}
   </form>
-  {% endif %}
-  {% if sel_comment %}
-  {% set _cd = comments_detail | selectattr('comment', 'equalto', sel_comment) | first if comments_detail is defined else None %}
-  <form method="post" action="/hotspot/voucher/hapus-comment" class="{% if not sel_server %}ml-auto{% endif %}" onsubmit="return confirm('Hapus semua voucher tersedia dengan comment {{ sel_comment }}?')">
-    <input type="hidden" name="comment" value="{{ sel_comment }}">
-    <input type="hidden" name="status" value="tersedia">
-    <button class="text-xs px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-2 transition-colors">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-      Hapus "{{ sel_comment }}"{% if _cd and _cd.agen_nama %} · {{ _cd.agen_nama }}{% endif %}
-    </button>
-  </form>
-  {% endif %}
-</form>
+</div>
 
 <!-- Voucher Table -->
 {% if not vouchers %}
 <div class="card p-16 text-center">
-  <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-    <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+  <div class="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
+    </svg>
   </div>
-  <p class="text-slate-500 font-medium">Belum ada voucher</p>
-  <p class="text-slate-400 text-sm mt-1">Generate voucher baru untuk mulai berjualan</p>
+  <p class="text-gray-600 font-semibold">Belum ada voucher</p>
+  <p class="text-gray-400 text-sm mt-1">Generate voucher baru untuk mulai berjualan</p>
+  <button onclick="document.getElementById('modal-generate').classList.remove('hidden')"
+    class="btn-primary px-5 py-2.5 text-sm mt-5">
+    Generate Voucher Sekarang
+  </button>
 </div>
 {% else %}
 <div class="card overflow-hidden">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+    <p class="text-sm font-semibold text-gray-600">{{ vouchers|length }} voucher ditemukan</p>
+    <div class="flex items-center gap-2">
+      <input type="text" id="search-voucher" placeholder="Cari kode / paket / batch..."
+        oninput="filterVoucher(this.value)"
+        class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-200 w-52">
+    </div>
+  </div>
   <div class="overflow-x-auto">
-    <table class="w-full">
+    <table class="w-full text-sm" id="voucher-table">
       <thead>
-        <tr>
+        <tr class="text-left bg-gray-50 border-b border-gray-100">
           <th class="th">Kode Voucher</th>
           <th class="th">Paket</th>
-          <th class="th">Durasi</th>
-          <th class="th">Profile / Speed</th>
           <th class="th">Server</th>
-          <th class="th">Comment</th>
-          <th class="th">Tgl Generate</th>
+          <th class="th">Batch</th>
+          <th class="th">Generate</th>
           <th class="th">Status</th>
-          <th class="th">Aksi</th>
+          <th class="th text-right">Aksi</th>
         </tr>
       </thead>
       <tbody>
       {% for v in vouchers %}
-      <tr class="hover:bg-gray-50/50 transition">
+      <tr class="voucher-row hover:bg-gray-50/70 transition border-b border-gray-50 last:border-0"
+          data-search="{{ v.kode }} {{ v.paket_nama or '' }} {{ v.comment or '' }} {{ v.server_nama or '' }}">
+        <!-- Kode -->
         <td class="td">
           <div class="flex items-center gap-2">
-            <div class="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
-              <span class="font-mono font-bold text-blue-700 tracking-[0.15em] text-sm">{{ v.kode }}</span>
+            <div class="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 inline-block">
+              <span class="font-mono font-bold text-blue-700 tracking-widest text-sm">{{ v.kode }}</span>
             </div>
-            <button onclick="copyKode('{{ v.kode }}')" class="text-slate-300 hover:text-blue-500 transition" title="Salin">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <button onclick="copyKode('{{ v.kode }}')"
+              class="text-gray-300 hover:text-blue-500 transition" title="Salin kode">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
             </button>
           </div>
         </td>
-        <td class="td"><span class="text-sm font-medium text-slate-700">{{ v.paket_nama or '—' }}</span></td>
-        <td class="td"><span class="text-sm text-slate-600">{{ v.durasi or '—' }}</span></td>
-        <td class="td"><span class="font-mono text-xs text-slate-500">{{ v.kecepatan or '—' }}</span></td>
+        <!-- Paket -->
         <td class="td">
-          <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ v.server_nama or v.server_id[:8] if v.server_id else '—' }}</span>
+          <p class="font-semibold text-gray-700">{{ v.paket_nama or '—' }}</p>
+          <p class="text-xs text-gray-400 mt-0.5">
+            {{ v.durasi or '' }}{% if v.kecepatan %} · <span class="font-mono">{{ v.kecepatan }}</span>{% endif %}
+          </p>
         </td>
+        <!-- Server -->
+        <td class="td">
+          <span class="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
+            {{ v.server_nama or (v.server_id[:8] if v.server_id else '—') }}
+          </span>
+        </td>
+        <!-- Batch/Comment -->
         <td class="td">
           {% if v.comment %}
-          <div class="flex flex-col gap-0.5">
-            <span class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg font-medium">{{ v.comment }}</span>
-            {% if v.agen_nama %}
-            <span class="text-xs text-slate-400">{{ v.agen_nama }}</span>
-            {% endif %}
-          </div>
+          <span class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg font-medium">{{ v.comment }}</span>
+          {% if v.agen_nama %}<p class="text-xs text-gray-400 mt-0.5">{{ v.agen_nama }}</p>{% endif %}
           {% else %}
-          <span class="text-xs text-slate-300">—</span>
+          <span class="text-xs text-gray-300">—</span>
           {% endif %}
         </td>
+        <!-- Tgl Generate -->
         <td class="td">
-          {% if v.created_at %}
-          <span class="text-xs text-slate-500">{{ v.created_at | ts_date }}</span>
+          <span class="text-xs text-gray-400">{{ v.created_at | ts_date if v.created_at else '—' }}</span>
+        </td>
+        <!-- Status -->
+        <td class="td">
+          {% if v.status == 'tersedia' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Tersedia
+          </span>
+          {% elif v.status == 'terjual' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>Terjual
+          </span>
+          {% elif v.status == 'dipakai' %}
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>Dipakai
+          </span>
           {% else %}
-          <span class="text-xs text-slate-300">—</span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Expired
+          </span>
+          {% endif %}
+          {% if not v.mt_pushed and v.status in ('terjual',) %}
+          <div class="mt-1">
+            <span class="inline-flex items-center gap-1 text-xs text-orange-500 font-medium">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+              Pending push
+            </span>
+          </div>
           {% endif %}
         </td>
-        <td class="td">
-          <div class="flex flex-col gap-1">
-            {% if v.status=='tersedia' %}
-            <span class="badge-green"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Tersedia</span>
-            {% elif v.status=='dipakai' %}
-            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Dipakai</span>
-            {% else %}
-            <span class="badge-red"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Expired</span>
-            {% endif %}
-            {% if v.mt_pushed %}
-            <span class="inline-flex items-center gap-1 text-xs text-teal-600 font-medium" title="Sudah ada di MikroTik">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
-              MikroTik ✓
-            </span>
-            {% else %}
-            <span class="inline-flex items-center gap-1 text-xs text-orange-500 font-medium" title="Belum di-push ke MikroTik">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-              Belum push
-            </span>
-            {% endif %}
-          </div>
-        </td>
-        <td class="td">
-          {% if v.status=='tersedia' %}
-          <form method="post" action="/hotspot/voucher/hapus-kode-form"
-            onsubmit="return confirm('Hapus voucher {{ v.kode }}?\nAkan dihapus dari database dan MikroTik.')">
-            <input type="hidden" name="kode" value="{{ v.kode }}">
-            <input type="hidden" name="server_id" value="{{ v.server_id or '' }}">
-            <button type="submit"
-              class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-medium transition-colors flex items-center gap-1">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              Hapus
-            </button>
-          </form>
+        <!-- Aksi -->
+        <td class="td text-right">
+          {% if v.status == 'tersedia' %}
+          <button onclick="hapusKode('{{ v.kode }}','{{ v.server_id or '' }}')"
+            class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-medium transition">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Hapus
+          </button>
           {% else %}
-          <span class="text-xs text-slate-300">—</span>
+          <span class="text-xs text-gray-300">—</span>
           {% endif %}
         </td>
       </tr>
@@ -233,11 +330,17 @@
 
 <!-- Modal Generate -->
 <div id="modal-generate" class="hidden modal-overlay">
-  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
     <div class="flex items-center justify-between mb-5">
-      <h3 class="font-bold text-slate-900 text-lg">Generate Voucher</h3>
-      <button onclick="document.getElementById('modal-generate').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      <div>
+        <h3 class="font-bold text-gray-900 text-lg">Generate Voucher</h3>
+        <p class="text-xs text-gray-400 mt-0.5">Buat batch voucher baru</p>
+      </div>
+      <button onclick="document.getElementById('modal-generate').classList.add('hidden')"
+        class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
       </button>
     </div>
     <form method="post" action="/hotspot/voucher/generate">
@@ -246,53 +349,70 @@
           <label class="form-label">Server MikroTik</label>
           <select name="server_id" required class="form-select">
             <option value="">Pilih Server</option>
-            {% for s in servers %}<option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>{% endfor %}
+            {% for s in servers %}
+            <option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>
+            {% endfor %}
           </select>
         </div>
         <div>
           <label class="form-label">Paket Hotspot</label>
           <select name="paket_id" required class="form-select">
             <option value="">Pilih Paket</option>
-            {% for p in pakets %}<option value="{{ p.id }}">{{ p.nama }} — {{ p.harga | rp }}</option>{% endfor %}
+            {% for p in pakets %}
+            <option value="{{ p.id }}">{{ p.nama }} — {{ p.harga | rp }}</option>
+            {% endfor %}
           </select>
         </div>
-        <div>
-          <label class="form-label">Jumlah Voucher</label>
-          <input name="jumlah" type="number" required value="10" min="1" max="500" class="form-input">
-          <p class="text-xs text-slate-400 mt-1">Maksimal 500 per generate</p>
-        </div>
-        <div>
-          <label class="form-label">Comment / Keterangan Batch</label>
-          <input name="comment" type="text" placeholder="Contoh: RT 01, Promo Lebaran, Batch Jan 2026" class="form-input">
-          <p class="text-xs text-slate-400 mt-1">Digunakan untuk memilih voucher saat cetak</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Jumlah</label>
+            <input name="jumlah" type="number" required value="10" min="1" max="500" class="form-input">
+            <p class="text-xs text-gray-400 mt-1">Maks 500</p>
+          </div>
+          <div>
+            <label class="form-label">Batch / Comment</label>
+            <input name="comment" type="text" placeholder="Contoh: RT 01" class="form-input">
+            <p class="text-xs text-gray-400 mt-1">Opsional</p>
+          </div>
         </div>
         <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
           <label class="flex items-start gap-2.5 cursor-pointer">
             <input type="checkbox" name="push_mikrotik" value="1" class="mt-0.5 rounded" checked>
             <div>
-              <p class="text-sm font-medium text-blue-800">Push ke MikroTik</p>
-              <p class="text-xs text-blue-500 mt-0.5">Buat user hotspot di router secara otomatis saat generate</p>
+              <p class="text-sm font-semibold text-blue-800">Push ke MikroTik</p>
+              <p class="text-xs text-blue-500 mt-0.5">Buat user hotspot di router saat generate</p>
             </div>
           </label>
         </div>
       </div>
       <div class="flex gap-3 mt-6">
         <button type="button" onclick="document.getElementById('modal-generate').classList.add('hidden')"
-          class="btn-secondary flex-1 px-4 py-2.5 justify-center">Batal</button>
-        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
           Generate
         </button>
       </div>
     </form>
   </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 function copyKode(kode) {
   navigator.clipboard.writeText(kode).then(() => showToast('Kode disalin: ' + kode));
+}
+
+function filterVoucher(q) {
+  const kw = q.toLowerCase().trim();
+  document.querySelectorAll('.voucher-row').forEach(row => {
+    const text = (row.dataset.search || '').toLowerCase();
+    row.style.display = (!kw || text.includes(kw)) ? '' : 'none';
+  });
 }
 
 async function hapusKode(kode, serverId) {
@@ -306,24 +426,29 @@ async function hapusKode(kode, serverId) {
     showToast('Voucher ' + kode + ' dihapus');
     setTimeout(() => location.reload(), 800);
   } else {
-    alert(data.msg);
+    showToast(data.msg || 'Gagal hapus', 'error');
   }
 }
 
 async function pushKeMikrotik(serverId, comment) {
-  if (!confirm('Push semua voucher tersedia ke MikroTik?\nVoucher yang sudah ada di MikroTik akan dilewati.')) return;
+  if (!confirm('Push semua voucher tersedia ke MikroTik?\nVoucher yang sudah ada akan dilewati.')) return;
   const fd = new FormData();
   fd.append('server_id', serverId);
   fd.append('comment', comment || '');
   const btn = event.target.closest('button');
+  const orig = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = 'Memproses...';
-  const res = await fetch('/hotspot/voucher/push', { method: 'POST', body: fd });
-  const data = await res.json();
+  try {
+    const res = await fetch('/hotspot/voucher/push', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) showToast(data.msg, 'success');
+    else showToast(data.msg || 'Gagal push', 'error');
+  } catch(e) {
+    showToast('Gagal: ' + e.message, 'error');
+  }
   btn.disabled = false;
-  btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Push ke MikroTik';
-  if (data.ok) showToast(data.msg);
-  else alert(data.msg);
+  btn.innerHTML = orig;
 }
 </script>
 {% endblock %}

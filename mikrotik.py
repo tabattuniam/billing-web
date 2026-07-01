@@ -81,6 +81,15 @@ class MikroTik:
         except Exception:
             return []
 
+    def kick_pppoe_session(self, session_id: str) -> bool:
+        """Disconnect sesi PPPoE aktif berdasarkan .id dari /ppp/active."""
+        try:
+            api = self._conn()
+            api.get_resource("/ppp/active").remove(id=session_id)
+            return True
+        except Exception:
+            return False
+
     def list_pppoe_secrets(self) -> list[dict]:
         try:
             api = self._conn()

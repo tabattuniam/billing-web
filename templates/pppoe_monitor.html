@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% set active = "pppoe_monitor" %}
+{% block title %}Monitor Online — {{ app_name }}{% endblock %}
+{% block topbar_title %}Monitor Sesi Online{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Monitor Sesi Online</h1>
+    <p class="page-sub" id="sub-info">Memuat data...</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <!-- Indikator auto-refresh -->
+    <div class="flex items-center gap-2 text-xs text-gray-400">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+      <span id="countdown">Refresh 30s</span>
+    </div>
+    <button onclick="loadData(true)" id="btn-refresh"
+      class="btn-secondary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+      <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-gray-900" id="stat-online">—</p>
+      <p class="text-xs text-gray-400">Sesi Online</p>
+    </div>
+  </div>
+  <div class="card p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+      <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M5 12h14M19 12l-7-7m7 7l-7 7"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-black text-gray-900" id="stat-servers">{{ servers|length }}</p>
+      <p class="text-xs text-gray-400">Server Aktif</p>
+    </div>
+  </div>
+  <div class="card p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+      <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-sm font-bold text-gray-900" id="stat-updated">—</p>
+      <p class="text-xs text-gray-400">Diperbarui</p>
+    </div>
+  </div>
+  <div class="card p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+      <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+    </div>
+    <div class="flex-1">
+      <input id="search-input" type="text" placeholder="Cari username/IP/nama..."
+        class="w-full text-sm border-0 outline-none bg-transparent font-medium text-gray-700 placeholder-gray-400"
+        oninput="filterTable(this.value)">
+      <p class="text-xs text-gray-400">Filter</p>
+    </div>
+  </div>
+</div>
+
+<!-- Tabel sesi -->
+<div id="monitor-wrap" class="space-y-4">
+  <div class="card p-10 text-center text-gray-400">
+    <svg class="w-8 h-8 mx-auto mb-2 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+    </svg>
+    Menghubungi router...
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _refreshTimer = null;
+let _countdown = 30;
+let _allRows = [];
+
+async function loadData(manual = false) {
+  clearInterval(_refreshTimer);
+  _countdown = 30;
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.querySelector('svg').classList.add('animate-spin');
+
+  try {
+    const res = await fetch('/pppoe/monitor/json');
+    const d = await res.json();
+    renderData(d);
+  } catch(e) {
+    document.getElementById('monitor-wrap').innerHTML =
+      `<div class="card p-8 text-center text-red-500">Gagal mengambil data: ${e.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.querySelector('svg').classList.remove('animate-spin');
+  startCountdown();
+}
+
+function renderData(d) {
+  document.getElementById('stat-online').textContent = d.total_online;
+  const now = new Date(d.fetched_at * 1000);
+  document.getElementById('stat-updated').textContent =
+    now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  document.getElementById('sub-info').textContent =
+    `${d.total_online} sesi aktif dari ${d.servers.length} server`;
+
+  _allRows = [];
+  const wrap = document.getElementById('monitor-wrap');
+  if (!d.servers.length) {
+    wrap.innerHTML = '<div class="card p-8 text-center text-gray-400">Tidak ada server terdaftar</div>';
+    return;
+  }
+
+  wrap.innerHTML = d.servers.map(srv => {
+    if (srv.error) {
+      return `<div class="card p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-2 h-2 rounded-full bg-red-400"></span>
+          <span class="font-semibold text-gray-700">${srv.server_nama}</span>
+          <span class="text-xs text-red-500 ml-2">${srv.error}</span>
+        </div>
+      </div>`;
+    }
+    const rows = srv.sessions.map(s => {
+      _allRows.push({el: null, text: `${s.username} ${s.address} ${s.nama_pelanggan} ${s.caller_id}`.toLowerCase()});
+      return `<tr class="monitor-row hover:bg-gray-50 transition" data-search="${s.username} ${s.address} ${s.nama_pelanggan} ${s.caller_id}".toLowerCase()>
+        <td class="td">
+          <p class="font-semibold text-gray-800 text-sm">${s.username}</p>
+          <p class="text-xs text-gray-400">${s.nama_pelanggan}</p>
+        </td>
+        <td class="td">
+          <span class="font-mono text-sm text-blue-700">${s.address}</span>
+        </td>
+        <td class="td text-xs text-gray-500">${s.caller_id}</td>
+        <td class="td">
+          <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            ${s.uptime}
+          </span>
+        </td>
+        <td class="td text-xs text-gray-500">${s.paket_nama}</td>
+        <td class="td text-right">
+          <button onclick="kickSession('${srv.server_id}','${s.session_id}','${s.username}',this)"
+            class="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+            title="Putuskan koneksi">
+            Kick
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const count = srv.sessions.length;
+    return `<div class="card overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full ${count > 0 ? 'bg-emerald-400' : 'bg-gray-300'}"></span>
+          <span class="font-semibold text-gray-700">${srv.server_nama}</span>
+        </div>
+        <span class="text-xs font-bold ${count > 0 ? 'text-emerald-600' : 'text-gray-400'}">${count} online</span>
+      </div>
+      ${count === 0
+        ? '<p class="text-sm text-gray-400 text-center py-6">Tidak ada sesi aktif</p>'
+        : `<div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left">
+                  <th class="th">Username / Pelanggan</th>
+                  <th class="th">IP Address</th>
+                  <th class="th">MAC / Caller ID</th>
+                  <th class="th">Uptime</th>
+                  <th class="th">Paket</th>
+                  <th class="th"></th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function filterTable(q) {
+  const keyword = q.toLowerCase().trim();
+  document.querySelectorAll('.monitor-row').forEach(row => {
+    const text = (row.dataset.search || '').toLowerCase();
+    row.style.display = (!keyword || text.includes(keyword)) ? '' : 'none';
+  });
+}
+
+async function kickSession(serverId, sessionId, username, btn) {
+  if (!confirm(`Putuskan koneksi ${username}?`)) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  const res = await fetch('/pppoe/monitor/kick', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({server_id: serverId, session_id: sessionId, username})
+  });
+  const d = await res.json();
+  if (d.ok) {
+    showToast(`✅ ${username} berhasil di-disconnect`, 'success');
+    setTimeout(() => loadData(), 1500);
+  } else {
+    showToast(d.msg || 'Gagal kick session', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Kick';
+  }
+}
+
+function startCountdown() {
+  _countdown = 30;
+  document.getElementById('countdown').textContent = `Refresh ${_countdown}s`;
+  _refreshTimer = setInterval(() => {
+    _countdown--;
+    document.getElementById('countdown').textContent = `Refresh ${_countdown}s`;
+    if (_countdown <= 0) {
+      clearInterval(_refreshTimer);
+      loadData();
+    }
+  }, 1000);
+}
+
+// Load pertama kali
+loadData();
+</script>
+{% endblock %}

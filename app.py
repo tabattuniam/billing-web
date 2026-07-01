@@ -68,10 +68,10 @@ def ts_date(ts) -> str:
         return str(ts)
 
 
-def datetimeformat(ts) -> str:
+def datetimeformat(ts, fmt="%-d %b %Y %H:%M") -> str:
     from datetime import datetime
     try:
-        return datetime.fromtimestamp(int(ts)).strftime("%-d %b %Y %H:%M")
+        return datetime.fromtimestamp(int(ts)).strftime(fmt)
     except Exception:
         return "-"
 
@@ -594,6 +594,94 @@ scheduler.add_job(_refresh_pppoe_online, "interval", minutes=15,
                   id="pppoe_online_refresh", replace_existing=True)
 
 
+# ── Retry MT push untuk voucher yang gagal saat MikroTik down ────────────────
+
+async def _retry_voucher_mt_push():
+    """Coba push ulang voucher yang belum masuk ke MikroTik (mt_pushed=0)."""
+    import logging as _log
+    pending = db.vouchers_pending_mt_push()
+    if not pending:
+        return
+    _log.warning(f"[MT retry] {len(pending)} voucher pending MT push")
+    for v in pending:
+        try:
+            server = db.get_server(v["server_id"])
+            if not server:
+                continue
+            paket = db.get_paket_hotspot(v["paket_id"])
+            mt = MikroTik(server["vpn_ip"], server["api_port"], server["api_user"], server["api_password"])
+            profile      = (paket or {}).get("kecepatan") or "default"
+            comment      = (paket or {}).get("nama", "")
+            limit_uptime = (paket or {}).get("durasi") or ""
+            ok = mt.add_hotspot_user(v["kode"], v["kode"], profile=profile,
+                                     comment=comment, limit_uptime=limit_uptime)
+            if ok:
+                db.set_voucher_mt_pushed(v["kode"], pushed=True)
+                _log.warning(f"[MT retry] OK: {v['kode']}")
+            else:
+                _log.warning(f"[MT retry] masih gagal: {v['kode']}")
+        except Exception as e:
+            _log.warning(f"[MT retry] error {v['kode']}: {e}")
+
+scheduler.add_job(_retry_voucher_mt_push, "interval", minutes=5,
+                  id="voucher_mt_retry", replace_existing=True)
+
+
+# ── Sync status voucher dengan MikroTik ──────────────────────────────────────
+
+async def _sync_voucher_status():
+    """Sinkronisasi status voucher (terjual/dipakai) dengan kondisi nyata di MikroTik.
+
+    Logika per voucher:
+    - Ada di MT, uptime = 0s  → terjual   (belum dipakai pelanggan)
+    - Ada di MT, uptime > 0s  → dipakai   (pelanggan sedang/sudah pakai)
+    - Tidak ada di MT         → expired   (sudah habis, MT auto-hapus)
+    """
+    import logging as _log
+    from collections import defaultdict
+
+    vouchers = db.vouchers_active_for_sync()
+    if not vouchers:
+        return
+
+    # Group per server agar hanya konek sekali per router
+    by_server = defaultdict(list)
+    for v in vouchers:
+        by_server[v["server_id"]].append(v)
+
+    for sid, vlist in by_server.items():
+        s = vlist[0]
+        try:
+            mt = MikroTik(s["vpn_ip"], int(s["api_port"]), s["api_user"], s["api_password"])
+            api = mt.api
+            # Ambil semua hotspot user sekaligus (lebih efisien dari query satu-satu)
+            all_hs = api.get_resource("/ip/hotspot/user").get()
+            mt_users = {u.get("name", ""): u for u in all_hs}
+        except Exception as e:
+            _log.warning(f"[voucher sync] server {sid} tidak bisa diakses: {e}")
+            continue
+
+        for v in vlist:
+            kode = v["kode"]
+            try:
+                if kode not in mt_users:
+                    # Tidak ada di MT → sudah habis/expired
+                    db.mark_voucher_expired(kode)
+                    _log.warning(f"[voucher sync] {kode} tidak ada di MT → expired")
+                else:
+                    uptime = mt_users[kode].get("uptime", "0s")
+                    if uptime and uptime != "0s":
+                        if v["status"] == "terjual":
+                            db.mark_voucher_dipakai(kode)
+                            _log.warning(f"[voucher sync] {kode} uptime={uptime} → dipakai")
+                    # uptime=0s dan ada di MT: status terjual, tidak perlu ubah
+            except Exception as e:
+                _log.warning(f"[voucher sync] error {kode}: {e}")
+
+scheduler.add_job(_sync_voucher_status, "interval", minutes=10,
+                  id="voucher_sync_status", replace_existing=True)
+
+
 # ── MikroTik helper ───────────────────────────────────────────────────────────
 
 def get_mt(server_id: str) -> MikroTik | None:
@@ -808,18 +896,9 @@ async def update_slug(request: Request, slug: str = Form(...)):
 async def dashboard(request: Request):
     user = require_login(request)
     stats = db.stats(user["id"], user["role"])
-    # Data tambahan untuk dashboard
-    import calendar
-    now = int(time.time())
-    bulan_ini_start = int(time.mktime(time.localtime(now)[:2] + (1, 0, 0, 0, 0, 0, 0)))
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     iid = _isp_id(user)
-    # Pendapatan bulan ini
-    pendapatan_bulan = con.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM transaksi WHERE user_id=? AND created_at>=?",
-        (iid, bulan_ini_start)
-    ).fetchone()[0]
     # Transaksi terbaru (5)
     transaksi_terbaru = [dict(r) for r in con.execute(
         "SELECT amount, keterangan, created_at FROM transaksi WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
@@ -836,7 +915,6 @@ async def dashboard(request: Request):
     con.close()
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(
         request, user=user, stats=stats,
-        pendapatan_bulan=pendapatan_bulan,
         transaksi_terbaru=transaksi_terbaru,
         total_pppoe=total_pppoe,
         tagihan_pending=tagihan_pending,
@@ -1164,6 +1242,8 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
             cache_ages.append(age)
     cache_age = min(cache_ages) if cache_ages else None
     push_msg = request.query_params.get("push")
+    import datetime as _dt
+    now_date = _dt.date.today().strftime("%Y-%m-%d")
     return tpl.TemplateResponse(request, "pppoe_users.html", _ctx(
         request, user=user, users=users, servers=servers, pakets=pakets,
         sel_server=server_id, sel_status=status, q=q, sel_odp=odp_id,
@@ -1172,6 +1252,7 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
         tagihan_map=tagihan_map, bulan_ini=bulan_ini,
         odp_filter_list=odp_filter_list,
         cache_age=cache_age, push_msg=push_msg,
+        now_date=now_date,
     ))
 
 
@@ -1182,13 +1263,21 @@ async def pppoe_user_tambah(
     username: str = Form(...), password: str = Form(...),
     paket_id: int = Form(...), telepon: str = Form(""),
     alamat: str = Form(""), tgl_bayar: int = Form(1),
+    tgl_mulai: str = Form(""),
     odp_id: str = Form(""), odp_port: str = Form("")
 ):
     user = require_login(request)
     iid = _isp_id(user)
     isp = db.get_user(iid)
     paket = db.get_paket_pppoe(paket_id)
-    pid = db.create_pppoe_user(iid, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed=0)
+    import datetime as _dt
+    tgl_mulai_ts = None
+    if tgl_mulai.strip():
+        try:
+            tgl_mulai_ts = int(_dt.datetime.strptime(tgl_mulai.strip(), "%Y-%m-%d").timestamp())
+        except ValueError:
+            pass
+    pid = db.create_pppoe_user(iid, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed=0, tgl_mulai=tgl_mulai_ts)
     if odp_id.strip():
         db.assign_odp(pid, int(odp_id), int(odp_port) if odp_port.strip() else None)
     mt = get_mt(server_id)
@@ -1250,14 +1339,22 @@ async def pppoe_user_edit(
     nama_pelanggan: str = Form(...), telepon: str = Form(""),
     alamat: str = Form(""), tgl_bayar: int = Form(1),
     username: str = Form(""), password: str = Form(""),
+    tgl_mulai: str = Form(""),
 ):
     user = require_login(request)
     iid = _isp_id(user)
     pu = db.get_pppoe_user(pid)
     if pu and pu["user_id"] == iid:
+        import datetime as _dt
+        tgl_mulai_ts = None
+        if tgl_mulai.strip():
+            try:
+                tgl_mulai_ts = int(_dt.datetime.strptime(tgl_mulai.strip(), "%Y-%m-%d").timestamp())
+            except ValueError:
+                pass
         new_user = username.strip() or pu["username"]
         new_pass = password.strip() or pu["password"]
-        db.update_pppoe_user(pid, nama_pelanggan, telepon, alamat, tgl_bayar, new_user, new_pass)
+        db.update_pppoe_user(pid, nama_pelanggan, telepon, alamat, tgl_bayar, new_user, new_pass, tgl_mulai=tgl_mulai_ts)
         # Update password di MikroTik jika ada perubahan
         mt = get_mt(pu["server_id"])
         if mt and (new_user != pu["username"] or new_pass != pu["password"]):
@@ -1348,6 +1445,109 @@ async def pppoe_refresh_online(request: Request):
     user = require_login(request)
     await _refresh_pppoe_online()
     return JSONResponse({"ok": True})
+
+
+# ── PPPoE Monitor Realtime ────────────────────────────────────────────────────
+
+@app.get("/pppoe/monitor", response_class=HTMLResponse)
+async def pppoe_monitor_page(request: Request):
+    user = require_login(request)
+    servers = db.list_servers(_isp_id(user))
+    return tpl.TemplateResponse(request, "pppoe_monitor.html", _ctx(
+        request, user=user, active="pppoe_monitor", servers=servers
+    ))
+
+
+@app.get("/pppoe/monitor/json", response_class=JSONResponse)
+async def pppoe_monitor_json(request: Request):
+    """Ambil data sesi aktif realtime dari semua MikroTik server."""
+    user = require_login(request)
+    iid = _isp_id(user)
+    servers = db.list_servers(iid)
+    # Ambil semua pelanggan untuk match username → nama
+    all_users = db.list_pppoe_users(iid)
+    user_map = {u["username"]: u for u in all_users}
+
+    result = []
+    total_online = 0
+    for s in servers:
+        mt = get_mt(s["id"])
+        if not mt:
+            result.append({"server_id": s["id"], "server_nama": s["nama"], "error": "Tidak terhubung", "sessions": []})
+            continue
+        actives = mt.list_pppoe_active()
+        sessions = []
+        for a in actives:
+            name = a.get("name", "")
+            pu = user_map.get(name)
+            sessions.append({
+                "session_id": a.get(".id", ""),
+                "username":   name,
+                "address":    a.get("address", "-"),
+                "caller_id":  a.get("caller-id", "-"),
+                "uptime":     a.get("uptime", "-"),
+                "service":    a.get("service", "pppoe"),
+                "nama_pelanggan": pu["nama_pelanggan"] if pu else "-",
+                "telepon":    pu["telepon"] if pu else "",
+                "paket_nama": pu.get("paket_nama", "-") if pu else "-",
+            })
+        total_online += len(sessions)
+        result.append({
+            "server_id":   s["id"],
+            "server_nama": s["nama"],
+            "sessions":    sessions,
+            "error":       None,
+        })
+
+    return JSONResponse({
+        "ok": True,
+        "total_online": total_online,
+        "servers": result,
+        "fetched_at": int(time.time()),
+    })
+
+
+@app.post("/pppoe/monitor/kick", response_class=JSONResponse)
+async def pppoe_monitor_kick(request: Request):
+    """Disconnect / kick satu sesi PPPoE aktif."""
+    user = require_login(request)
+    iid = _isp_id(user)
+    body = await request.json()
+    server_id  = (body.get("server_id") or "").strip()
+    session_id = (body.get("session_id") or "").strip()
+    username   = (body.get("username") or "").strip()
+    if not server_id or not session_id:
+        return JSONResponse({"ok": False, "msg": "Parameter tidak lengkap"})
+    s = db.get_server(server_id)
+    if not s or s["user_id"] != iid:
+        return JSONResponse({"ok": False, "msg": "Server tidak ditemukan"}, status_code=403)
+    mt = get_mt(server_id)
+    if not mt:
+        return JSONResponse({"ok": False, "msg": "Tidak dapat terhubung ke router"})
+    ok = mt.kick_pppoe_session(session_id)
+    if ok:
+        _log(request, user, "Kick PPPoE Session", f"{username} @ {s['nama']}")
+    return JSONResponse({"ok": ok, "msg": "" if ok else "Gagal disconnect sesi"})
+
+
+# ── PPPoE Monitoring & Laporan ────────────────────────────────────────────────
+
+@app.get("/pppoe/monitoring")
+async def pppoe_monitoring_page(request: Request):
+    user = require_login(request)
+    iid  = _isp_id(user)
+    from datetime import date
+    bulan = date.today().strftime("%Y-%m")
+    summary    = db.summary_monitoring(iid, bulan)
+    jatuh_7    = db.jatuh_tempo_mendatang(iid, hari=7)
+    overdue    = db.pelanggan_overdue_list(iid, bulan)
+    nonaktif   = db.pelanggan_nonaktif(iid)
+    pertumbuhan = db.pertumbuhan_pelanggan(iid)
+    return tpl.TemplateResponse(request, "pppoe_monitoring.html", _ctx(
+        request, user=user, active="pppoe_monitoring",
+        summary=summary, jatuh_7=jatuh_7, overdue=overdue,
+        nonaktif=nonaktif, pertumbuhan=pertumbuhan, bulan=bulan
+    ))
 
 
 # ── PPPoE Import dari MikroTik ───────────────────────────────────────────────
@@ -1843,10 +2043,24 @@ async def hotspot_voucher(request: Request, server_id: str = "", status: str = "
     comments = db.list_voucher_comments(user["id"])
     comments_detail = db.list_voucher_comments_with_agen(user["id"])
     vouchers = db.list_vouchers(user["id"], server_id or None, status or None, paket_id or None, comment or None)
+    # Stats count per status
+    import sqlite3 as _sq
+    _con = _sq.connect(DB_PATH)
+    _con.row_factory = _sq.Row
+    _uid = user["id"]
+    _sid_filter = f" AND server_id='{server_id}'" if server_id else ""
+    stats_v = {
+        "tersedia": _con.execute(f"SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='tersedia'{_sid_filter}", (_uid,)).fetchone()[0],
+        "terjual":  _con.execute(f"SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='terjual'{_sid_filter}",  (_uid,)).fetchone()[0],
+        "dipakai":  _con.execute(f"SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='dipakai'{_sid_filter}",  (_uid,)).fetchone()[0],
+        "expired":  _con.execute(f"SELECT COUNT(*) FROM voucher_hotspot WHERE user_id=? AND status='expired'{_sid_filter}",  (_uid,)).fetchone()[0],
+    }
+    _con.close()
     return tpl.TemplateResponse(request, "voucher.html", _ctx(
         request, user=user, vouchers=vouchers, servers=servers, pakets=pakets,
         comments=comments, comments_detail=comments_detail,
-        sel_server=server_id, sel_status=status, sel_paket=paket_id, sel_comment=comment
+        sel_server=server_id, sel_status=status, sel_paket=paket_id, sel_comment=comment,
+        stats_v=stats_v
     ))
 
 
@@ -3575,20 +3789,26 @@ async def toko_mayar_notif(request: Request):
         return JSONResponse({"ok": True})
 
     # ── Voucher hotspot ───────────────────────────────────────────────────────
-    voucher = db.confirm_order(order_id, mt_callback=_mt_push_voucher)
+    # confirm_order hanya simpan ke DB, MT push dilakukan terpisah agar hasilnya bisa dicek
+    voucher = db.confirm_order(order_id)
     if not voucher:
         _logging.warning(f"[Mayar webhook] confirm_order returned None for {order_id}")
         return JSONResponse({"ok": True, "msg": "Already confirmed or error"})
 
     _logging.warning(f"[Mayar webhook] voucher generated: {voucher['kode']} for {order_id}")
-    try:
-        con2 = sqlite3.connect(DB_PATH)
-        con2.execute("UPDATE voucher_hotspot SET mt_pushed=1 WHERE id=?", (voucher['id'],))
-        con2.commit(); con2.close()
-    except Exception:
-        pass
 
-    order = db.get_order(order_id)
+    # Push ke MikroTik — catat hasilnya; kalau gagal, retry job akan mencoba ulang
+    order_for_mt = db.get_order(order_id)
+    if order_for_mt:
+        paket_for_mt = db.get_paket_hotspot(order_for_mt["paket_id"])
+        try:
+            _mt_push_voucher(order_for_mt["server_id"], voucher["kode"], paket_for_mt or {})
+            db.set_voucher_mt_pushed(voucher["kode"], pushed=True)
+            _logging.warning(f"[Mayar webhook] MT push OK: {voucher['kode']}")
+        except Exception as mt_err:
+            _logging.warning(f"[Mayar webhook] MT push GAGAL ({mt_err}), akan dicoba ulang otomatis: {voucher['kode']}")
+
+    order = order_for_mt  # sudah di-fetch sebelumnya
 
     # Credit saldo tenant + fee platform
     _credit_voucher_saldo(order_id)
