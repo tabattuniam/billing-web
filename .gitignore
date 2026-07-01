@@ -7,9 +7,6 @@ venv/
 *.egg-info/
 
 # Database & data
-data/
-*.db
-*.sqlite3
 
 # Config dengan kredensial
 configs/billing.yaml
