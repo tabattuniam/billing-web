@@ -7,7 +7,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">Pelanggan PPPoE</h1>
-    <p class="page-sub">{{ users|length }} pelanggan terdaftar
+    <p class="page-sub">{{ total }} pelanggan
       {% if cache_age is not none %}
       · <span class="text-xs">diperbarui {{ (cache_age // 60)|int }} mnt lalu</span>
       {% else %}
@@ -36,16 +36,16 @@
   </div>
 </div>
 
-{% set total    = users | length %}
-{% set aktif    = users | selectattr('status','eq','aktif') | list | length %}
-{% set nonaktif = users | selectattr('status','eq','nonaktif') | list | length %}
-{% set online   = users | selectattr('username','in', online_set) | list | length %}
-{% set terlambat = overdue_ids | length %}
+{% set cnt_total    = tab_counts.semua %}
+{% set cnt_aktif    = tab_counts.aktif %}
+{% set cnt_suspended = tab_counts.suspended %}
+{% set cnt_nonaktif = tab_counts.nonaktif %}
+{% set cnt_online   = tab_counts.online %}
 
 <!-- Stats Cards -->
 <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-  <div onclick="filterTab('semua')"
-    class="card p-4 cursor-pointer hover:shadow-md transition-all group"
+  <a href="{{ page_url(1, '') }}"
+    class="card p-4 cursor-pointer hover:shadow-md transition-all group {{ 'ring-2 ring-blue-400' if not sel_status else '' }}"
     style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-color:#e2e8f0">
     <div class="flex items-center justify-between mb-2">
       <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Total</p>
@@ -53,12 +53,12 @@
         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       </div>
     </div>
-    <p class="text-3xl font-black text-slate-800">{{ total }}</p>
+    <p class="text-3xl font-black text-slate-800">{{ cnt_total }}</p>
     <p class="text-xs text-slate-400 mt-0.5">pelanggan</p>
-  </div>
+  </a>
 
-  <div onclick="filterTab('aktif')"
-    class="card p-4 cursor-pointer hover:shadow-md transition-all group"
+  <a href="{{ page_url(1, 'aktif') }}"
+    class="card p-4 cursor-pointer hover:shadow-md transition-all group {{ 'ring-2 ring-emerald-400' if sel_status=='aktif' else '' }}"
     style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0">
     <div class="flex items-center justify-between mb-2">
       <p class="text-xs font-bold text-emerald-500 uppercase tracking-wide">Aktif</p>
@@ -66,12 +66,12 @@
         <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </div>
     </div>
-    <p class="text-3xl font-black text-emerald-700">{{ aktif }}</p>
+    <p class="text-3xl font-black text-emerald-700">{{ cnt_aktif }}</p>
     <p class="text-xs text-emerald-500 mt-0.5">berlangganan</p>
-  </div>
+  </a>
 
-  <div onclick="filterTab('online')"
-    class="card p-4 cursor-pointer hover:shadow-md transition-all group relative overflow-hidden"
+  <a href="{{ page_url(1, 'online') }}"
+    class="card p-4 cursor-pointer hover:shadow-md transition-all group relative overflow-hidden {{ 'ring-2 ring-blue-400' if sel_status=='online' else '' }}"
     style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-color:#bfdbfe">
     <div class="flex items-center justify-between mb-2">
       <p class="text-xs font-bold text-blue-500 uppercase tracking-wide">Online</p>
@@ -80,25 +80,25 @@
         <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse border-2 border-white"></span>
       </div>
     </div>
-    <p class="text-3xl font-black text-blue-700">{{ online }}</p>
+    <p class="text-3xl font-black text-blue-700">{{ cnt_online }}</p>
     <p class="text-xs text-blue-500 mt-0.5">sekarang</p>
-  </div>
+  </a>
 
-  <div onclick="filterTab('terlambat')"
-    class="card p-4 cursor-pointer hover:shadow-md transition-all group"
-    style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
+  <a href="{{ page_url(1, 'suspended') }}"
+    class="card p-4 cursor-pointer hover:shadow-md transition-all group {{ 'ring-2 ring-orange-400' if sel_status=='suspended' else '' }}"
+    style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fed7aa">
     <div class="flex items-center justify-between mb-2">
-      <p class="text-xs font-bold text-amber-500 uppercase tracking-wide">Terlambat</p>
-      <div class="w-8 h-8 rounded-xl bg-amber-100 group-hover:bg-amber-200 flex items-center justify-center transition">
-        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <p class="text-xs font-bold text-orange-500 uppercase tracking-wide">Terlambat</p>
+      <div class="w-8 h-8 rounded-xl bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center transition">
+        <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
       </div>
     </div>
-    <p class="text-3xl font-black text-amber-700">{{ terlambat }}</p>
-    <p class="text-xs text-amber-500 mt-0.5">belum bayar</p>
-  </div>
+    <p class="text-3xl font-black text-orange-600">{{ cnt_suspended }}</p>
+    <p class="text-xs text-orange-400 mt-0.5">diblokir otomatis</p>
+  </a>
 
-  <div onclick="filterTab('nonaktif')"
-    class="card p-4 cursor-pointer hover:shadow-md transition-all group"
+  <a href="{{ page_url(1, 'nonaktif') }}"
+    class="card p-4 cursor-pointer hover:shadow-md transition-all group {{ 'ring-2 ring-red-400' if sel_status=='nonaktif' else '' }}"
     style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border-color:#fecdd3">
     <div class="flex items-center justify-between mb-2">
       <p class="text-xs font-bold text-red-400 uppercase tracking-wide">Nonaktif</p>
@@ -106,9 +106,9 @@
         <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </div>
     </div>
-    <p class="text-3xl font-black text-red-600">{{ nonaktif }}</p>
-    <p class="text-xs text-red-400 mt-0.5">disuspend</p>
-  </div>
+    <p class="text-3xl font-black text-red-600">{{ cnt_nonaktif }}</p>
+    <p class="text-xs text-red-400 mt-0.5">berhenti berlangganan</p>
+  </a>
 </div>
 
 {% if push_msg == 'ok' %}
@@ -140,6 +140,8 @@
     <select name="status" class="form-select !w-auto">
       <option value="">Semua Status</option>
       <option value="aktif" {% if sel_status=='aktif' %}selected{% endif %}>Aktif</option>
+      <option value="online" {% if sel_status=='online' %}selected{% endif %}>Online</option>
+      <option value="suspended" {% if sel_status=='suspended' %}selected{% endif %}>Suspended</option>
       <option value="nonaktif" {% if sel_status=='nonaktif' %}selected{% endif %}>Nonaktif</option>
     </select>
     {% if odp_filter_list %}
@@ -154,22 +156,52 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
       Filter
     </button>
-    {% if q or sel_server or sel_status %}
+    {% if q or sel_server or sel_status or aktif_filter %}
     <a href="/pppoe/users" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
     {% endif %}
   </form>
 
-  <!-- Tab Filter -->
-  <div class="flex gap-1 mt-3 pt-3 border-t border-gray-100">
-    {% set tabs = [('semua','Semua',total,'slate'),('aktif','Aktif',aktif,'emerald'),('online','Online',online,'blue'),('terlambat','Terlambat',terlambat,'amber'),('nonaktif','Nonaktif',nonaktif,'red')] %}
-    {% for key, label, count, color in tabs %}
-    <button id="tab-{{ key }}" onclick="filterTab('{{ key }}')"
-      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all
-      {% if loop.first %}bg-blue-600 text-white shadow{% else %}text-gray-500 hover:bg-gray-100{% endif %}">
-      {{ label }}
-      <span class="{% if loop.first %}bg-blue-500 text-white{% else %}bg-gray-200 text-gray-600{% endif %} tab-count-{{ key }} text-xs px-1.5 py-0.5 rounded-full font-bold leading-none">{{ count }}</span>
-    </button>
-    {% endfor %}
+  {% if aktif_filter %}
+  <div class="flex items-center gap-2 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm">
+    <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+    </svg>
+    <span class="text-blue-700 font-semibold">Filter dari Dashboard:</span>
+    <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">{{ aktif_filter }}</span>
+    <span class="text-blue-500 text-xs ml-1">{{ total }} pelanggan</span>
+    <a href="/pppoe/users" class="ml-auto text-xs text-blue-500 hover:text-blue-700 font-semibold flex items-center gap-1">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      Hapus filter
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- Tab Filter (server-side) -->
+  <div class="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-100 flex-wrap">
+    <div class="flex gap-1 flex-wrap">
+      {% set tabs = [('','Semua',cnt_total,'slate'),('aktif','Aktif',cnt_aktif,'emerald'),('online','Online',cnt_online,'blue'),('suspended','Terlambat',cnt_suspended,'orange'),('nonaktif','Nonaktif',cnt_nonaktif,'red')] %}
+      {% for key, label, count, color in tabs %}
+      {% set is_active = (sel_status == key) or (key == '' and not sel_status) %}
+      <a href="{{ page_url(1, key) }}"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all
+        {{ 'bg-blue-600 text-white shadow' if is_active else 'text-gray-500 hover:bg-gray-100' }}">
+        {{ label }}
+        <span class="{{ 'bg-blue-500 text-white' if is_active else 'bg-gray-200 text-gray-600' }} text-xs px-1.5 py-0.5 rounded-full font-bold leading-none">{{ count }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="flex items-center gap-2 text-xs text-gray-500 shrink-0">
+      <span>Tampilkan</span>
+      <select onchange="location.href=this.options[this.selectedIndex].dataset.url"
+        class="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-300">
+        {% for n in [20,50,100] %}
+        <option value="{{ n }}" {% if per_page==n %}selected{% endif %} data-url="{{ page_url(1, sel_status, n) }}">{{ n }}</option>
+        {% endfor %}
+      </select>
+      <span>per halaman</span>
+    </div>
   </div>
 </div>
 
@@ -195,16 +227,12 @@
       {% set is_online  = u.username in online_set %}
       {% set is_overdue = u.id in overdue_ids %}
       <tr class="hover:bg-blue-50/30 transition-colors border-b border-gray-50
-        {% if is_overdue and u.status=='aktif' %}bg-amber-50/40{% endif %}
-        row-data"
-        data-status="{{ u.status }}"
-        data-online="{{ 'ya' if is_online else 'tidak' }}"
-        data-overdue="{{ 'ya' if is_overdue else 'tidak' }}">
+        {% if is_overdue and u.status=='aktif' %}bg-amber-50/40{% endif %}">
 
         <td class="td">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm shadow-sm
-              {% if is_overdue %}bg-amber-500 text-white{% elif is_online %}bg-blue-600 text-white{% elif u.status=='aktif' %}bg-indigo-500 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
+              {% if is_overdue %}bg-amber-500 text-white{% elif is_online %}bg-blue-600 text-white{% elif u.status=='aktif' %}bg-indigo-500 text-white{% elif u.status=='suspended' %}bg-amber-400 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
               {{ u.nama_pelanggan[0]|upper }}
             </div>
             <div>
@@ -296,6 +324,10 @@
             <span class="badge-green self-start">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Aktif
             </span>
+            {% elif u.status=='suspended' %}
+            <span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start border border-orange-200">
+              <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>Terlambat
+            </span>
             {% else %}
             <span class="badge-red self-start">
               <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Nonaktif
@@ -305,10 +337,17 @@
             <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start border border-blue-100">
               <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>Online
             </span>
-            {% elif u.mt_pushed == 0 %}
-            <span class="inline-flex items-center gap-1 bg-orange-50 text-orange-500 text-xs px-2 py-0.5 rounded-full font-semibold self-start border border-orange-100">
-              Blm di MT
-            </span>
+            {% endif %}
+            {% if u.terpasang == 0 %}
+            <button onclick="toggleTerpasang({{ u.id }}, 1, this)"
+              class="inline-flex items-center gap-1 bg-amber-50 text-amber-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start border border-amber-200 hover:bg-amber-100 transition cursor-pointer">
+              🔧 Blm Terpasang
+            </button>
+            {% else %}
+            <button onclick="toggleTerpasang({{ u.id }}, 0, this)"
+              class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 text-xs px-2 py-0.5 rounded-full font-semibold self-start border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer">
+              ✓ Terpasang
+            </button>
             {% endif %}
           </div>
         </td>
@@ -316,18 +355,18 @@
         <td class="td">
           <div class="flex items-center gap-1 justify-end">
             <button onclick="openEdit({{ u.id }}, '{{ u.nama_pelanggan|replace("'","\\'") }}', '{{ u.telepon or '' }}', '{{ u.alamat or ''|replace("'","\\'") }}', {{ u.tgl_bayar }}, '{{ u.username }}', '{{ u.password }}', {{ u.tgl_mulai or 0 }})"
-              class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition" title="Edit">
+              class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition" data-tip="Edit data pelanggan">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
             <form method="post" action="/pppoe/users/status/{{ u.id }}" class="inline">
               {% if u.status=='aktif' %}
               <input type="hidden" name="status" value="nonaktif">
-              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 transition" title="Nonaktifkan">
+              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-500 transition" data-tip="Nonaktifkan (juga disable di MikroTik)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               </button>
               {% else %}
               <input type="hidden" name="status" value="aktif">
-              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition" title="Aktifkan">
+              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition" data-tip="Aktifkan kembali (enable di MikroTik)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               </button>
               {% endif %}
@@ -335,17 +374,32 @@
             {% if u.telepon %}
             <a href="https://wa.me/{{ u.telepon }}?text={{ ('Halo ' + u.nama_pelanggan + ', tagihan internet Anda jatuh tempo tanggal ' + u.tgl_bayar|string + ' setiap bulan. Mohon segera melakukan pembayaran. Terima kasih.')|urlencode }}"
               target="_blank"
-              class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition" title="WhatsApp">
+              class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition" data-tip="Hubungi via WhatsApp">
               <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.117.549 4.107 1.51 5.845L.036 23.737a.5.5 0 00.61.637l6.11-1.597A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.792 9.792 0 01-5.028-1.385l-.36-.214-3.733.977.993-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
             </a>
             {% endif %}
             {% if u.mt_pushed == 0 %}
             <form method="post" action="/pppoe/users/push/{{ u.id }}" class="inline"
               onsubmit="return confirm('Push {{ u.nama_pelanggan }} ke MikroTik?')">
-              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-500 transition" title="Push ke MikroTik">
+              <button class="w-8 h-8 flex items-center justify-center rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-500 transition" data-tip="Push ke MikroTik — buat PPP Secret di router agar pelanggan bisa konek">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
               </button>
             </form>
+            {% endif %}
+            {% if u.status == 'aktif' %}
+            {% set tx = tagihan_map.get(u.id) %}
+            {% if tx is none %}
+            <button onclick="generateTagihan({{ u.id }}, '{{ u.nama_pelanggan|e }}')"
+              class="w-8 h-8 flex items-center justify-center rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-600 transition" data-tip="Generate tagihan bulan ini — normalnya otomatis di tgl_bayar pelanggan">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+            </button>
+            {% endif %}
+            {% endif %}
+            {% if u.telepon %}
+            <button onclick="kirimReminder({{ u.id }}, '{{ u.nama_pelanggan|e }}')"
+              class="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 transition" title="Kirim Reminder WA">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            </button>
             {% endif %}
             <button onclick="hapusPelanggan({{ u.id }}, '{{ u.nama_pelanggan|e }}')"
               class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition" title="Hapus">
@@ -372,20 +426,55 @@
   </div>
 </div>
 
+<!-- Pagination Desktop -->
+{% if total_pages > 1 %}
+<div class="hidden sm:flex items-center justify-between px-4 py-3 bg-white border border-gray-100 rounded-b-2xl -mt-1 mb-4">
+  <p class="text-xs text-gray-500">
+    {{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }} dari {{ total }} pelanggan
+  </p>
+  <div class="flex gap-1">
+    {% if page > 1 %}<a href="{{ page_url(page-1) }}" class="px-2.5 py-1 rounded-lg text-xs font-semibold border text-gray-500 border-gray-200 hover:bg-gray-100">‹</a>{% endif %}
+    {% for p in range([1,page-2]|max, [total_pages+1,page+3]|min) %}
+    <a href="{{ page_url(p) }}" class="px-2.5 py-1 rounded-lg text-xs font-semibold border {{ 'bg-blue-600 text-white border-blue-600' if p==page else 'text-gray-500 border-gray-200 hover:bg-gray-100' }}">{{ p }}</a>
+    {% endfor %}
+    {% if page < total_pages %}<a href="{{ page_url(page+1) }}" class="px-2.5 py-1 rounded-lg text-xs font-semibold border text-gray-500 border-gray-200 hover:bg-gray-100">›</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Summary Bar -->
+<div class="card p-4 mb-4 hidden sm:block">
+  <div class="grid grid-cols-3 gap-4">
+    <div class="text-center">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Total Pelanggan</p>
+      <p class="text-2xl font-black text-slate-800">{{ cnt_total }}</p>
+      <p class="text-xs text-gray-400 mt-0.5">terdaftar</p>
+    </div>
+    <div class="text-center border-x border-gray-100">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Total Tagihan {{ bulan_ini }}</p>
+      <p class="text-2xl font-black text-blue-700">{{ tagihan_total_amount | rp }}</p>
+      <p class="text-xs text-gray-400 mt-0.5">{{ tagihan_map | length }} pelanggan tertagih</p>
+    </div>
+    <div class="text-center">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Total Lunas</p>
+      <p class="text-2xl font-black text-emerald-600">{{ tagihan_lunas_amount | rp }}</p>
+      {% set lunas_count = users | selectattr('id', 'in', tagihan_map.keys()) | list | length %}
+      <p class="text-xs text-gray-400 mt-0.5">bulan {{ bulan_ini }}</p>
+    </div>
+  </div>
+</div>
+
 <!-- Card View (mobile) -->
 <div class="space-y-3 sm:hidden" id="card-list">
   {% for u in users %}
   {% set is_online  = u.username in online_set %}
   {% set is_overdue = u.id in overdue_ids %}
   {% set tx_status  = tagihan_map.get(u.id) %}
-  <div class="card p-4 row-data"
-    data-status="{{ u.status }}"
-    data-online="{{ 'ya' if is_online else 'tidak' }}"
-    data-overdue="{{ 'ya' if is_overdue else 'tidak' }}">
+  <div class="card p-4">
     <div class="flex items-start gap-3">
       <!-- Avatar -->
       <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm shadow-sm
-        {% if is_overdue %}bg-amber-500 text-white{% elif is_online %}bg-blue-600 text-white{% elif u.status=='aktif' %}bg-indigo-500 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
+        {% if is_overdue %}bg-amber-500 text-white{% elif is_online %}bg-blue-600 text-white{% elif u.status=='aktif' %}bg-indigo-500 text-white{% elif u.status=='suspended' %}bg-amber-400 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
         {{ u.nama_pelanggan[0]|upper }}
       </div>
       <div class="flex-1 min-w-0">
@@ -397,6 +486,8 @@
           <div class="flex flex-col items-end gap-1">
             {% if u.status=='aktif' %}
             <span class="badge-green text-xs">Aktif</span>
+            {% elif u.status=='suspended' %}
+            <span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-xs px-2 py-0.5 rounded-full font-semibold border border-orange-200">Terlambat</span>
             {% else %}
             <span class="badge-red text-xs">Nonaktif</span>
             {% endif %}
@@ -464,6 +555,10 @@
             class="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.999 0C5.373 0 0 5.373 0 12c0 2.117.549 4.107 1.51 5.845L.036 23.737a.5.5 0 00.61.637l6.11-1.597A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.792 9.792 0 01-5.028-1.385l-.36-.214-3.733.977.993-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
           </a>
+          <button onclick="kirimReminder({{ u.id }}, '{{ u.nama_pelanggan|e }}')"
+            class="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-500 transition" title="Kirim Reminder WA">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          </button>
           {% endif %}
         </div>
       </div>
@@ -479,6 +574,36 @@
     </div>
   </div>
   {% endfor %}
+</div>
+
+<!-- Pagination Mobile -->
+{% if total_pages > 1 %}
+<div class="sm:hidden flex items-center justify-between px-2 py-3 mb-4">
+  <p class="text-xs text-gray-500">{{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }} / {{ total }}</p>
+  <div class="flex gap-1">
+    {% if page > 1 %}<a href="{{ page_url(page-1) }}" class="px-2.5 py-1 rounded-lg text-xs font-semibold border text-gray-500 border-gray-200">‹</a>{% endif %}
+    <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white border border-blue-600">{{ page }}/{{ total_pages }}</span>
+    {% if page < total_pages %}<a href="{{ page_url(page+1) }}" class="px-2.5 py-1 rounded-lg text-xs font-semibold border text-gray-500 border-gray-200">›</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Summary Bar Mobile -->
+<div class="card p-4 mb-4 sm:hidden">
+  <div class="grid grid-cols-3 gap-3 text-center">
+    <div>
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Pelanggan</p>
+      <p class="text-xl font-black text-slate-800">{{ cnt_total }}</p>
+    </div>
+    <div class="border-x border-gray-100">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Tagihan</p>
+      <p class="text-xl font-black text-blue-700">{{ tagihan_total_amount | rp }}</p>
+    </div>
+    <div>
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Lunas</p>
+      <p class="text-xl font-black text-emerald-600">{{ tagihan_lunas_amount | rp }}</p>
+    </div>
+  </div>
 </div>
 
 <!-- ── MODALS ── -->
@@ -544,6 +669,26 @@
         <div>
           <label class="form-label">Alamat</label>
           <input name="alamat" placeholder="Alamat pemasangan" class="form-input">
+        </div>
+        <!-- Status Pemasangan -->
+        <div class="rounded-xl border border-gray-100 p-3 bg-gray-50">
+          <label class="form-label mb-2">Status Pemasangan</label>
+          <div class="flex gap-3">
+            <label class="flex items-center gap-2 cursor-pointer flex-1 p-2.5 rounded-xl border border-amber-200 bg-amber-50 has-[:checked]:ring-2 has-[:checked]:ring-amber-400 transition">
+              <input type="radio" name="terpasang" value="0" checked class="accent-amber-500">
+              <div>
+                <p class="text-xs font-bold text-amber-700">Belum Terpasang</p>
+                <p class="text-[10px] text-amber-500">Tunggu teknisi</p>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer flex-1 p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 has-[:checked]:ring-2 has-[:checked]:ring-emerald-400 transition">
+              <input type="radio" name="terpasang" value="1" class="accent-emerald-500">
+              <div>
+                <p class="text-xs font-bold text-emerald-700">Sudah Terpasang</p>
+                <p class="text-[10px] text-emerald-500">Sudah di-install</p>
+              </div>
+            </label>
+          </div>
         </div>
         {% if odp_list %}
         <div>
@@ -748,6 +893,50 @@
 <script>
 const PAKETS = [{% for p in pakets %}{"id":{{ p.id }},"nama":"{{ p.nama | e }}"},{% endfor %}];
 
+async function toggleTerpasang(pid, val, btn) {
+  const fd = new FormData();
+  fd.append('terpasang', val);
+  const r = await fetch(`/pppoe/users/terpasang/${pid}`, { method: 'POST', body: fd });
+  const d = await r.json();
+  if (d.ok) {
+    showToast(d.label, 'success');
+    // Update tombol tanpa reload
+    if (val === 1) {
+      btn.className = btn.className.replace(/amber/g, 'emerald');
+      btn.innerHTML = '✓ Terpasang';
+      btn.onclick = function() { toggleTerpasang(pid, 0, btn); };
+    } else {
+      btn.className = btn.className.replace(/emerald/g, 'amber');
+      btn.innerHTML = '🔧 Blm Terpasang';
+      btn.onclick = function() { toggleTerpasang(pid, 1, btn); };
+    }
+  } else {
+    showToast('Gagal update status', 'error');
+  }
+}
+
+async function generateTagihan(pid, nama) {
+  const res = await fetch(`/pppoe/users/${pid}/generate-tagihan`, { method: 'POST' });
+  const d = await res.json();
+  if (d.ok) {
+    showToast(`✅ ${nama}: ${d.msg}`, 'success');
+    setTimeout(() => window.location.reload(), 1200);
+  } else {
+    showToast(d.msg || 'Gagal generate tagihan', d.msg?.includes('sudah ada') ? 'warning' : 'error');
+  }
+}
+
+async function kirimReminder(pid, nama) {
+  if (!confirm(`Kirim reminder tagihan ke "${nama}"?`)) return;
+  const r = await fetch(`/pppoe/users/kirim-reminder/${pid}`, { method: 'POST' });
+  const d = await r.json();
+  if (d.ok) {
+    showToast(`✅ Reminder terkirim ke ${nama}`, 'success');
+  } else {
+    showToast(d.msg || 'Gagal kirim reminder', 'error');
+  }
+}
+
 async function hapusPelanggan(pid, nama) {
   if (!confirm(`Hapus pelanggan "${nama}"?\n\nAkun PPPoE di router juga akan dihapus.`)) return;
   const btn = event.currentTarget;
@@ -779,39 +968,6 @@ function updatePortOptions(odp_id, targetId) {
   }
 }
 
-function filterTab(tab) {
-  const colors = { semua:'blue', aktif:'emerald', online:'blue', terlambat:'amber', nonaktif:'red' };
-  ['semua','aktif','online','terlambat','nonaktif'].forEach(t => {
-    const el = document.getElementById('tab-' + t);
-    if (!el) return;
-    const active = t === tab;
-    el.className = el.className
-      .replace(/bg-\w+-\d+ text-white shadow|text-gray-500 hover:bg-gray-100/g, '').trim();
-    el.className += active ? ' bg-blue-600 text-white shadow' : ' text-gray-500 hover:bg-gray-100';
-    const badge = el.querySelector(`.tab-count-${t}`);
-    if (badge) {
-      badge.className = badge.className
-        .replace(/bg-blue-500 text-white|bg-gray-200 text-gray-600/g, '').trim();
-      badge.className += active ? ' bg-blue-500 text-white' : ' bg-gray-200 text-gray-600';
-    }
-  });
-  document.querySelectorAll('.row-data').forEach(row => {
-    const status  = row.dataset.status;
-    const online  = row.dataset.online === 'ya';
-    const overdue = row.dataset.overdue === 'ya';
-    let show = tab === 'semua' ||
-      (tab === 'aktif' && status === 'aktif') ||
-      (tab === 'nonaktif' && status === 'nonaktif') ||
-      (tab === 'online' && online) ||
-      (tab === 'terlambat' && overdue);
-    row.style.display = show ? '' : 'none';
-  });
-}
-
-(function(){
-  const p = new URLSearchParams(location.search).get('status');
-  if (p) filterTab(p);
-})();
 
 function openEdit(id, nama, telepon, alamat, tgl, username, password, tglMulaiTs) {
   document.getElementById('form-edit').action = '/pppoe/users/edit/' + id;

@@ -43,9 +43,29 @@ db  = Storage(DB_PATH)
 
 scheduler = AsyncIOScheduler(timezone="Asia/Jakarta")
 
+def _restore_wa_webhooks():
+    """Saat startup: set ulang webhook WuzAPI untuk semua tenant yang punya ai_chat aktif."""
+    try:
+        con = db._conn()
+        rows = con.execute(
+            "SELECT wg.wa_token, u.id as user_id FROM tenant_addons ta "
+            "JOIN addons a ON a.id=ta.addon_id "
+            "JOIN users u ON u.id=ta.user_id "
+            "JOIN wa_gateway wg ON wg.user_id=u.id "
+            "WHERE a.code='ai_chat' AND ta.status='active' AND u.status='aktif'"
+        ).fetchall()
+        con.close()
+        for row in rows:
+            token = row["wa_token"]
+            webhook_url = f"https://{APP_DOMAIN}/wa/chatbot/{token}"
+            _wa_set_webhook(token, webhook_url)
+    except Exception:
+        pass
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     scheduler.start()
+    _restore_wa_webhooks()
     yield
     scheduler.shutdown()
 
@@ -162,15 +182,22 @@ def _normalize_wa(nomor: str) -> str:
         n = "62" + n[1:]
     return n
 
-def send_wa(nomor: str, pesan: str, token: str = "") -> tuple[bool, str]:
-    """Kirim WA. Return (ok, error_message)."""
+def send_wa(nomor: str, pesan: str, token: str = "",
+            user_id: str = "", tipe: str = "") -> tuple[bool, str]:
+    """Kirim WA. Return (ok, error_message). Log otomatis ke wa_log."""
     if not WA_URL:
-        return False, "WA_URL tidak dikonfigurasi"
+        err = "WA_URL tidak dikonfigurasi"
+        if user_id:
+            db.add_wa_log(user_id, nomor, tipe, pesan, "failed", err, token)
+        return False, err
     if not nomor:
         return False, "Nomor HP kosong"
     tok = token or WA_TOKEN
     if not tok:
-        return False, "Token WA belum dikonfigurasi"
+        err = "Token WA belum dikonfigurasi"
+        if user_id:
+            db.add_wa_log(user_id, nomor, tipe, pesan, "failed", err, token)
+        return False, err
     try:
         r = requests.post(
             f"{WA_URL}/chat/send/text",
@@ -180,10 +207,18 @@ def send_wa(nomor: str, pesan: str, token: str = "") -> tuple[bool, str]:
         )
         data = r.json()
         if data.get("success") or data.get("code") == 200:
+            if user_id:
+                db.add_wa_log(user_id, nomor, tipe, pesan, "sent", "", tok)
             return True, ""
-        return False, data.get("message") or str(data)
+        err = data.get("message") or str(data)
+        if user_id:
+            db.add_wa_log(user_id, nomor, tipe, pesan, "failed", err, tok)
+        return False, err
     except Exception as e:
-        return False, str(e)
+        err = str(e)
+        if user_id:
+            db.add_wa_log(user_id, nomor, tipe, pesan, "failed", err, tok)
+        return False, err
 
 
 def _isp_wa_token(user_id: str) -> str:
@@ -293,6 +328,7 @@ _DEFAULT_WA_TEMPLATES: dict[str, str] = {
         "✅ *Pembayaran Diterima!*\n\n"
         "Halo *{nama}*,\n\n"
         "Pembayaran tagihan bulan *{bulan}* sebesar *{nominal}* telah kami terima.\n\n"
+        "🧾 Lihat nota pembayaran:\n{link_nota}\n\n"
         "Terima kasih sudah membayar tepat waktu 🙏\n"
         "_{isp}_"
     ),
@@ -337,15 +373,18 @@ def _render_wa_template(user_id: str, jenis: str, **vars) -> str:
 # ── Auto Reminder Scheduler ──────────────────────────────────────────────────
 
 def _run_auto_reminder():
-    """Jalan tiap hari jam 08:00 WIB — kirim WA reminder + link bayar otomatis."""
+    """Jalan tiap hari jam 08:00 WIB — kirim WA reminder + link bayar otomatis.
+
+    Logika jatuh tempo:
+    - tgl_bayar + grace_period (per-ISP, default 10) = jatuh tempo
+    - Reminder dikirim H-3, H-1, H-0, H+1 dari jatuh tempo
+    """
     from datetime import date, timedelta
+    import calendar
+    
     today = date.today()
     bulan = today.strftime("%Y-%m")
     hari  = today.day
-
-    # Reminder H-3, H-1, H+1 (setelah jatuh tempo)
-    tgl_targets = {today.day, (today + timedelta(days=2)).day,
-                   (today + timedelta(days=1)).day, (today - timedelta(days=1)).day}
 
     # Ambil semua ISP yang punya pelanggan PPPoE aktif
     con = db._conn()
@@ -360,37 +399,71 @@ def _run_auto_reminder():
         isp = db.get_user(user_id)
         if not isp:
             continue
+        if not isp.get("auto_reminder", 1):
+            continue
+
+        grace_period = isp.get("grace_period") or 10
 
         # Generate tagihan untuk pelanggan yang tgl_bayar = hari ini (jika belum ada)
         db.generate_tagihan(user_id, bulan, tgl_bayar=hari)
 
-        # Ambil tagihan unpaid/overdue yang jatuh temponya hari ini atau target
+        # Ambil tagihan unpaid/overdue
         tagihan_list = db.list_tagihan(user_id, bulan)
         for t in tagihan_list:
             if t["status"] == "paid":
                 continue
             if not t.get("telepon"):
                 continue
-            tgl = t.get("tgl_bayar") or 1
-            if tgl not in tgl_targets:
+
+            tgl_bayar = t.get("tgl_bayar") or 1
+
+            # Hitung jatuh tempo = tgl_bayar + grace_period
+            year, month = int(bulan[:4]), int(bulan[5:])
+            max_day = calendar.monthrange(year, month)[1]
+
+            # Pastikan tgl_bayar tidak melebihi jumlah hari di bulan ini
+            tgl_bayar_actual = min(tgl_bayar, max_day)
+
+            try:
+                tgl_bayar_date = date(year, month, tgl_bayar_actual)
+                jatuh_tempo_date = tgl_bayar_date + timedelta(days=grace_period)
+                jatuh_tempo_day = jatuh_tempo_date.day
+                jatuh_tempo_month = jatuh_tempo_date.strftime("%Y-%m")
+                
+                # Hanya proses jika jatuh tempo di bulan tagihan ini atau bulan depan
+                if jatuh_tempo_month != bulan and jatuh_tempo_date.month != today.month:
+                    continue
+                    
+            except ValueError:
+                # Skip jika ada error tanggal
+                continue
+            
+            # Hitung selisih hari dari hari ini ke jatuh tempo
+            days_until_due = (jatuh_tempo_date - today).days
+            
+            # Kirim reminder berdasarkan selisih hari
+            # H-3, H-1, H-0, H+1
+            if days_until_due not in [3, 1, 0, -1]:
                 continue
 
             label = _label_bulan(bulan)
             link  = f"https://{APP_DOMAIN}/bayar/tagihan/{t['id']}"
+            
+            jatuh_tempo_str = jatuh_tempo_date.strftime("%-d %b %Y")
 
-            # Tentukan pesan berdasarkan posisi hari
-            if tgl == (today + timedelta(days=2)).day:
+            # Tentukan pesan berdasarkan selisih hari
+            if days_until_due == 3:
                 emoji = "🔔"
-                keterangan = f"Tagihan bulan *{label}* jatuh tempo *3 hari lagi* (tgl {tgl})."
-            elif tgl == (today + timedelta(days=1)).day:
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *3 hari lagi* ({jatuh_tempo_str})."
+            elif days_until_due == 1:
                 emoji = "⚠️"
-                keterangan = f"Tagihan bulan *{label}* jatuh tempo *besok* (tgl {tgl})."
-            elif tgl == today.day:
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *besok* ({jatuh_tempo_str})."
+            elif days_until_due == 0:
                 emoji = "🚨"
-                keterangan = f"Tagihan bulan *{label}* jatuh tempo *hari ini* (tgl {tgl})."
-            else:
+                keterangan = f"Tagihan bulan *{label}* jatuh tempo *hari ini* ({jatuh_tempo_str})."
+            else:  # days_until_due == -1
                 emoji = "❗"
-                keterangan = f"Tagihan bulan *{label}* sudah *melewati jatuh tempo*."
+                keterangan = f"Tagihan bulan *{label}* sudah *melewati jatuh tempo* (sejak {jatuh_tempo_str})."
 
             pesan = (
                 f"{emoji} *Reminder Tagihan Internet*\n\n"
@@ -400,7 +473,7 @@ def _run_auto_reminder():
                 f"Bayar sekarang:\n{link}\n\n"
                 f"_Abaikan jika sudah membayar._"
             ).replace(",", ".")
-            send_wa(t["telepon"], pesan, token=tok)
+            send_wa(t["telepon"], pesan, token=tok, user_id=user_id, tipe="reminder")
 
 
 scheduler.add_job(_run_auto_reminder, CronTrigger(hour=8, minute=0, timezone="Asia/Jakarta"),
@@ -445,15 +518,17 @@ def _run_auto_suspend():
     for isp_row in isps:
         db.tagihan_overdue(isp_row[0], bulan, hari_ini)
 
-    # Cari tagihan overdue yang pppoe_users-nya masih aktif
+    # Cari tagihan overdue bulan ini yang pppoe_users-nya masih aktif
+    # Filter bulan: hanya proses overdue dari bulan berjalan saja,
+    # agar ISP yang re-aktifkan pelanggan tidak langsung di-suspend lagi karena tagihan lama.
     con = db._conn()
     rows = con.execute("""
         SELECT t.id, t.user_id, t.pppoe_id,
                p.username, p.server_id, p.telepon, p.nama_pelanggan
         FROM tagihan_pppoe t
         JOIN pppoe_users p ON p.id = t.pppoe_id
-        WHERE t.status = 'overdue' AND p.status = 'aktif'
-    """).fetchall()
+        WHERE t.status = 'overdue' AND p.status = 'aktif' AND t.bulan = ?
+    """, (bulan,)).fetchall()
     con.close()
 
     for r in rows:
@@ -464,7 +539,7 @@ def _run_auto_suspend():
                 mt.disable_pppoe_secret(r["username"])
 
             # Update status DB
-            db.update_pppoe_status(r["pppoe_id"], "nonaktif")
+            db.update_pppoe_status(r["pppoe_id"], "suspended")
 
             # WA notif
             if r["telepon"]:
@@ -475,7 +550,7 @@ def _run_auto_suspend():
                     r["telepon"],
                     _render_wa_template(r["user_id"], "suspend",
                         nama=r["nama_pelanggan"], isp=isp_nama),
-                    token=tok
+                    token=tok, user_id=r["user_id"], tipe="suspend"
                 )
         except Exception:
             pass
@@ -494,9 +569,10 @@ def _run_auto_saas_billing():
     con = db._conn()
     tarif   = int(con.execute("SELECT value FROM platform_config WHERE key='saas_tarif_pppoe'").fetchone()[0] or 1000)
     minimum = int(con.execute("SELECT value FROM platform_config WHERE key='saas_minimum'").fetchone()[0] or 25000)
-    tenants = con.execute("SELECT id FROM users WHERE role='admin' AND status='aktif'").fetchall()
+    ADDON_HOTSPOT_BULANAN = 20000
+    tenants = con.execute("SELECT id, fitur_hotspot_bulanan FROM users WHERE role='admin' AND status='aktif'").fetchall()
     for t in tenants:
-        uid = t[0]
+        uid, fitur_hb = t[0], (t[1] or 0)
         try:
             existing = con.execute("SELECT id FROM saas_tagihan WHERE user_id=? AND bulan=?", (uid, bulan)).fetchone()
             if existing:
@@ -504,24 +580,27 @@ def _run_auto_saas_billing():
             n_pppoe = con.execute(
                 "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (uid,)
             ).fetchone()[0]
-            if n_pppoe == 0:
+            if n_pppoe == 0 and not fitur_hb:
                 continue
             subtotal = n_pppoe * tarif
-            total    = max(subtotal, minimum)
+            addon_hb = ADDON_HOTSPOT_BULANAN if fitur_hb else 0
+            total    = max(subtotal, minimum) + addon_hb
             tid = "SAAS-" + _uuid.uuid4().hex[:10].upper()
             con.execute(
-                "INSERT INTO saas_tagihan (id,user_id,bulan,jumlah_pppoe,tarif_per_pppoe,subtotal,total,minimum,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (tid, uid, bulan, n_pppoe, tarif, subtotal, total, minimum, "unpaid", int(time.time()))
+                "INSERT INTO saas_tagihan (id,user_id,bulan,jumlah_pppoe,tarif_per_pppoe,subtotal,total,minimum,addon_hotspot_bulanan,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (tid, uid, bulan, n_pppoe, tarif, subtotal, total, minimum, addon_hb, "unpaid", int(time.time()))
             )
-            # Kirim notif WA ke ISP
             isp = con.execute("SELECT nama, wa_number FROM users WHERE id=?", (uid,)).fetchone()
             if isp and isp[1]:
                 tok = db.get_platform_config("wa_token") or WA_TOKEN
+                addon_info = f"\nAddon Hotspot Bulanan: *Rp {addon_hb:,}*" if addon_hb else ""
                 send_wa(isp[1],
                     f"🧾 *Tagihan SaaS {bulan}*\n\n"
                     f"Halo *{isp[0]}*,\n"
                     f"Tagihan sewa platform bulan *{bulan}* telah diterbitkan.\n\n"
                     f"PPPoE Aktif: *{n_pppoe} pelanggan*\n"
+                    f"Subtotal PPPoE: *Rp {max(subtotal,minimum):,}*"
+                    f"{addon_info}\n"
                     f"Total: *Rp {total:,}*\n\n"
                     f"Silakan bayar via menu Tagihan SaaS sebelum tanggal 10.",
                     token=tok)
@@ -809,9 +888,17 @@ async def profil_page(request: Request):
     # Re-read fee_mode dari DB (sessions cache mungkin stale)
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    row = con.execute("SELECT fee_mode FROM users WHERE id=?", (user["id"],)).fetchone()
+    row = con.execute("SELECT fee_mode, auto_reminder, grace_period, fitur_hotspot_bulanan FROM users WHERE id=?", (user["id"],)).fetchone()
     con.close()
-    fee_mode = (dict(row).get("fee_mode") if row else "customer") or "customer"
+    row_dict = dict(row) if row else {}
+    fee_mode = row_dict.get("fee_mode") or "customer"
+    auto_reminder = row_dict.get("auto_reminder")
+    if auto_reminder is None:
+        auto_reminder = 1
+    grace_period = row_dict.get("grace_period")
+    if grace_period is None:
+        grace_period = 10
+    fitur_hotspot_bulanan = row_dict.get("fitur_hotspot_bulanan") or 0
     # Read platform fee config
     try:
         pf_small  = int(db.get_platform_config("platform_fee_small") or 300)
@@ -822,7 +909,8 @@ async def profil_page(request: Request):
     return tpl.TemplateResponse(request, "profil.html", _ctx(
         request, user=user, active="profil",
         fee_mode=fee_mode, pf_small=pf_small, pf_large=pf_large, pf_thresh=pf_thresh,
-        mayar_fee_percent=MAYAR_FEE_PERCENT,
+        mayar_fee_percent=MAYAR_FEE_PERCENT, auto_reminder=auto_reminder,
+        grace_period=grace_period, fitur_hotspot_bulanan=fitur_hotspot_bulanan,
     ))
 
 
@@ -864,6 +952,53 @@ async def profil_update(request: Request):
     return JSONResponse({"ok": True})
 
 
+@app.post("/profil/reminder-toggle", response_class=JSONResponse)
+async def toggle_auto_reminder(request: Request):
+    user = require_login(request)
+    if user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Hanya admin ISP yang bisa ubah"})
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT auto_reminder FROM users WHERE id=?", (user["id"],)).fetchone()
+    current = row[0] if row else 1
+    if current is None:
+        current = 1
+    new_val = 0 if current else 1
+    con.execute("UPDATE users SET auto_reminder=? WHERE id=?", (new_val, user["id"]))
+    con.commit(); con.close()
+    return JSONResponse({"ok": True, "auto_reminder": new_val})
+
+
+@app.post("/profil/grace-period", response_class=JSONResponse)
+async def update_grace_period(request: Request):
+    user = require_login(request)
+    if user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Hanya admin ISP yang bisa ubah"})
+    body = await request.json()
+    try:
+        gp = int(body.get("grace_period", 10))
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "msg": "Nilai tidak valid"})
+    gp = max(1, min(gp, 30))
+    con = sqlite3.connect(DB_PATH)
+    con.execute("UPDATE users SET grace_period=? WHERE id=?", (gp, user["id"]))
+    con.commit(); con.close()
+    return JSONResponse({"ok": True, "grace_period": gp})
+
+
+@app.post("/profil/fitur-hotspot-bulanan", response_class=JSONResponse)
+async def toggle_fitur_hotspot_bulanan(request: Request):
+    user = require_login(request)
+    if user["role"] != "admin":
+        return JSONResponse({"ok": False, "msg": "Hanya admin ISP yang bisa ubah"})
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT fitur_hotspot_bulanan FROM users WHERE id=?", (user["id"],)).fetchone()
+    current = (row[0] or 0) if row else 0
+    new_val = 0 if current else 1
+    con.execute("UPDATE users SET fitur_hotspot_bulanan=? WHERE id=?", (new_val, user["id"]))
+    con.commit(); con.close()
+    return JSONResponse({"ok": True, "aktif": new_val})
+
+
 @app.post("/profil/fee-mode", response_class=JSONResponse)
 async def update_fee_mode(request: Request, fee_mode: str = Form(...)):
     user = require_login(request)
@@ -894,30 +1029,145 @@ async def update_slug(request: Request, slug: str = Form(...)):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    user = require_login(request)
+    from datetime import date
+    user  = require_login(request)
     stats = db.stats(user["id"], user["role"])
+    iid   = _isp_id(user)
+    today = date.today()
+    tahun = str(today.year)
+    bulan_ini = today.strftime("%Y-%m")
+
+    import calendar as _cal
+    import time as _time
+
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    iid = _isp_id(user)
-    # Transaksi terbaru (5)
+
+    # Migration: tambah kolom baru jika belum ada
+    for col_sql in [
+        "ALTER TABLE pppoe_users ADD COLUMN isolated_at INTEGER DEFAULT NULL",
+        "ALTER TABLE pppoe_users ADD COLUMN terpasang INTEGER DEFAULT 0",
+    ]:
+        try:
+            con.execute(col_sql)
+            con.commit()
+        except Exception:
+            pass
+    # Backfill terpasang: pelanggan aktif atau sudah pernah di-push = sudah terpasang
+    con.execute("UPDATE pppoe_users SET terpasang=1 WHERE (status='aktif' OR mt_pushed=1) AND terpasang=0")
+    con.commit()
+
     transaksi_terbaru = [dict(r) for r in con.execute(
         "SELECT amount, keterangan, created_at FROM transaksi WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
         (iid,)
     ).fetchall()]
-    # Total pelanggan PPPoE
-    total_pppoe = con.execute(
-        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=?", (iid,)
-    ).fetchone()[0]
-    # Tagihan belum lunas bulan ini
     tagihan_pending = con.execute(
         "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND status='unpaid'", (iid,)
     ).fetchone()[0]
+
+    # PPPoE stats lengkap
+    pppoe_total     = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=?", (iid,)).fetchone()[0]
+    pppoe_aktif     = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif'", (iid,)).fetchone()[0]
+    pppoe_suspended = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='suspended'", (iid,)).fetchone()[0]
+    pppoe_nonaktif  = con.execute("SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='nonaktif'", (iid,)).fetchone()[0]
+
+    # Pelanggan baru bulan ini + timestamps
+    y, m = today.year, today.month
+    ts_start = int(_time.mktime((y, m, 1, 0, 0, 0, 0, 0, -1)))
+    last_day = _cal.monthrange(y, m)[1]
+    ts_end   = int(_time.mktime((y, m, last_day, 23, 59, 59, 0, 0, -1)))
+    ts_today_start = int(_time.mktime((y, m, today.day, 0, 0, 0, 0, 0, -1)))
+    ts_today_end   = int(_time.mktime((y, m, today.day, 23, 59, 59, 0, 0, -1)))
+
+    pppoe_baru_bln = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND created_at BETWEEN ? AND ?",
+        (iid, ts_start, ts_end)
+    ).fetchone()[0]
+
+    # Card stats baru (sesuai referensi gambar)
+    blm_terpasang = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND terpasang=0", (iid,)
+    ).fetchone()[0]
+    blm_active = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND terpasang=1 AND status='nonaktif'", (iid,)
+    ).fetchone()[0]
+    bayar_hari_ini = con.execute(
+        "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND paid_at BETWEEN ? AND ?",
+        (iid, ts_today_start, ts_today_end)
+    ).fetchone()[0]
+    sudah_bayar = con.execute(
+        "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status IN ('paid','lunas')",
+        (iid, bulan_ini)
+    ).fetchone()[0]
+    belum_ada_tagihan = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND status='aktif' "
+        "AND id NOT IN (SELECT pppoe_id FROM tagihan_pppoe WHERE user_id=? AND bulan=?)",
+        (iid, iid, bulan_ini)
+    ).fetchone()[0]
+    belum_bayar = con.execute(
+        "SELECT COUNT(*) FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status IN ('unpaid','overdue')",
+        (iid, bulan_ini)
+    ).fetchone()[0]
+    isolir_hari_ini = con.execute(
+        "SELECT COUNT(*) FROM pppoe_users WHERE user_id=? AND isolated_at BETWEEN ? AND ?",
+        (iid, ts_today_start, ts_today_end)
+    ).fetchone()[0]
+
+    # Chart data: pendaftaran per hari bulan ini
+    reg_rows = con.execute(
+        "SELECT DATE(created_at,'unixepoch','localtime') as tgl, COUNT(*) as n "
+        "FROM pppoe_users WHERE user_id=? AND created_at BETWEEN ? AND ? "
+        "GROUP BY tgl ORDER BY tgl",
+        (iid, ts_start, ts_end)
+    ).fetchall()
+    # Fill all days of month
+    import datetime as _dt
+    reg_map = {r["tgl"]: r["n"] for r in reg_rows}
+    reg_labels = []
+    reg_data   = []
+    for d in range(1, last_day + 1):
+        tgl = f"{y:04d}-{m:02d}-{d:02d}"
+        reg_labels.append(str(d))
+        reg_data.append(reg_map.get(tgl, 0))
+
     con.close()
+
+    # Laporan data
+    bulanan      = db.laporan_pendapatan(iid, tahun)
+    pel_baru     = db.laporan_pelanggan_baru(iid, tahun)
+    stats_bln    = db.stats_tagihan(iid, bulan_ini)
+    total_tahun  = sum(b["total"] for b in bulanan)
+
+    pppoe_stats = {
+        "total": pppoe_total, "aktif": pppoe_aktif,
+        "suspended": pppoe_suspended, "nonaktif": pppoe_nonaktif,
+        "baru_bln": pppoe_baru_bln,
+    }
+    pelanggan_cards = {
+        "total":             pppoe_total,
+        "blm_terpasang":     blm_terpasang,
+        "blm_active":        blm_active,
+        "bayar_hari_ini":    bayar_hari_ini,
+        "sudah_bayar":       sudah_bayar,
+        "belum_ada_tagihan": belum_ada_tagihan,
+        "belum_bayar":       belum_bayar,
+        "suspended":         pppoe_suspended,
+        "isolir_hari_ini":   isolir_hari_ini,
+    }
+
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(
         request, user=user, stats=stats,
         transaksi_terbaru=transaksi_terbaru,
-        total_pppoe=total_pppoe,
+        total_pppoe=pppoe_total,
         tagihan_pending=tagihan_pending,
+        pppoe_stats=pppoe_stats,
+        pelanggan_cards=pelanggan_cards,
+        reg_labels=reg_labels,
+        reg_data=reg_data,
+        bulan_ini=bulan_ini,
+        bulanan=bulanan, pel_baru=pel_baru,
+        stats_bln=stats_bln, total_tahun=total_tahun,
+        tahun=tahun,
     ))
 
 
@@ -928,7 +1178,11 @@ async def bantuan_page(request: Request):
 
 
 @app.get("/laporan", response_class=HTMLResponse)
-async def laporan_page(request: Request, tahun: str = "", mode: str = "bulanan", bulan: str = ""):
+async def laporan_page(request: Request):
+    return RedirectResponse("/dashboard", status_code=302)
+
+@app.get("/laporan-detail", response_class=HTMLResponse)
+async def laporan_detail_page(request: Request, tahun: str = "", mode: str = "bulanan", bulan: str = "", metode: str = ""):
     user = require_login(request)
     from datetime import date
     today = date.today()
@@ -937,7 +1191,6 @@ async def laporan_page(request: Request, tahun: str = "", mode: str = "bulanan",
     if not bulan:
         bulan = today.strftime("%Y-%m")
     tahun_list = [str(today.year - i) for i in range(3)]
-    # Daftar bulan untuk dropdown filter harian
     bulan_list = []
     for y in range(today.year, today.year - 2, -1):
         for m in range(12, 0, -1):
@@ -948,25 +1201,26 @@ async def laporan_page(request: Request, tahun: str = "", mode: str = "bulanan",
     topup_manual    = db.laporan_topup_agen(iid, tahun)
     pendapatan_agen = db.laporan_pendapatan_agen(iid, tahun)
     harian          = db.laporan_pendapatan_harian(iid, bulan) if mode == "harian" else []
-    # Summary bulan ini
+    riwayat         = db.laporan_riwayat_bayar(iid, bulan, metode) if mode == "riwayat" else []
     bulan_ini = today.strftime("%Y-%m")
     stats_bln = db.stats_tagihan(iid, bulan_ini)
-    # Totals
     total_tahun        = sum(b["total"] for b in bulanan)
     total_topup_manual = sum(t["total"] for t in topup_manual)
     total_pend_agen    = sum(t["total"] for t in pendapatan_agen)
     total_semua        = total_tahun + total_topup_manual
     total_harian       = sum(h["total"] for h in harian)
+    total_riwayat      = sum(r["amount"] for r in riwayat)
     return tpl.TemplateResponse(request, "laporan.html", _ctx(
         request, user=user, active="laporan",
         tahun=tahun, tahun_list=tahun_list,
         bulan=bulan, bulan_list=bulan_list,
-        mode=mode,
+        mode=mode, metode=metode,
         bulanan=bulanan, pelanggan=pelanggan,
         topup_manual=topup_manual, total_topup_manual=total_topup_manual,
         pendapatan_agen=pendapatan_agen, total_pend_agen=total_pend_agen,
         stats_bln=stats_bln, total_tahun=total_tahun, total_semua=total_semua,
         harian=harian, total_harian=total_harian,
+        riwayat=riwayat, total_riwayat=total_riwayat,
     ))
 
 # ── MikroTik Servers ──────────────────────────────────────────────────────────
@@ -1209,32 +1463,115 @@ async def kalkulator_odp(request: Request):
 # ── PPPoE Users ───────────────────────────────────────────────────────────────
 
 @app.get("/pppoe/users", response_class=HTMLResponse)
-async def pppoe_users(request: Request, server_id: str = "", status: str = "", q: str = "", odp_id: str = ""):
+async def pppoe_users(request: Request, server_id: str = "", status: str = "", q: str = "",
+                       odp_id: str = "", page: int = 1, per_page: int = 50,
+                       terpasang: str = "", tagihan: str = ""):
     user = require_login(request)
     iid = _isp_id(user)
     servers = db.list_servers(iid)
-    # Semua ODP (untuk JS data mapping), filter dropdown sesuai server dipilih
     odp_list = db.list_odp(iid)
     odp_filter_list = db.list_odp(iid, server_id if server_id else None)
     _odp_id = int(odp_id) if odp_id else None
-    users = db.list_pppoe_users(iid, server_id if server_id else None, odp_id=_odp_id)
-    if status:
-        users = [u for u in users if u["status"] == status]
-    if q:
-        q_lower = q.lower()
-        users = [u for u in users if
-                 q_lower in u["nama_pelanggan"].lower() or
-                 q_lower in u["username"].lower() or
-                 q_lower in (u["telepon"] or "").lower()]
-    pakets = db.list_paket_pppoe(iid)
+    _sid = server_id if server_id else None
+    _status = status if status and status != "semua" else None
+    per_page = max(10, min(per_page, 200))
+    page = max(1, page)
+
+    # Resolve terpasang filter
+    _terpasang = None
+    if terpasang == "0":
+        _terpasang = 0
+    elif terpasang == "1":
+        _terpasang = 1
+
+    # Resolve tagihan-based filter → list of pppoe_ids
+    import datetime as _dt
+    bulan_ini = _dt.date.today().strftime("%Y-%m")
+    _pppoe_ids = None
+    _tagihan_label = ""
+    if tagihan:
+        con_t = sqlite3.connect(DB_PATH)
+        con_t.row_factory = sqlite3.Row
+        _today = _dt.date.today()
+        _ts_start = int(_dt.datetime(_today.year, _today.month, _today.day, 0, 0, 0).timestamp())
+        _ts_end   = int(_dt.datetime(_today.year, _today.month, _today.day, 23, 59, 59).timestamp())
+        if tagihan == "bayar_hari_ini":
+            rows = con_t.execute(
+                "SELECT DISTINCT pppoe_id FROM tagihan_pppoe WHERE user_id=? AND paid_at BETWEEN ? AND ?",
+                (iid, _ts_start, _ts_end)
+            ).fetchall()
+            _pppoe_ids = [r["pppoe_id"] for r in rows]
+            _tagihan_label = "Bayar Hari Ini"
+        elif tagihan == "sudah_bayar":
+            rows = con_t.execute(
+                "SELECT DISTINCT pppoe_id FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status IN ('paid','lunas')",
+                (iid, bulan_ini)
+            ).fetchall()
+            _pppoe_ids = [r["pppoe_id"] for r in rows]
+            _tagihan_label = "Sudah Bayar"
+        elif tagihan == "belum_bayar":
+            rows = con_t.execute(
+                "SELECT DISTINCT pppoe_id FROM tagihan_pppoe WHERE user_id=? AND bulan=? AND status IN ('unpaid','overdue')",
+                (iid, bulan_ini)
+            ).fetchall()
+            _pppoe_ids = [r["pppoe_id"] for r in rows]
+            _tagihan_label = "Belum Bayar"
+        elif tagihan == "belum_ada_tagihan":
+            all_ids = [r["id"] for r in con_t.execute(
+                "SELECT id FROM pppoe_users WHERE user_id=? AND status='aktif'", (iid,)
+            ).fetchall()]
+            billed = {r["pppoe_id"] for r in con_t.execute(
+                "SELECT DISTINCT pppoe_id FROM tagihan_pppoe WHERE user_id=? AND bulan=?", (iid, bulan_ini)
+            ).fetchall()}
+            _pppoe_ids = [i for i in all_ids if i not in billed]
+            _tagihan_label = "Belum Ada Tagihan"
+        elif tagihan == "isolir_hari_ini":
+            rows = con_t.execute(
+                "SELECT id FROM pppoe_users WHERE user_id=? AND isolated_at BETWEEN ? AND ?",
+                (iid, _ts_start, _ts_end)
+            ).fetchall()
+            _pppoe_ids = [r["id"] for r in rows]
+            _tagihan_label = "Isolir Hari Ini"
+        con_t.close()
+
+    # Count per-tab stats from DB (lightweight, no row data)
+    count_all   = db.count_pppoe_users(iid, _sid, _odp_id, q=q)
+    count_aktif = db.count_pppoe_users(iid, _sid, _odp_id, status="aktif", q=q)
+    count_sus   = db.count_pppoe_users(iid, _sid, _odp_id, status="suspended", q=q)
+    count_non   = db.count_pppoe_users(iid, _sid, _odp_id, status="nonaktif", q=q)
+
+    # Online filter needs client-side data; fetch minimal set for online tab count
     online_set = db.get_all_online_usernames()
-    # Status tagihan bulan ini per pelanggan
-    from datetime import date
-    bulan_ini = date.today().strftime("%Y-%m")
+
+    # Fetch only current page
+    total = db.count_pppoe_users(iid, _sid, _odp_id, status=_status, q=q,
+                                  terpasang=_terpasang, pppoe_ids=_pppoe_ids)
+    # For online tab, online filter is post-processed (no DB column) — fetch all for that tab
+    if status == "online":
+        all_for_online = db.list_pppoe_users(iid, _sid, _odp_id, status="aktif", q=q,
+                                              terpasang=_terpasang, pppoe_ids=_pppoe_ids)
+        all_for_online = [u for u in all_for_online if u["username"] in online_set]
+        total = len(all_for_online)
+        offset = (page - 1) * per_page
+        users = all_for_online[offset: offset + per_page]
+        count_online = total
+    else:
+        count_online = len([u for u in db.list_pppoe_users(iid, _sid, _odp_id, status="aktif") if u["username"] in online_set])
+        offset = (page - 1) * per_page
+        users = db.list_pppoe_users(iid, _sid, _odp_id, status=_status, q=q,
+                                     terpasang=_terpasang, pppoe_ids=_pppoe_ids,
+                                     limit=per_page, offset=offset)
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+
+    pakets = db.list_paket_pppoe(iid)
     tagihan_bulan = db.list_tagihan(iid, bulan=bulan_ini)
     tagihan_map = {t["pppoe_id"]: t["status"] for t in tagihan_bulan}
     overdue_ids = {t["pppoe_id"] for t in tagihan_bulan if t["status"] == "overdue"}
-    # Hitung usia cache
+    tagihan_total_amount = sum(t["amount"] for t in tagihan_bulan if t.get("amount"))
+    tagihan_lunas_amount = sum(t["amount"] for t in tagihan_bulan if t["status"] in ("paid", "lunas") and t.get("amount"))
     cache_ages = []
     for s in servers:
         age = db.get_online_cache_age(s["id"])
@@ -1242,8 +1579,37 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
             cache_ages.append(age)
     cache_age = min(cache_ages) if cache_ages else None
     push_msg = request.query_params.get("push")
-    import datetime as _dt
     now_date = _dt.date.today().strftime("%Y-%m-%d")
+    con2 = sqlite3.connect(DB_PATH)
+    con2.row_factory = sqlite3.Row
+    isp_row = con2.execute("SELECT auto_reminder FROM users WHERE id=?", (iid,)).fetchone()
+    con2.close()
+    isp_auto_reminder = (dict(isp_row).get("auto_reminder") if isp_row else 1)
+    if isp_auto_reminder is None:
+        isp_auto_reminder = 1
+
+    tab_counts = {"semua": count_all, "aktif": count_aktif, "online": count_online,
+                  "suspended": count_sus, "nonaktif": count_non}
+
+    def page_url(p, s=status, pp=per_page):
+        params = {"page": p, "per_page": pp}
+        if server_id: params["server_id"] = server_id
+        if s: params["status"] = s
+        if q: params["q"] = q
+        if odp_id: params["odp_id"] = odp_id
+        if terpasang: params["terpasang"] = terpasang
+        if tagihan: params["tagihan"] = tagihan
+        return "/pppoe/users?" + "&".join(f"{k}={v}" for k, v in params.items())
+
+    # Active filter label for badge
+    aktif_filter = ""
+    if _terpasang == 0:
+        aktif_filter = "Belum Terpasang"
+    elif _terpasang == 1:
+        aktif_filter = "Sudah Terpasang"
+    elif _tagihan_label:
+        aktif_filter = _tagihan_label
+
     return tpl.TemplateResponse(request, "pppoe_users.html", _ctx(
         request, user=user, users=users, servers=servers, pakets=pakets,
         sel_server=server_id, sel_status=status, q=q, sel_odp=odp_id,
@@ -1252,7 +1618,13 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
         tagihan_map=tagihan_map, bulan_ini=bulan_ini,
         odp_filter_list=odp_filter_list,
         cache_age=cache_age, push_msg=push_msg,
-        now_date=now_date,
+        now_date=now_date, isp_auto_reminder=isp_auto_reminder,
+        tagihan_total_amount=tagihan_total_amount,
+        tagihan_lunas_amount=tagihan_lunas_amount,
+        tab_counts=tab_counts,
+        page=page, per_page=per_page, total=total, total_pages=total_pages,
+        page_url=page_url,
+        aktif_filter=aktif_filter, sel_terpasang=terpasang, sel_tagihan=tagihan,
     ))
 
 
@@ -1264,7 +1636,8 @@ async def pppoe_user_tambah(
     paket_id: int = Form(...), telepon: str = Form(""),
     alamat: str = Form(""), tgl_bayar: int = Form(1),
     tgl_mulai: str = Form(""),
-    odp_id: str = Form(""), odp_port: str = Form("")
+    odp_id: str = Form(""), odp_port: str = Form(""),
+    terpasang: int = Form(0),
 ):
     user = require_login(request)
     iid = _isp_id(user)
@@ -1277,16 +1650,17 @@ async def pppoe_user_tambah(
             tgl_mulai_ts = int(_dt.datetime.strptime(tgl_mulai.strip(), "%Y-%m-%d").timestamp())
         except ValueError:
             pass
-    pid = db.create_pppoe_user(iid, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed=0, tgl_mulai=tgl_mulai_ts)
+    pid = db.create_pppoe_user(iid, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed=0, tgl_mulai=tgl_mulai_ts, terpasang=terpasang)
     if odp_id.strip():
         db.assign_odp(pid, int(odp_id), int(odp_port) if odp_port.strip() else None)
     mt = get_mt(server_id)
     pushed = False
     if mt:
-        profile = paket["nama"] if paket else "default"
+        profile = paket["kecepatan"] if paket else "default"
         pushed = mt.add_pppoe_secret(username, password, profile=profile)
     if pushed:
         db.set_mt_pushed(pid, 1)
+        db.set_terpasang(pid, 1)
     db.add_transaksi(iid, str(pid), "pppoe", paket["harga"] if paket else 0, f"Tambah PPPoE {username}")
     _log(request, user, "Tambah Pelanggan PPPoE", f"{nama_pelanggan} ({username})")
     # Notif WA aktivasi ke pelanggan
@@ -1396,6 +1770,21 @@ async def pppoe_user_status(request: Request, pid: int, status: str = Form(...))
             )
     return RedirectResponse("/pppoe/users", status_code=302)
 
+
+@app.post("/pppoe/users/terpasang/{pid}", response_class=JSONResponse)
+async def pppoe_set_terpasang(request: Request, pid: int, terpasang: int = Form(1)):
+    """Update status pemasangan fisik pelanggan (dipakai teknisi)."""
+    user = require_login(request)
+    iid = _isp_id(user)
+    pu = db.get_pppoe_user(pid)
+    if not pu or pu["user_id"] != iid:
+        return JSONResponse({"ok": False, "msg": "Tidak ditemukan"}, status_code=404)
+    db.set_terpasang(pid, terpasang)
+    label = "Sudah Terpasang" if terpasang else "Belum Terpasang"
+    _log(request, user, "Update Pemasangan", f"{pu['nama_pelanggan']} → {label}")
+    return JSONResponse({"ok": True, "terpasang": terpasang, "label": label})
+
+
 # ── PPPoE Push & Online Refresh ──────────────────────────────────────────────
 
 @app.post("/pppoe/users/push/{pid}")
@@ -1410,7 +1799,7 @@ async def pppoe_push_mt(request: Request, pid: int):
     ok = False
     if mt:
         paket = db.get_paket_pppoe(pu["paket_id"]) if pu.get("paket_id") else None
-        profile = paket["nama"] if paket else "default"
+        profile = paket["kecepatan"] if paket else "default"
         try:
             secrets = mt.api.get_resource("/ppp/secret")
             existing = secrets.get(name=pu["username"])
@@ -1423,6 +1812,7 @@ async def pppoe_push_mt(request: Request, pid: int):
             pass
     if ok:
         db.set_mt_pushed(pid, 1)
+        db.set_terpasang(pid, 1)
         # Notif WA aktivasi saat push berhasil
         if pu.get("telepon"):
             isp = db.get_user(iid)
@@ -1532,23 +1922,6 @@ async def pppoe_monitor_kick(request: Request):
 
 # ── PPPoE Monitoring & Laporan ────────────────────────────────────────────────
 
-@app.get("/pppoe/monitoring")
-async def pppoe_monitoring_page(request: Request):
-    user = require_login(request)
-    iid  = _isp_id(user)
-    from datetime import date
-    bulan = date.today().strftime("%Y-%m")
-    summary    = db.summary_monitoring(iid, bulan)
-    jatuh_7    = db.jatuh_tempo_mendatang(iid, hari=7)
-    overdue    = db.pelanggan_overdue_list(iid, bulan)
-    nonaktif   = db.pelanggan_nonaktif(iid)
-    pertumbuhan = db.pertumbuhan_pelanggan(iid)
-    return tpl.TemplateResponse(request, "pppoe_monitoring.html", _ctx(
-        request, user=user, active="pppoe_monitoring",
-        summary=summary, jatuh_7=jatuh_7, overdue=overdue,
-        nonaktif=nonaktif, pertumbuhan=pertumbuhan, bulan=bulan
-    ))
-
 
 # ── PPPoE Import dari MikroTik ───────────────────────────────────────────────
 
@@ -1598,10 +1971,56 @@ async def pppoe_import(request: Request):
         paket = db.get_paket_pppoe(int(paket_id)) if paket_id else None
         db.create_pppoe_user(
             user["id"], server_id, nama_pelanggan, username, password,
-            paket["id"] if paket else None, telepon, "", tgl_bayar
+            paket["id"] if paket else None, telepon, "", tgl_bayar,
+            mt_pushed=1, terpasang=1  # diimport dari MikroTik = sudah terpasang
         )
         imported += 1
     return JSONResponse({"imported": imported})
+
+
+@app.post("/pppoe/users/sync-mt-pushed", response_class=JSONResponse)
+async def pppoe_sync_mt_pushed(request: Request):
+    """Cek PPPoE secrets di semua MikroTik server, update mt_pushed di DB sesuai keberadaannya."""
+    user = require_login(request)
+    iid  = _isp_id(user)
+    servers = db.list_servers(iid)
+    all_users = db.list_pppoe_users(iid)
+
+    updated_ada = 0
+    updated_tidak = 0
+    errors = []
+
+    for s in servers:
+        mt = get_mt(s["id"])
+        if not mt:
+            errors.append(f"{s['nama']}: tidak terhubung")
+            continue
+        secrets = mt.list_pppoe_secrets()
+        mt_usernames = {sec.get("name", "").lower() for sec in secrets}
+
+        server_users = [u for u in all_users if u["server_id"] == s["id"]]
+        con = sqlite3.connect(DB_PATH)
+        for u in server_users:
+            exists = u["username"].lower() in mt_usernames
+            new_val = 1 if exists else 0
+            if u.get("terpasang") != new_val or u.get("mt_pushed") != new_val:
+                con.execute("UPDATE pppoe_users SET mt_pushed=?, terpasang=? WHERE id=?",
+                            (new_val, new_val, u["id"]))
+                if exists:
+                    updated_ada += 1
+                else:
+                    updated_tidak += 1
+        con.commit()
+        con.close()
+
+    return JSONResponse({
+        "ok": True,
+        "updated_ada": updated_ada,
+        "updated_tidak": updated_tidak,
+        "errors": errors,
+        "msg": f"Sync selesai. {updated_ada} ditandai terpasang, {updated_tidak} belum terpasang."
+        + (f" Error: {', '.join(errors)}" if errors else ""),
+    })
 
 
 # ── WA Gateway ───────────────────────────────────────────────────────────────
@@ -1843,7 +2262,7 @@ tpl.env.filters["label_bulan"] = _label_bulan
 
 
 @app.get("/pppoe/tagihan", response_class=HTMLResponse)
-async def tagihan_page(request: Request, bulan: str = "", status: str = "", q: str = ""):
+async def tagihan_page(request: Request, bulan: str = "", status: str = "paid", q: str = "", metode: str = ""):
     user = require_login(request)
     if not bulan:
         bulan = _bulan_sekarang()
@@ -1853,11 +2272,16 @@ async def tagihan_page(request: Request, bulan: str = "", status: str = "", q: s
         tagihan = [t for t in tagihan if
                    q_lower in (t.get("nama_pelanggan") or "").lower() or
                    q_lower in (t.get("pppoe_username") or "").lower()]
+    if metode:
+        tagihan = [t for t in tagihan if (t.get("metode_bayar") or "") == metode]
     stats   = db.stats_tagihan(user["id"], bulan)
     bulans  = _bulan_list()
+    # Kumpulkan metode yang ada untuk opsi filter
+    all_metode = sorted({t["metode_bayar"] for t in db.list_tagihan(user["id"], bulan) if t.get("metode_bayar")})
     return tpl.TemplateResponse(request, "pppoe_tagihan.html", _ctx(
         request, user=user, tagihan=tagihan, stats=stats,
-        bulan=bulan, bulans=bulans, sel_status=status, q=q, active="pppoe_tagihan"
+        bulan=bulan, bulans=bulans, sel_status=status, q=q,
+        sel_metode=metode, all_metode=all_metode, active="pppoe_tagihan"
     ))
 
 
@@ -1868,6 +2292,69 @@ async def tagihan_generate(request: Request, bulan: str = Form("")):
         bulan = _bulan_sekarang()
     n = db.generate_tagihan(user["id"], bulan)
     return JSONResponse({"ok": True, "dibuat": n, "bulan": bulan})
+
+
+@app.get("/pppoe/tagihan/belum-bayar", response_class=JSONResponse)
+async def tagihan_belum_bayar(request: Request, bulan: str = ""):
+    user = require_login(request)
+    if not bulan:
+        bulan = _bulan_sekarang()
+    tagihan = db.list_tagihan(user["id"], bulan)
+    belum = [
+        {
+            "id": t["id"],
+            "nama": t["nama_pelanggan"],
+            "username": t["pppoe_username"],
+            "paket": t["paket_nama"] or "",
+            "amount": t["amount"],
+            "status": t["status"],
+        }
+        for t in tagihan if t["status"] in ("unpaid", "overdue")
+    ]
+    return JSONResponse({"ok": True, "data": belum, "bulan": bulan})
+
+
+@app.post("/pppoe/users/{pid}/generate-tagihan", response_class=JSONResponse)
+async def generate_tagihan_satu(request: Request, pid: int):
+    user = require_login(request)
+    iid  = _isp_id(user)
+    con  = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    p = con.execute(
+        "SELECT p.*, pk.harga FROM pppoe_users p "
+        "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+        "WHERE p.id=? AND p.user_id=?", (pid, iid)
+    ).fetchone()
+    if not p:
+        con.close()
+        return JSONResponse({"ok": False, "msg": "Pelanggan tidak ditemukan"})
+    bulan  = _bulan_sekarang()
+    harga  = p["harga"] or 0
+    now    = int(time.time())
+    # Prorate jika tagihan pertama
+    prev = con.execute(
+        "SELECT COUNT(*) FROM tagihan_pppoe WHERE pppoe_id=? AND bulan<?", (pid, bulan)
+    ).fetchone()[0]
+    if prev == 0 and p["tgl_mulai"]:
+        amount = db._hitung_prorate(harga, p["tgl_mulai"], bulan, p["tgl_bayar"] or 1)
+    else:
+        amount = harga
+    try:
+        con.execute(
+            "INSERT OR IGNORE INTO tagihan_pppoe (user_id,pppoe_id,bulan,amount,created_at) VALUES (?,?,?,?,?)",
+            (iid, pid, bulan, amount, now)
+        )
+        changes = con.execute("SELECT changes()").fetchone()[0]
+        con.commit()
+        con.close()
+        prorate_info = f" (prorate {amount:,} dari {harga:,})" if amount != harga else ""
+        if changes:
+            return JSONResponse({"ok": True, "msg": f"Tagihan {bulan} dibuat — Rp {amount:,}{prorate_info}"})
+        else:
+            return JSONResponse({"ok": False, "msg": f"Tagihan {bulan} sudah ada"})
+    except Exception as e:
+        con.close()
+        return JSONResponse({"ok": False, "msg": str(e)})
 
 
 @app.post("/pppoe/tagihan/{tid}/lunas", response_class=JSONResponse)
@@ -1886,17 +2373,60 @@ async def tagihan_lunas(request: Request, tid: int):
         _log(request, user, "Bayar Tagihan", f"{t['nama_pelanggan']} — {_label_bulan(t['bulan'])} — Rp {t['amount']:,} ({metode})")
         _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
         if t.get("telepon"):
-            label   = _label_bulan(t["bulan"])
-            tok     = _isp_wa_token(t["user_id"])
-            nominal = f"Rp {t['amount']:,}".replace(",", ".")
+            label      = _label_bulan(t["bulan"])
+            tok        = _isp_wa_token(t["user_id"])
+            nominal    = f"Rp {t['amount']:,}".replace(",", ".")
+            link_nota  = f"https://{APP_DOMAIN}/nota/{tid}"
             send_wa(
                 t["telepon"],
                 _render_wa_template(t["user_id"], "pembayaran",
                     nama=t["nama_pelanggan"], nominal=nominal,
-                    bulan=label, isp=user["nama"]),
-                token=tok
+                    bulan=label, isp=user["nama"], link_nota=link_nota),
+                token=tok, user_id=t["user_id"], tipe="pembayaran"
             )
     return JSONResponse({"ok": ok})
+
+@app.post("/pppoe/tagihan/{tid}/edit", response_class=JSONResponse)
+async def tagihan_edit(request: Request, tid: int):
+    user = require_login(request)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    amount = body.get("amount")
+    status = (body.get("status") or "").strip()
+    if amount is None or int(amount) < 0:
+        return JSONResponse({"ok": False, "msg": "Nominal tidak valid"})
+    if status not in ("unpaid", "paid", "overdue"):
+        return JSONResponse({"ok": False, "msg": "Status tidak valid"})
+    t = db.get_tagihan(tid)
+    if not t or t["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    con = db._conn()
+    paid_at = int(__import__("time").time()) if status == "paid" else None
+    con.execute("UPDATE tagihan_pppoe SET amount=?, status=?, paid_at=? WHERE id=?",
+                (int(amount), status, paid_at, tid))
+    con.commit()
+    con.close()
+    _log(request, user, "Edit Tagihan", f"{t['nama_pelanggan']} — {_label_bulan(t['bulan'])} — Rp {amount:,} ({status})")
+    return JSONResponse({"ok": True})
+
+@app.post("/pppoe/tagihan/{tid}/hapus", response_class=JSONResponse)
+async def tagihan_hapus(request: Request, tid: int):
+    """Hapus tagihan."""
+    user = require_login(request)
+    t = db.get_tagihan(tid)
+    if not t or t["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    
+    con = db._conn()
+    con.execute("DELETE FROM tagihan_pppoe WHERE id=?", (tid,))
+    con.commit()
+    con.close()
+    
+    _log(request, user, "Hapus Tagihan", f"{t['nama_pelanggan']} — {_label_bulan(t['bulan'])} — Rp {t['amount']:,}")
+    return JSONResponse({"ok": True})
 
 
 @app.post("/pppoe/tagihan/{tid}/kirim-link", response_class=JSONResponse)
@@ -1925,6 +2455,43 @@ async def tagihan_kirim_link(request: Request, tid: int):
     return JSONResponse({"ok": True, "link": link})
 
 
+@app.post("/pppoe/users/kirim-reminder/{pid}", response_class=JSONResponse)
+async def kirim_reminder_pelanggan(request: Request, pid: int):
+    user = require_login(request)
+    iid = _isp_id(user)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    pu = con.execute("SELECT * FROM pppoe_users WHERE id=? AND user_id=?", (pid, iid)).fetchone()
+    con.close()
+    if not pu:
+        return JSONResponse({"ok": False, "msg": "Pelanggan tidak ditemukan"})
+    pu = dict(pu)
+    if not pu.get("telepon"):
+        return JSONResponse({"ok": False, "msg": "Pelanggan tidak punya nomor WA"})
+    from datetime import date
+    bulan = date.today().strftime("%Y-%m")
+    label = _label_bulan(bulan)
+    tagihan_list = db.list_tagihan(iid, bulan)
+    tagihan = next((t for t in tagihan_list if t["pppoe_id"] == pid and t["status"] != "paid"), None)
+    if tagihan:
+        nominal = f"Rp {tagihan['amount']:,}".replace(",", ".")
+        link = f"https://{APP_DOMAIN}/bayar/tagihan/{tagihan['id']}"
+        pesan = (
+            f"🔔 *Reminder Tagihan Internet*\n\n"
+            f"Halo *{pu['nama_pelanggan']}*,\n\n"
+            f"Tagihan bulan *{label}* senilai *{nominal}* belum terbayar.\n\n"
+            f"Bayar sekarang:\n{link}\n\n"
+            f"_Abaikan jika sudah membayar._"
+        )
+    else:
+        pesan = _render_wa_template(iid, "penagihan",
+            nama=pu["nama_pelanggan"], nominal="", bulan=label,
+            paket="", tgl_bayar=pu.get("tgl_bayar") or 1, isp=user["nama"])
+    ok, msg = send_wa(pu["telepon"], pesan, token=_isp_wa_token(iid),
+                      user_id=iid, tipe="link_bayar")
+    return JSONResponse({"ok": ok, "msg": msg})
+
+
 @app.post("/pppoe/tagihan/reminder", response_class=JSONResponse)
 async def tagihan_reminder(request: Request, bulan: str = Form("")):
     user = require_login(request)
@@ -1942,9 +2509,55 @@ async def tagihan_reminder(request: Request, bulan: str = Form("")):
             nama=t["nama_pelanggan"], nominal=nominal, bulan=label,
             paket=t.get("paket_nama") or "", tgl_bayar=t.get("tgl_bayar") or 1,
             isp=user["nama"])
-        send_wa(t["telepon"], pesan, token=_isp_wa_token(user["id"]))
+        send_wa(t["telepon"], pesan, token=_isp_wa_token(user["id"]),
+                user_id=user["id"], tipe="reminder_manual")
         terkirim += 1
     return JSONResponse({"ok": True, "terkirim": terkirim})
+
+
+# ── WA Log ────────────────────────────────────────────────────────────────────
+
+@app.get("/wa-log", response_class=HTMLResponse)
+async def wa_log_page(request: Request, tipe: str = "", status: str = "", q: str = ""):
+    user = require_login(request)
+    iid  = _isp_id(user)
+    logs = db.list_wa_log(iid, tipe=tipe, status=status, q=q)
+    return tpl.TemplateResponse(request, "wa_log.html", _ctx(
+        request, user=user, logs=logs,
+        sel_tipe=tipe, sel_status=status, q=q,
+        active="wa_log"
+    ))
+
+
+@app.get("/pppoe/wa-log", response_class=HTMLResponse)
+async def wa_log_redirect(request: Request):
+    return RedirectResponse("/wa-log", status_code=301)
+
+
+@app.post("/wa-log/{lid}/kirim-ulang", response_class=JSONResponse)
+async def wa_log_kirim_ulang(request: Request, lid: int):
+    user = require_login(request)
+    iid  = _isp_id(user)
+    log  = db.get_wa_log(lid)
+    if not log or log["user_id"] != iid:
+        return JSONResponse({"ok": False, "msg": "Log tidak ditemukan"})
+    tok = log.get("token") or _isp_wa_token(iid)
+    ok, err = send_wa(log["nomor"], log["pesan"], token=tok,
+                      user_id=iid, tipe=log["tipe"])
+    return JSONResponse({"ok": ok, "msg": err or "Pesan berhasil dikirim ulang"})
+
+
+@app.post("/pppoe/wa-log/{lid}/kirim-ulang", response_class=JSONResponse)
+async def wa_log_kirim_ulang_old(request: Request, lid: int):
+    return RedirectResponse(f"/wa-log/{lid}/kirim-ulang", status_code=307)
+
+
+@app.post("/wa-log/{lid}/hapus", response_class=JSONResponse)
+async def wa_log_hapus(request: Request, lid: int):
+    user = require_login(request)
+    iid  = _isp_id(user)
+    ok   = db.delete_wa_log(lid, iid)
+    return JSONResponse({"ok": ok, "msg": "" if ok else "Log tidak ditemukan"})
 
 
 # ── Hotspot Paket ─────────────────────────────────────────────────────────────
@@ -2107,6 +2720,39 @@ async def voucher_generate(
         status = f"generate_ok&pushed=0"
 
     return RedirectResponse(f"/hotspot/voucher?ok={status}&jumlah={len(kodes)}", status_code=302)
+
+
+@app.post("/hotspot/voucher/tambah", response_class=JSONResponse)
+async def voucher_tambah(
+    request: Request,
+    server_id: str = Form(...), paket_id: int = Form(...),
+    kode: str = Form(""), push_mikrotik: str = Form(""),
+    comment: str = Form("")
+):
+    user = require_login(request)
+    import random, string as _str
+    kode = kode.strip().upper()
+    if not kode:
+        kode = "".join(random.choices(_str.ascii_uppercase + _str.digits, k=8))
+
+    ok = db.create_voucher_single(user["id"], server_id, paket_id, kode, comment.strip())
+    if not ok:
+        return JSONResponse({"ok": False, "msg": f"Kode '{kode}' sudah digunakan."}, status_code=400)
+
+    push_ok = False
+    if push_mikrotik:
+        paket = db.get_paket_hotspot(paket_id)
+        mt = get_mt(server_id)
+        if mt and paket:
+            profile      = paket.get("kecepatan") or "default"
+            mt_comment   = comment.strip() or paket.get("nama", "")
+            limit_uptime = paket.get("durasi") or ""
+            push_ok = mt.add_hotspot_user(kode, kode, profile=profile,
+                                           comment=mt_comment, limit_uptime=limit_uptime)
+            if push_ok:
+                db.set_voucher_mt_pushed(kode, True)
+
+    return JSONResponse({"ok": True, "kode": kode, "pushed": push_ok})
 
 
 @app.post("/hotspot/voucher/hapus")
@@ -2362,48 +3008,103 @@ async def teknisi_hapus(request: Request, uid: str):
 # ── Saldo ─────────────────────────────────────────────────────────────────────
 
 @app.get("/saldo", response_class=HTMLResponse)
-async def saldo_page(request: Request, bulan: str = ""):
+async def saldo_page(request: Request, bulan: str = "", tab: str = "mutasi", tipe: str = ""):
     from datetime import date, datetime
     user = require_login(request)
+    iid  = _isp_id(user)
     if not bulan:
         bulan = date.today().strftime("%Y-%m")
-    logs_all = db.list_saldo_log(user["id"])
 
-    # Filter bulan
     def _in_bulan(ts, bln):
         try:
             return datetime.fromtimestamp(int(ts)).strftime("%Y-%m") == bln
         except Exception:
             return False
 
+    # ── Tab 1: Mutasi Saldo ──────────────────────────────────────────────────
+    logs_all = db.list_saldo_log(user["id"])
     logs = [l for l in logs_all if _in_bulan(l["created_at"], bulan)]
+    total_kredit = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
+    total_debit  = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
+    kredit_mayar = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "mayar")
+    kredit_qris  = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "qris_statis")
 
-    total_kredit    = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
-    total_debit     = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
-    kredit_mayar    = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "mayar")
-    kredit_qris     = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "qris_statis")
-
-    saved_rek = {
-        "bank": user.get("rek_bank") or "",
-        "no":   user.get("rek_no") or "",
-        "nama": user.get("rek_nama") or "",
-    }
-    pending_topup_count = db.count_topup_manual_pending(user["id"]) if user.get("role") == "admin" else 0
-
-    # Tarik saldo pending
+    # ── Tab 2: Riwayat Transaksi ─────────────────────────────────────────────
     con = db._conn()
+    orders = con.execute(
+        """SELECT o.id, o.amount, o.status, o.nomor_hp, o.created_at,
+                  p.nama as paket_nama, 'hotspot_order' as tipe
+           FROM hotspot_orders o
+           LEFT JOIN paket_hotspot p ON p.id = o.paket_id
+           WHERE o.user_id=? ORDER BY o.created_at DESC LIMIT 300""",
+        (iid,)
+    ).fetchall()
+    tagihan = con.execute(
+        """SELECT t.id, t.amount, t.status, t.paid_at, t.created_at,
+                  u.nama_pelanggan as pelanggan, t.bulan, 'tagihan_pppoe' as tipe
+           FROM tagihan_pppoe t
+           LEFT JOIN pppoe_users u ON u.id = t.pppoe_id
+           WHERE t.user_id=? ORDER BY t.created_at DESC LIMIT 300""",
+        (iid,)
+    ).fetchall()
+    txs_raw = con.execute(
+        "SELECT *, 'internal' as tipe FROM transaksi WHERE user_id=? ORDER BY created_at DESC LIMIT 300",
+        (iid,)
+    ).fetchall()
     tarik_pending = con.execute(
         "SELECT COUNT(*) FROM tarik_saldo WHERE user_id=? AND status='pending'", (user["id"],)
     ).fetchone()[0]
     con.close()
 
+    all_txs = []
+    for o in orders:
+        all_txs.append({"id": o["id"], "tipe": "hotspot_order",
+            "keterangan": f"Beli voucher {o['paket_nama'] or ''} · {o['nomor_hp'] or ''}",
+            "amount": o["amount"], "status": o["status"], "created_at": o["created_at"]})
+    for t in tagihan:
+        all_txs.append({"id": str(t["id"]), "tipe": "tagihan_pppoe",
+            "keterangan": f"Tagihan {t['bulan']} · {t['pelanggan'] or ''}",
+            "amount": t["amount"], "status": t["status"], "created_at": t["created_at"]})
+    for tx in txs_raw:
+        all_txs.append({"id": tx["id"], "tipe": tx["ref_type"] if tx["ref_type"] else "internal",
+            "keterangan": tx["keterangan"],
+            "amount": tx["amount"], "status": tx["status"], "created_at": tx["created_at"]})
+
+    if tipe:
+        all_txs = [t for t in all_txs if t["tipe"] == tipe]
+    txs = [t for t in all_txs if _in_bulan(t["created_at"], bulan)]
+    txs.sort(key=lambda x: x["created_at"] or 0, reverse=True)
+
+    tx_stats = {
+        "total": len(txs),
+        "omzet": sum(t["amount"] for t in txs if t["status"] in ("paid", "lunas")),
+        "paid":  sum(1 for t in txs if t["status"] in ("paid", "lunas")),
+        "pending": sum(1 for t in txs if t["status"] == "pending"),
+    }
+
+    saved_rek = {"bank": user.get("rek_bank") or "", "no": user.get("rek_no") or "", "nama": user.get("rek_nama") or ""}
+    pending_topup_count = db.count_topup_manual_pending(user["id"]) if user.get("role") == "admin" else 0
+
+    # Tagihan SaaS yang belum lunas
+    con2 = db._conn()
+    saas_unpaid = con2.execute(
+        "SELECT * FROM saas_tagihan WHERE user_id=? AND status IN ('unpaid','waiting_payment') ORDER BY bulan DESC LIMIT 1",
+        (user["id"],)
+    ).fetchone()
+    saas_unpaid = dict(saas_unpaid) if saas_unpaid else None
+    con2.close()
+    platform_qris = db.get_platform_config("qris_image")
+
     return tpl.TemplateResponse(request, "saldo.html", _ctx(
-        request, user=user, logs=logs, saved_rek=saved_rek,
-        sel_bulan=bulan,
+        request, user=user, logs=logs, txs=txs, saved_rek=saved_rek,
+        sel_bulan=bulan, sel_tab=tab, sel_tipe=tipe,
         stats={"kredit": total_kredit, "debit": total_debit,
                "kredit_mayar": kredit_mayar, "kredit_qris": kredit_qris,
                "total_log": len(logs), "tarik_pending": tarik_pending},
-        pending_topup_count=pending_topup_count))
+        tx_stats=tx_stats,
+        pending_topup_count=pending_topup_count,
+        saas_unpaid=saas_unpaid,
+        platform_qris=platform_qris))
 
 
 
@@ -2482,6 +3183,16 @@ async def tarik_requests_page(request: Request):
         request, user=user, active="saldo",
         requests_list=requests_list, pending_count=pending_count
     ))
+
+
+@app.delete("/saldo/tarik/{rid}", response_class=JSONResponse)
+async def hapus_tarik_request(request: Request, rid: int):
+    """Admin ISP hapus request tarik saldo milik sendiri yang masih pending."""
+    user = require_login(request)
+    ok = db.hapus_tarik_saldo(rid, user["id"])
+    if not ok:
+        return JSONResponse({"ok": False, "detail": "Request tidak ditemukan atau sudah diproses"}, status_code=404)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/saldo/topup/{uid}")
@@ -2577,9 +3288,16 @@ async def topup_manual_reject(request: Request, oid: str):
 
 # ── Hotspot Bulanan ───────────────────────────────────────────────────────────
 
+def _require_fitur_hb(user: dict):
+    """Raise 403 jika fitur Hotspot Bulanan tidak diaktifkan tenant."""
+    if not (user.get("fitur_hotspot_bulanan") or 0):
+        raise HTTPException(status_code=403, detail="Fitur Hotspot Bulanan belum diaktifkan. Aktifkan di halaman Profil.")
+
+
 @app.get("/hotspot/bulanan", response_class=HTMLResponse)
 async def hotspot_bulanan(request: Request, bulan: str = "", status: str = ""):
     user = require_login(request)
+    _require_fitur_hb(user)
     from datetime import date
     if not bulan:
         bulan = date.today().strftime("%Y-%m")
@@ -2612,6 +3330,7 @@ async def hotspot_bulanan_tambah(
     catatan: str = Form(""),
 ):
     user = require_login(request)
+    _require_fitur_hb(user)
     iid = _isp_id(user)
     # Buat akun di MikroTik
     mt = get_mt(server_id)
@@ -2932,6 +3651,49 @@ async def bayar_tagihan_sukses(request: Request, tid: int):
     ))
 
 
+@app.get("/nota/{tid}", response_class=HTMLResponse)
+async def nota_tagihan(request: Request, tid: int):
+    """Nota pembayaran publik — tidak perlu login."""
+    t = db.get_tagihan(tid)
+    if not t:
+        return HTMLResponse("<h2>Nota tidak ditemukan</h2>", status_code=404)
+    if t["status"] not in ("paid", "lunas"):
+        return HTMLResponse("<h2>Tagihan belum lunas</h2>", status_code=403)
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    isp_row = con.execute("SELECT nama, nomor_wa FROM users WHERE id=?", (t["user_id"],)).fetchone()
+    con.close()
+    isp = dict(isp_row) if isp_row else {}
+    return tpl.TemplateResponse(request, "nota.html", _ctx(request, t=t, isp=isp))
+
+
+@app.post("/pppoe/tagihan/{tid}/kirim-nota", response_class=JSONResponse)
+async def tagihan_kirim_nota(request: Request, tid: int):
+    """Kirim link nota pembayaran ke WA pelanggan."""
+    user = require_login(request)
+    t = db.get_tagihan(tid)
+    if not t or t["user_id"] != user["id"]:
+        return JSONResponse({"ok": False, "msg": "Tagihan tidak ditemukan"})
+    if t["status"] not in ("paid", "lunas"):
+        return JSONResponse({"ok": False, "msg": "Tagihan belum lunas"})
+    if not t.get("telepon"):
+        return JSONResponse({"ok": False, "msg": "Nomor WA pelanggan belum diisi"})
+    label   = _label_bulan(t["bulan"])
+    nominal = f"Rp {t['amount']:,}".replace(",", ".")
+    link    = f"https://{APP_DOMAIN}/nota/{tid}"
+    pesan   = (
+        f"*Nota Pembayaran Internet*\n\n"
+        f"Pelanggan: *{t['nama_pelanggan']}*\n"
+        f"Paket: {t.get('paket_nama') or '-'}\n"
+        f"Bulan: {label}\n"
+        f"Nominal: *{nominal}*\n"
+        f"Status: ✅ *LUNAS*\n\n"
+        f"Lihat nota:\n{link}\n\n"
+        f"Terima kasih telah membayar tepat waktu 🙏"
+    )
+    tok = _isp_wa_token(t["user_id"])
+    ok  = send_wa(t["telepon"], pesan, token=tok, user_id=t["user_id"], tipe="pembayaran")
+    return JSONResponse({"ok": bool(ok), "link": link})
 
 
 # ── Toko Hotspot Online (Publik) ─────────────────────────────────────────────
@@ -3616,6 +4378,34 @@ async def toko_order(
     return JSONResponse({"ok": False, "msg": "Gateway pembayaran tidak tersedia. Hubungi ISP Anda."})
 
 
+def _credit_pppoe_saldo(tagihan_id: int):
+    """Credit saldo tenant dan fee platform setelah tagihan PPPoE dibayar online (Mayar)."""
+    import logging as _log
+    try:
+        t = db.get_tagihan(tagihan_id)
+        if not t:
+            return
+        isp      = db.get_user(t["user_id"])
+        fee_mode = (isp.get("fee_mode") or "customer").lower() if isp else "customer"
+        harga    = int(t["amount"])
+        amts     = _calc_order_amounts(harga, fee_mode)
+        saldo_in = amts["saldo_tenant"]
+        if saldo_in > 0:
+            db.topup_saldo(t["user_id"], saldo_in,
+                           f"PPPoE #{tagihan_id} {t.get('nama_pelanggan','')} bulan {t.get('bulan','')} ({fee_mode}-mode, fee Rp{amts['platform_fee']})",
+                           sumber="mayar")
+        pf_amount    = amts["platform_fee"]
+        platform_uid = db.get_platform_config("platform_uid") or ""
+        if pf_amount > 0 and platform_uid:
+            db.topup_saldo(platform_uid, pf_amount,
+                           f"Fee platform PPPoE #{tagihan_id} ({isp['nama'] if isp else t['user_id']})",
+                           sumber="mayar")
+        _log.warning(f"[saldo credit pppoe] #{tagihan_id}: tenant +{saldo_in}, platform_fee +{pf_amount}")
+    except Exception as e:
+        import logging as _log2
+        _log2.warning(f"[saldo credit pppoe] error #{tagihan_id}: {e}")
+
+
 def _credit_voucher_saldo(order_id: str):
     """Credit saldo tenant dan fee platform setelah order voucher dikonfirmasi."""
     import logging as _log
@@ -3772,17 +4562,19 @@ async def toko_mayar_notif(request: Request):
         isp = db.get_user(t["user_id"])
         ok = db.bayar_tagihan(int(order_id), t["user_id"], metode="Mayar", keterangan="Bayar Online via Mayar")
         if ok:
+            _credit_pppoe_saldo(int(order_id))
             _reaktivasi_pppoe(t["pppoe_id"], t["user_id"])
             if t.get("telepon"):
                 label    = _label_bulan(t["bulan"])
                 tok      = _isp_wa_token(t["user_id"])
                 nominal  = f"Rp {t['amount']:,}".replace(",", ".")
-                isp_nama = isp["nama"] if isp else ""
+                isp_nama  = isp["nama"] if isp else ""
+                link_nota = f"https://{APP_DOMAIN}/nota/{t['id']}"
                 wa_result = send_wa(
                     t["telepon"],
                     _render_wa_template(t["user_id"], "pembayaran",
                         nama=t["nama_pelanggan"], nominal=nominal,
-                        bulan=label, isp=isp_nama),
+                        bulan=label, isp=isp_nama, link_nota=link_nota),
                     token=tok
                 )
                 _logging.warning(f"[Mayar webhook] WA tagihan sent to {t['telepon']}: {wa_result}")
@@ -3878,6 +4670,234 @@ def _addon_db():
     con.row_factory = sqlite3.Row
     return con
 
+
+def _wa_set_webhook(token: str, webhook_url: str):
+    """Set webhook URL + subscribe events via WuzAPI API dan DB."""
+    if not WA_URL:
+        return
+    try:
+        payload = {"webhookUrl": webhook_url}
+        if webhook_url:
+            payload["subscribe"] = ["Message"]
+        requests.post(
+            f"{WA_URL}/webhook",
+            json=payload,
+            headers={"Token": token},
+            timeout=5
+        )
+    except Exception:
+        pass
+    # Update DB sebagai fallback (agar persist setelah WuzAPI restart)
+    if WA_USERS_DB and Path(WA_USERS_DB).exists():
+        try:
+            con = sqlite3.connect(WA_USERS_DB)
+            con.execute(
+                "UPDATE users SET webhook=?, events='Message' WHERE token=?",
+                (webhook_url, token)
+            )
+            con.commit()
+            con.close()
+        except Exception:
+            pass
+
+
+def _chatbot_reply(user_id: str, nomor: str, pesan: str) -> str | None:
+    """Proses pesan masuk pelanggan, return teks balasan atau None jika tidak dikenali."""
+    from datetime import date
+    keyword = pesan.strip().lower()
+
+    # Cari pelanggan berdasarkan nomor WA
+    con = db._conn()
+    # Normalisasi nomor: 628xxx → 08xxx atau sebaliknya
+    nomor_clean = nomor.replace("@s.whatsapp.net", "").replace("@c.us", "").strip()
+    pu = con.execute(
+        "SELECT p.*, pk.nama as paket_nama, pk.kecepatan FROM pppoe_users p "
+        "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+        "WHERE p.user_id=? AND (p.telepon=? OR p.telepon=? OR p.telepon=?)",
+        (user_id, nomor_clean,
+         "0" + nomor_clean[2:] if nomor_clean.startswith("62") else "62" + nomor_clean[1:],
+         nomor_clean)
+    ).fetchone()
+
+    # Jika nomor tidak terdaftar sebagai pelanggan tenant ini, abaikan
+    if not pu:
+        return None
+
+    isp = db.get_user(user_id)
+    isp_nama = isp["nama"] if isp else "ISP"
+
+    if keyword in ("menu", "help", "bantuan", "halo", "hi", "hello"):
+        nama = pu["nama_pelanggan"] if pu else "Pelanggan"
+        return (
+            f"Halo *{nama}*! 👋\n\n"
+            f"Selamat datang di layanan pelanggan *{isp_nama}*.\n\n"
+            f"Ketik salah satu perintah berikut:\n"
+            f"📋 *TAGIHAN* — Cek tagihan bulan ini\n"
+            f"💳 *BAYAR* — Dapat link pembayaran\n"
+            f"📡 *STATUS* — Cek status koneksi\n"
+            f"ℹ️ *INFO* — Info paket & akun\n\n"
+            f"_Nomor Anda: {nomor_clean}_"
+        )
+
+    if not pu:
+        return (
+            f"Maaf, nomor *{nomor_clean}* tidak terdaftar sebagai pelanggan *{isp_nama}*.\n\n"
+            f"Hubungi admin untuk informasi lebih lanjut."
+        )
+
+    pu = dict(pu)
+    bulan = date.today().strftime("%Y-%m")
+    tagihan_list = db.list_tagihan(user_id, bulan)
+    tagihan = next((t for t in tagihan_list if t["pppoe_id"] == pu["id"]), None)
+    con.close()
+
+    if keyword in ("tagihan", "invoice", "cek tagihan", "cek"):
+        if not tagihan:
+            return (
+                f"Halo *{pu['nama_pelanggan']}*,\n\n"
+                f"Belum ada tagihan bulan ini untuk akun *{pu['username']}*.\n"
+                f"Tagihan akan muncul pada tgl *{pu.get('tgl_bayar', 1)}* setiap bulan."
+            )
+        status_label = {"paid": "✅ Lunas", "unpaid": "⏳ Belum Bayar", "overdue": "❗ Terlambat"}.get(tagihan["status"], tagihan["status"])
+        return (
+            f"📋 *Tagihan Bulan Ini*\n\n"
+            f"Nama: *{pu['nama_pelanggan']}*\n"
+            f"Paket: *{pu.get('paket_nama') or '-'}*\n"
+            f"Nominal: *Rp {tagihan['amount']:,}*\n"
+            f"Status: {status_label}\n"
+            f"Jatuh Tempo: tgl *{(pu.get('tgl_bayar', 1) or 1) + (isp.get('grace_period') or 10)}*\n\n"
+            f"Ketik *BAYAR* untuk link pembayaran."
+        ).replace(",", ".")
+
+    if keyword in ("bayar", "payment", "pay", "link bayar", "link"):
+        if tagihan and tagihan["status"] == "paid":
+            return f"✅ Tagihan bulan ini sudah *LUNAS*. Terima kasih *{pu['nama_pelanggan']}*!"
+        if not tagihan:
+            return f"Belum ada tagihan aktif untuk akun *{pu['username']}* bulan ini."
+        link = f"https://{APP_DOMAIN}/bayar/tagihan/{tagihan['id']}"
+        return (
+            f"💳 *Link Pembayaran*\n\n"
+            f"Halo *{pu['nama_pelanggan']}*,\n"
+            f"Nominal: *Rp {tagihan['amount']:,}*\n\n"
+            f"Klik link berikut untuk bayar:\n{link}\n\n"
+            f"_Link berlaku 24 jam._"
+        ).replace(",", ".")
+
+    if keyword in ("status", "koneksi", "cek status", "online"):
+        online_set = db.get_all_online_usernames()
+        is_online = pu["username"] in online_set
+        status_akun = {"aktif": "✅ Aktif", "suspended": "⛔ Suspended", "nonaktif": "❌ Nonaktif"}.get(pu["status"], pu["status"])
+        koneksi = "🟢 *Online*" if is_online else "🔴 *Offline*"
+        return (
+            f"📡 *Status Koneksi*\n\n"
+            f"Nama: *{pu['nama_pelanggan']}*\n"
+            f"Username: `{pu['username']}`\n"
+            f"Paket: *{pu.get('paket_nama') or '-'}* ({pu.get('kecepatan') or '-'})\n"
+            f"Status Akun: {status_akun}\n"
+            f"Koneksi: {koneksi}"
+        )
+
+    if keyword in ("info", "paket", "akun", "profil"):
+        return (
+            f"ℹ️ *Info Akun*\n\n"
+            f"Nama: *{pu['nama_pelanggan']}*\n"
+            f"Username: `{pu['username']}`\n"
+            f"Paket: *{pu.get('paket_nama') or '-'}* ({pu.get('kecepatan') or '-'})\n"
+            f"Tgl Bayar: setiap tgl *{pu.get('tgl_bayar', 1)}*\n"
+            f"Status: *{pu['status']}*"
+        )
+
+    # Perintah tidak dikenali — tapi pelanggan terdaftar, kirim panduan
+    return (
+        "Maaf, perintah tidak dikenali. 😅\n\n"
+        "Ketik salah satu perintah:\n"
+        "📋 *TAGIHAN* · 💳 *BAYAR* · 📡 *STATUS* · ℹ️ *INFO* · 📖 *MENU*"
+    )
+
+
+@app.post("/wa/chatbot/{token}")
+async def wa_chatbot_webhook(request: Request, token: str):
+    """Webhook WuzAPI — terima pesan masuk dari pelanggan."""
+    import json as _json
+    # WuzAPI kirim sebagai form-urlencoded: instanceName=...&jsonData={...}
+    try:
+        form = await request.form()
+        json_data_str = form.get("jsonData", "")
+        if not json_data_str:
+            # fallback: coba parse sebagai JSON
+            body = await request.json()
+            json_data_str = body.get("jsonData", "")
+    except Exception:
+        try:
+            body = await request.json()
+            json_data_str = body.get("jsonData", "")
+        except Exception:
+            return JSONResponse({"ok": False})
+
+    # Cari user_id berdasarkan token WA
+    con = db._conn()
+    isp_row = con.execute(
+        "SELECT u.id FROM users u "
+        "JOIN wa_gateway wg ON wg.user_id = u.id "
+        "WHERE wg.wa_token=? AND u.status='aktif'", (token,)
+    ).fetchone()
+    con.close()
+
+    if not isp_row:
+        return JSONResponse({"ok": False})
+    user_id = isp_row[0]
+
+    # Cek addon ai_chat aktif
+    con2 = db._conn()
+    addon_aktif = con2.execute(
+        "SELECT ta.id FROM tenant_addons ta "
+        "JOIN addons a ON a.id=ta.addon_id "
+        "WHERE ta.user_id=? AND a.code='ai_chat' AND ta.status='active'", (user_id,)
+    ).fetchone()
+    con2.close()
+    if not addon_aktif:
+        return JSONResponse({"ok": False})
+
+    # Parse jsonData string → event object
+    try:
+        event_obj = _json.loads(json_data_str) if json_data_str else {}
+    except Exception:
+        event_obj = {}
+
+    event = event_obj.get("event", event_obj)
+    info = event.get("Info", {})
+
+    if info.get("IsFromMe"):
+        return JSONResponse({"ok": True})  # Abaikan pesan dari diri sendiri
+
+    if info.get("IsGroup"):
+        return JSONResponse({"ok": True})  # Abaikan pesan grup
+
+    sender_alt = info.get("SenderAlt", "")
+    nomor = sender_alt.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("@lid", "")
+    if not nomor:
+        # fallback ke Chat field
+        chat = info.get("Chat", "")
+        nomor = chat.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("@lid", "")
+    if not nomor:
+        return JSONResponse({"ok": False})
+
+    message = event.get("Message", {})
+    teks = (
+        message.get("conversation") or
+        (message.get("extendedTextMessage") or {}).get("text") or ""
+    ).strip()
+
+    if not teks:
+        return JSONResponse({"ok": True})
+
+    balasan = _chatbot_reply(user_id, nomor, teks)
+    if not balasan:
+        return JSONResponse({"ok": True})  # Nomor tidak terdaftar, diam saja
+
+    send_wa(nomor, balasan, token=token)
+    return JSONResponse({"ok": True})
+
 def _vpncmd(cmd: str) -> str:
     """Jalankan perintah vpncmd ke SoftEther server."""
     import subprocess
@@ -3906,7 +4926,9 @@ def _vpn_user_exists(vpn_username: str) -> bool:
 async def addons_page(request: Request, ok: str = "", err: str = ""):
     user = require_login(request)
     con = _addon_db()
-    addons = [dict(r) for r in con.execute("SELECT * FROM addons WHERE is_active=1 ORDER BY kategori, harga").fetchall()]
+    addons = [dict(r) for r in con.execute(
+        "SELECT * FROM addons WHERE is_active=1 AND code IN ('ai_chat','laporan_pro') ORDER BY harga"
+    ).fetchall()]
     aktif = {r["addon_id"]: dict(r) for r in con.execute(
         "SELECT * FROM tenant_addons WHERE user_id=? AND status='active'", (user["id"],)
     ).fetchall()}
@@ -3915,10 +4937,12 @@ async def addons_page(request: Request, ok: str = "", err: str = ""):
     con.close()
     servers = db.list_servers(user["id"])
     server = servers[0] if servers else None
+    gw = db.get_wa_gateway(user["id"])
+    wa_token_aktif = gw.get("wa_token") if gw else None
     return tpl.TemplateResponse(request, "addons.html", {
         "request": request, "active": "addons", "user": user,
         "addons": addons, "aktif": aktif, "vpn_akun": vpn_akun,
-        "server": server,
+        "server": server, "wa_token_aktif": wa_token_aktif,
         "ok": ok, "err": err,
     })
 
@@ -3970,6 +4994,13 @@ async def addon_aktifkan(request: Request, addon_id: int):
             (user["id"], vpn_user, vpn_pass)
         )
 
+    # Jika AI Chat → set webhook WuzAPI
+    if addon["code"] == "ai_chat":
+        gw = db.get_wa_gateway(user["id"])
+        if gw and gw.get("wa_token"):
+            webhook_url = f"https://{APP_DOMAIN}/wa/chatbot/{gw['wa_token']}"
+            _wa_set_webhook(gw["wa_token"], webhook_url)
+
     con.commit()
     con.close()
     return JSONResponse({"ok": True, "msg": f"Add-on '{addon['nama']}' berhasil diaktifkan!"})
@@ -3989,11 +5020,17 @@ async def addon_nonaktifkan(request: Request, addon_id: int):
         (user["id"], addon_id)
     )
 
-    if dict(addon)["code"] == "vpn_remote":
+    addon_dict = dict(addon)
+    if addon_dict["code"] == "vpn_remote":
         vpn = con.execute("SELECT vpn_username FROM vpn_users WHERE user_id=?", (user["id"],)).fetchone()
         if vpn:
             _vpn_delete_user(vpn["vpn_username"])
             con.execute("UPDATE vpn_users SET status='inactive' WHERE user_id=?", (user["id"],))
+
+    if addon_dict["code"] == "ai_chat":
+        gw = db.get_wa_gateway(user["id"])
+        if gw and gw.get("wa_token"):
+            _wa_set_webhook(gw["wa_token"], "")
 
     con.commit()
     con.close()

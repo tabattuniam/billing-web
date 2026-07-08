@@ -37,11 +37,13 @@
   </div>
   <div class="card p-5 {% if estimasi > 0 %}border-violet-200{% endif %}">
     <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Estimasi Bulan Ini</p>
-    {% if estimasi > 0 %}
-    <p class="text-2xl font-extrabold text-violet-700">{{ estimasi | rp }}</p>
+    {% set estimasi_total = estimasi + (20000 if user.fitur_hotspot_bulanan else 0) %}
+    {% if estimasi_total > 0 %}
+    <p class="text-2xl font-extrabold text-violet-700">{{ estimasi_total | rp }}</p>
     <p class="text-xs text-gray-400 mt-1">
       {% if n_pppoe * tarif < minimum %}Minimum {{ minimum | rp }}
       {% else %}{{ n_pppoe }} × {{ tarif | rp }}{% endif %}
+      {% if user.fitur_hotspot_bulanan %} + Addon Rp 20.000{% endif %}
     </p>
     {% else %}
     <p class="text-2xl font-extrabold text-gray-300">—</p>
@@ -62,6 +64,7 @@
         <tr>
           <th class="th">Bulan</th>
           <th class="th text-right">PPPoE</th>
+          <th class="th text-right">Addon</th>
           <th class="th text-right">Total</th>
           <th class="th text-center">Status</th>
           <th class="th text-right">Tanggal Bayar</th>
@@ -73,6 +76,11 @@
         <tr id="row-{{ tg.id }}" class="hover:bg-gray-50">
           <td class="td font-semibold text-gray-800">{{ tg.bulan }}</td>
           <td class="td text-right text-gray-600">{{ tg.jumlah_pppoe }}</td>
+          <td class="td text-right text-xs text-gray-500">
+            {% if tg.addon_hotspot_bulanan %}
+              <span class="badge" style="background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe">Hotspot Bulanan</span>
+            {% else %}—{% endif %}
+          </td>
           <td class="td text-right font-bold text-violet-700">{{ tg.total | rp }}</td>
           <td class="td text-center">
             {% if tg.status == 'paid' %}
@@ -115,7 +123,8 @@
 
 <div class="mt-4 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
   <strong>Cara kerja:</strong> Tagihan dihitung per pelanggan PPPoE aktif × Rp {{ tarif | rp }}.
-  Minimum Rp {{ minimum | rp }}/bulan. Bayar via saldo platform atau transfer QRIS.
+  Minimum Rp {{ minimum | rp }}/bulan.{% if user.fitur_hotspot_bulanan %} + Addon Hotspot Bulanan Rp 20.000/bulan.{% endif %}
+  Bayar via saldo platform atau transfer QRIS.
 </div>
 
 <!-- Modal Pilihan Bayar -->

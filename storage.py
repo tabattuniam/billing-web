@@ -94,6 +94,19 @@ class Storage:
         u_cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
         if "qris_image" not in u_cols:
             con.execute("ALTER TABLE users ADD COLUMN qris_image TEXT DEFAULT ''")
+        if "auto_reminder" not in u_cols:
+            con.execute("ALTER TABLE users ADD COLUMN auto_reminder INTEGER DEFAULT 1")
+        if "grace_period" not in u_cols:
+            con.execute("ALTER TABLE users ADD COLUMN grace_period INTEGER DEFAULT 10")
+            con.commit()
+        if "fitur_hotspot_bulanan" not in u_cols:
+            con.execute("ALTER TABLE users ADD COLUMN fitur_hotspot_bulanan INTEGER DEFAULT 0")
+            con.commit()
+
+        st_cols = {r[1] for r in con.execute("PRAGMA table_info(saas_tagihan)")}
+        if "addon_hotspot_bulanan" not in st_cols:
+            con.execute("ALTER TABLE saas_tagihan ADD COLUMN addon_hotspot_bulanan INTEGER DEFAULT 0")
+            con.commit()
 
         to_cols = {r[1] for r in con.execute("PRAGMA table_info(topup_orders)")}
         if "tipe" not in to_cols:
@@ -495,6 +508,19 @@ class Storage:
             updated_at  INTEGER
         );
 
+        -- Log pengiriman WA
+        CREATE TABLE IF NOT EXISTS wa_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     TEXT,
+            nomor       TEXT,
+            tipe        TEXT DEFAULT '',
+            pesan       TEXT,
+            status      TEXT DEFAULT 'sent',
+            error       TEXT DEFAULT '',
+            token       TEXT DEFAULT '',
+            created_at  INTEGER
+        );
+
         -- Registrasi tenant ISP dari vpntunel.my.id/daftar
         CREATE TABLE IF NOT EXISTS tenant_registrasi (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -815,20 +841,29 @@ class Storage:
 
     # ── PPPoE Users ──────────────────────────────────────────────────────────
 
-    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0, tgl_mulai=None) -> int:
+    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0, tgl_mulai=None, terpasang=0) -> int:
         now = int(time.time())
         tgl_mulai = tgl_mulai or now
         con = self._conn()
         cur = con.execute(
-            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at,tgl_mulai) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, now, tgl_mulai)
+            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at,tgl_mulai,terpasang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, now, tgl_mulai, terpasang)
         )
         con.commit()
         pid = cur.lastrowid
         con.close()
         return pid
 
-    def list_pppoe_users(self, user_id: str, server_id: str = None, odp_id: int = None) -> list[dict]:
+    def set_terpasang(self, pid: int, terpasang: int = 1):
+        con = self._conn()
+        con.execute("UPDATE pppoe_users SET terpasang=? WHERE id=?", (terpasang, pid))
+        con.commit()
+        con.close()
+
+    def list_pppoe_users(self, user_id: str, server_id: str = None, odp_id: int = None,
+                          status: str = None, q: str = None,
+                          terpasang: int = None, pppoe_ids: list = None,
+                          limit: int = None, offset: int = 0) -> list[dict]:
         con = self._conn()
         base = ("SELECT p.*, pk.nama as paket_nama, pk.kecepatan, "
                 "s.nama as server_nama, o.nama as odp_nama "
@@ -844,10 +879,62 @@ class Storage:
         if odp_id is not None:
             base += " AND p.odp_id=?"
             args.append(odp_id)
+        if status:
+            base += " AND p.status=?"
+            args.append(status)
+        if terpasang is not None:
+            base += " AND p.terpasang=?"
+            args.append(terpasang)
+        if pppoe_ids is not None:
+            if not pppoe_ids:
+                con.close()
+                return []
+            placeholders = ",".join("?" * len(pppoe_ids))
+            base += f" AND p.id IN ({placeholders})"
+            args += list(pppoe_ids)
+        if q:
+            base += " AND (LOWER(p.nama_pelanggan) LIKE ? OR LOWER(p.username) LIKE ? OR p.telepon LIKE ?)"
+            pat = f"%{q.lower()}%"
+            args += [pat, pat, pat]
         base += " ORDER BY p.nama_pelanggan"
+        if limit is not None:
+            base += f" LIMIT {int(limit)} OFFSET {int(offset)}"
         rows = con.execute(base, args).fetchall()
         con.close()
         return [dict(r) for r in rows]
+
+    def count_pppoe_users(self, user_id: str, server_id: str = None, odp_id: int = None,
+                           status: str = None, q: str = None,
+                           terpasang: int = None, pppoe_ids: list = None) -> int:
+        con = self._conn()
+        base = "SELECT COUNT(*) FROM pppoe_users p WHERE p.user_id=?"
+        args: list = [user_id]
+        if server_id:
+            base += " AND p.server_id=?"
+            args.append(server_id)
+        if odp_id is not None:
+            base += " AND p.odp_id=?"
+            args.append(odp_id)
+        if status:
+            base += " AND p.status=?"
+            args.append(status)
+        if terpasang is not None:
+            base += " AND p.terpasang=?"
+            args.append(terpasang)
+        if pppoe_ids is not None:
+            if not pppoe_ids:
+                con.close()
+                return 0
+            placeholders = ",".join("?" * len(pppoe_ids))
+            base += f" AND p.id IN ({placeholders})"
+            args += list(pppoe_ids)
+        if q:
+            base += " AND (LOWER(p.nama_pelanggan) LIKE ? OR LOWER(p.username) LIKE ? OR p.telepon LIKE ?)"
+            pat = f"%{q.lower()}%"
+            args += [pat, pat, pat]
+        n = con.execute(base, args).fetchone()[0]
+        con.close()
+        return n
 
     def get_pppoe_user(self, pid: int) -> dict | None:
         con = self._conn()
@@ -872,13 +959,21 @@ class Storage:
         con.close()
 
     def update_pppoe_status(self, pid: int, status: str):
+        import time as _t
         con = self._conn()
-        con.execute("UPDATE pppoe_users SET status=? WHERE id=?", (status, pid))
+        if status == "suspended":
+            con.execute(
+                "UPDATE pppoe_users SET status=?, isolated_at=? WHERE id=?",
+                (status, int(_t.time()), pid)
+            )
+        else:
+            con.execute("UPDATE pppoe_users SET status=? WHERE id=?", (status, pid))
         con.commit()
         con.close()
 
     def delete_pppoe_user(self, pid: int):
         con = self._conn()
+        con.execute("DELETE FROM tagihan_pppoe WHERE pppoe_id=?", (pid,))
         con.execute("DELETE FROM pppoe_users WHERE id=?", (pid,))
         con.commit()
         con.close()
@@ -1092,6 +1187,21 @@ class Storage:
         con.commit()
         con.close()
         return kodes
+
+    def create_voucher_single(self, user_id: str, server_id: str, paket_id: int, kode: str, comment: str = "") -> bool:
+        """Insert one voucher with a specific kode. Returns False if kode already exists."""
+        con = self._conn()
+        exists = con.execute("SELECT id FROM voucher_hotspot WHERE kode=?", (kode,)).fetchone()
+        if exists:
+            con.close()
+            return False
+        con.execute(
+            "INSERT INTO voucher_hotspot (user_id,server_id,paket_id,kode,comment,created_at) VALUES (?,?,?,?,?,?)",
+            (user_id, server_id, paket_id, kode, comment, int(time.time()))
+        )
+        con.commit()
+        con.close()
+        return True
 
     def set_voucher_mt_pushed(self, kode: str, pushed: bool = True):
         con = self._conn()
@@ -1432,6 +1542,21 @@ class Storage:
         con.commit()
         con.close()
         return row
+
+    def hapus_tarik_saldo(self, rid: int, user_id: str) -> bool:
+        """Hapus request tarik saldo milik sendiri yang masih pending."""
+        con = self._conn()
+        self._ensure_tarik_saldo_table(con)
+        row = con.execute(
+            "SELECT id FROM tarik_saldo WHERE id=? AND user_id=? AND status='pending'", (rid, user_id)
+        ).fetchone()
+        if not row:
+            con.close()
+            return False
+        con.execute("DELETE FROM tarik_saldo WHERE id=?", (rid,))
+        con.commit()
+        con.close()
+        return True
 
     def list_tarik_saldo_all(self) -> list[dict]:
         """SA: list semua tarik saldo dari semua tenant ISP."""
@@ -1895,20 +2020,39 @@ class Storage:
 
     # ── Tagihan PPPoE ─────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _hitung_prorate(harga: int, tgl_mulai_ts: int, bulan: str, tgl_bayar_hari: int) -> int:
+        """Hitung nominal prorate tagihan pertama.
+        Dari tgl_mulai sampai tgl_bayar di bulan tagihan."""
+        import datetime as _dt
+        try:
+            year, month = int(bulan[:4]), int(bulan[5:7])
+            tgl_bayar_hari = max(1, min(tgl_bayar_hari or 1, 28))
+            end_date   = _dt.date(year, month, tgl_bayar_hari)
+            start_date = _dt.date.fromtimestamp(tgl_mulai_ts)
+            days = (end_date - start_date).days
+            if days <= 0 or days >= 30:
+                return harga  # edge case → full
+            # Bulatkan ke kelipatan 500 terdekat
+            raw = harga * days / 30
+            return max(500, round(raw / 500) * 500)
+        except Exception:
+            return harga
+
     def generate_tagihan(self, user_id: str, bulan: str, tgl_bayar: int = None) -> int:
         """Buat tagihan pelanggan aktif untuk bulan tertentu.
-        Jika tgl_bayar diisi, hanya buat untuk pelanggan dengan tgl_bayar tersebut."""
+        Tagihan pertama dihitung prorate dari tgl_mulai ke tgl_bayar."""
         con = self._conn()
         if tgl_bayar:
             pelanggan = con.execute(
-                "SELECT p.id, p.paket_id, pk.harga FROM pppoe_users p "
+                "SELECT p.id, p.paket_id, p.tgl_mulai, p.tgl_bayar, pk.harga FROM pppoe_users p "
                 "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
                 "WHERE p.user_id=? AND p.status='aktif' AND p.tgl_bayar=?",
                 (user_id, tgl_bayar)
             ).fetchall()
         else:
             pelanggan = con.execute(
-                "SELECT p.id, p.paket_id, pk.harga FROM pppoe_users p "
+                "SELECT p.id, p.paket_id, p.tgl_mulai, p.tgl_bayar, pk.harga FROM pppoe_users p "
                 "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
                 "WHERE p.user_id=? AND p.status='aktif'", (user_id,)
             ).fetchall()
@@ -1916,10 +2060,19 @@ class Storage:
         dibuat = 0
         for p in pelanggan:
             harga = p["harga"] or 0
+            # Cek apakah ini tagihan pertama (belum pernah ada tagihan sebelumnya)
+            prev = con.execute(
+                "SELECT COUNT(*) FROM tagihan_pppoe WHERE pppoe_id=? AND bulan<?",
+                (p["id"], bulan)
+            ).fetchone()[0]
+            if prev == 0 and p["tgl_mulai"]:
+                amount = self._hitung_prorate(harga, p["tgl_mulai"], bulan, p["tgl_bayar"] or 1)
+            else:
+                amount = harga
             try:
                 con.execute(
                     "INSERT OR IGNORE INTO tagihan_pppoe (user_id,pppoe_id,bulan,amount,created_at) VALUES (?,?,?,?,?)",
-                    (user_id, p["id"], bulan, harga, now)
+                    (user_id, p["id"], bulan, amount, now)
                 )
                 if con.execute("SELECT changes()").fetchone()[0]:
                     dibuat += 1
@@ -1932,6 +2085,7 @@ class Storage:
     def list_tagihan(self, user_id: str, bulan: str = None, status: str = None) -> list[dict]:
         con = self._conn()
         q = """SELECT t.*, p.nama_pelanggan, p.telepon, p.username as pppoe_username,
+                      p.tgl_bayar,
                       pk.nama as paket_nama, pk.kecepatan, s.nama as server_nama
                FROM tagihan_pppoe t
                LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
@@ -2013,19 +2167,35 @@ class Storage:
         con.close()
         return True
 
-    def tagihan_overdue(self, user_id: str, bulan: str, hari_ini: int) -> int:
-        """Tandai tagihan unpaid yang sudah lewat jatuh tempo sebagai overdue. Return jumlah."""
+    def tagihan_overdue(self, user_id: str, bulan: str, hari_ini: int = None) -> int:
+        """Tandai tagihan unpaid yang sudah melewati jatuh tempo (tgl_bayar + grace_period)
+        sebagai overdue, sekaligus suspend pppoe_users. Return jumlah."""
+        from datetime import date, timedelta
+        import calendar as _cal
+        today = date.today()
+        year, month = int(bulan[:4]), int(bulan[5:])
         con = self._conn()
-        # Cari tagihan unpaid bulan ini yang tgl_bayar sudah lewat
+        # Ambil grace_period tenant (default 10)
+        gp_row = con.execute("SELECT grace_period FROM users WHERE id=?", (user_id,)).fetchone()
+        grace_period = (gp_row["grace_period"] if gp_row and gp_row["grace_period"] is not None else 10)
         rows = con.execute("""
-            SELECT t.id FROM tagihan_pppoe t
+            SELECT t.id, t.pppoe_id, p.tgl_bayar FROM tagihan_pppoe t
             LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
-            WHERE t.user_id=? AND t.bulan=? AND t.status='unpaid' AND p.tgl_bayar < ?
-        """, (user_id, bulan, hari_ini)).fetchall()
+            WHERE t.user_id=? AND t.bulan=? AND t.status='unpaid'
+        """, (user_id, bulan)).fetchall()
         n = 0
         for r in rows:
-            con.execute("UPDATE tagihan_pppoe SET status='overdue' WHERE id=?", (r[0],))
-            n += 1
+            tgl_bayar = r["tgl_bayar"] or 1
+            max_day = _cal.monthrange(year, month)[1]
+            tgl_bayar_actual = min(tgl_bayar, max_day)
+            try:
+                jatuh_tempo = date(year, month, tgl_bayar_actual) + timedelta(days=grace_period)
+            except ValueError:
+                continue
+            if today >= jatuh_tempo:
+                con.execute("UPDATE tagihan_pppoe SET status='overdue' WHERE id=?", (r["id"],))
+                con.execute("UPDATE pppoe_users SET status='suspended' WHERE id=? AND status='aktif'", (r["pppoe_id"],))
+                n += 1
         con.commit()
         con.close()
         return n
@@ -2270,9 +2440,16 @@ class Storage:
             ts_start = int(time.mktime((tahun, bulan, d, 0, 0, 0, 0, 0, -1)))
             ts_end   = int(time.mktime((tahun, bulan, d, 23, 59, 59, 0, 0, -1)))
             tgl_str  = f"{tahun_bulan}-{str(d).zfill(2)}"
-            pppoe = con.execute(
+            pppoe_manual = con.execute(
                 "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM tagihan_pppoe "
-                "WHERE user_id=? AND status='paid' AND paid_at BETWEEN ? AND ?",
+                "WHERE user_id=? AND status='paid' AND paid_at BETWEEN ? AND ? "
+                "AND (metode_bayar='Manual' OR metode_bayar='' OR metode_bayar IS NULL)",
+                (user_id, ts_start, ts_end)
+            ).fetchone()
+            pppoe_online = con.execute(
+                "SELECT COALESCE(SUM(amount),0), COUNT(*) FROM tagihan_pppoe "
+                "WHERE user_id=? AND status='paid' AND paid_at BETWEEN ? AND ? "
+                "AND metode_bayar NOT IN ('Manual', '', '') AND metode_bayar IS NOT NULL AND metode_bayar != ''",
                 (user_id, ts_start, ts_end)
             ).fetchone()
             voucher = con.execute(
@@ -2285,24 +2462,49 @@ class Storage:
                 "WHERE isp_id=? AND tipe='manual' AND status='paid' AND paid_at BETWEEN ? AND ?",
                 (user_id, ts_start, ts_end)
             ).fetchone()
-            omzet_pppoe   = pppoe[0] if pppoe else 0
+            omzet_pppoe_manual = pppoe_manual[0] if pppoe_manual else 0
+            omzet_pppoe_online = pppoe_online[0] if pppoe_online else 0
+            omzet_pppoe   = omzet_pppoe_manual + omzet_pppoe_online
             omzet_voucher = voucher[0] if voucher else 0
             omzet_topup   = topup[0] if topup else 0
-            total_gw      = omzet_pppoe + omzet_voucher
-            total_semua   = total_gw + omzet_topup
+            total_semua   = omzet_pppoe + omzet_voucher + omzet_topup
             result.append({
-                "tgl":           tgl_str,
-                "hari":          d,
-                "omzet_pppoe":   omzet_pppoe,
-                "lunas_pppoe":   pppoe[1] if pppoe else 0,
-                "omzet_voucher": omzet_voucher,
-                "lunas_voucher": voucher[1] if voucher else 0,
-                "omzet_topup":   omzet_topup,
-                "total_gw":      total_gw,
-                "total":         total_semua,
+                "tgl":                tgl_str,
+                "hari":               d,
+                "omzet_pppoe":        omzet_pppoe,
+                "omzet_pppoe_manual": omzet_pppoe_manual,
+                "omzet_pppoe_online": omzet_pppoe_online,
+                "lunas_pppoe":        (pppoe_manual[1] if pppoe_manual else 0) + (pppoe_online[1] if pppoe_online else 0),
+                "lunas_pppoe_manual": pppoe_manual[1] if pppoe_manual else 0,
+                "lunas_pppoe_online": pppoe_online[1] if pppoe_online else 0,
+                "omzet_voucher":      omzet_voucher,
+                "lunas_voucher":      voucher[1] if voucher else 0,
+                "omzet_topup":        omzet_topup,
+                "total":              total_semua,
             })
         con.close()
         return result
+
+    def laporan_riwayat_bayar(self, user_id: str, bulan: str, metode: str = "") -> list[dict]:
+        """Riwayat detail pembayaran tagihan PPPoE per bulan, bisa filter metode."""
+        con = self._conn()
+        q = """SELECT t.id, t.bulan, t.amount, t.status, t.paid_at,
+                      t.metode_bayar, t.keterangan_bayar,
+                      p.nama_pelanggan, p.telepon, p.username as pppoe_username,
+                      pk.nama as paket_nama
+               FROM tagihan_pppoe t
+               LEFT JOIN pppoe_users p ON p.id = t.pppoe_id
+               LEFT JOIN paket_pppoe pk ON pk.id = p.paket_id
+               WHERE t.user_id=? AND t.bulan=? AND t.status='paid'"""
+        args = [user_id, bulan]
+        if metode == "manual":
+            q += " AND (t.metode_bayar='Manual' OR t.metode_bayar='' OR t.metode_bayar IS NULL)"
+        elif metode == "online":
+            q += " AND t.metode_bayar NOT IN ('Manual','') AND t.metode_bayar IS NOT NULL AND t.metode_bayar != ''"
+        q += " ORDER BY t.paid_at DESC"
+        rows = con.execute(q, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
 
     # ── Hotspot Bulanan ───────────────────────────────────────────────────────
 
@@ -2648,3 +2850,48 @@ class Storage:
             "total": total, "aktif": aktif, "nonaktif": nonaktif,
             "overdue": overdue, "jatuh_hari_ini": jatuh_hari_ini, "omzet": omzet
         }
+
+    def add_wa_log(self, user_id: str, nomor: str, tipe: str, pesan: str,
+                   status: str, error: str = "", token: str = "") -> int:
+        import time as _time
+        con = self._conn()
+        cur = con.execute(
+            "INSERT INTO wa_log (user_id,nomor,tipe,pesan,status,error,token,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (user_id, nomor, tipe, pesan, status, error, token, int(_time.time()))
+        )
+        lid = cur.lastrowid
+        con.commit()
+        con.close()
+        return lid
+
+    def list_wa_log(self, user_id: str, tipe: str = "", status: str = "",
+                    q: str = "", limit: int = 200) -> list[dict]:
+        con = self._conn()
+        sql = "SELECT * FROM wa_log WHERE user_id=?"
+        args = [user_id]
+        if tipe:
+            sql += " AND tipe=?"
+            args.append(tipe)
+        if status:
+            sql += " AND status=?"
+            args.append(status)
+        if q:
+            sql += " AND (nomor LIKE ? OR pesan LIKE ?)"
+            args += [f"%{q}%", f"%{q}%"]
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        args.append(limit)
+        rows = con.execute(sql, args).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_wa_log(self, lid: int) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM wa_log WHERE id=?", (lid,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def delete_wa_log(self, lid: int, user_id: str) -> bool:
+        con = self._conn()
+        cur = con.execute("DELETE FROM wa_log WHERE id=? AND user_id=?", (lid, user_id))
+        con.commit(); con.close()
+        return cur.rowcount > 0

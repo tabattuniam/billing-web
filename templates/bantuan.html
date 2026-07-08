@@ -18,9 +18,9 @@
     <div class="flex flex-wrap gap-2">
       {% set nav_items = [
         ('#mulai','Memulai'),('#server','Router MikroTik'),('#pppoe','PPPoE'),
-        ('#hotspot','Hotspot Voucher'),('#agen','Sistem Agen'),('#wa','WhatsApp Gateway'),
-        ('#store','Halaman Beli'),('#teknisi','Teknisi'),('#saldo','Saldo & Topup'),
-        ('#profil','Profil')
+        ('#reminder','Reminder Tagihan'),('#hotspot','Hotspot Voucher'),('#agen','Sistem Agen'),
+        ('#wa','WhatsApp Gateway'),('#store','Halaman Beli'),('#teknisi','Teknisi'),
+        ('#saldo','Saldo & Topup'),('#profil','Profil'),('#faq','FAQ'),('#troubleshoot','Troubleshooting')
       ] %}
       {% for href, label in nav_items %}
       <a href="{{ href }}" class="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium transition-colors">{{ label }}</a>
@@ -74,45 +74,261 @@
   <div id="pppoe" class="card p-6 mb-5">
     <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
       <span class="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center text-sm">📡</span>
-      PPPoE
+      PPPoE (Point-to-Point Protocol over Ethernet)
     </h2>
     <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Paket PPPoE</p>
-        <p>Buat paket layanan PPPoE (nama, kecepatan upload/download, harga bulanan). Paket bisa diimpor langsung dari profile MikroTik yang sudah ada.</p>
+        <p class="font-semibold text-gray-700 mb-2">🌐 Apa itu PPPoE?</p>
+        <p>PPPoE adalah teknologi koneksi internet untuk pelanggan rumahan/dedicated. Pelanggan menggunakan <strong>username & password</strong> untuk dial koneksi ke router ISP. Cocok untuk layanan internet bulanan dengan tagihan berlangganan.</p>
+        <div class="bg-blue-50 rounded-lg p-3 mt-2 text-xs">
+          <strong>Contoh use case:</strong> ISP rumahan, RT/RW Net dengan pelanggan tetap, layanan dedicated internet.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">1️⃣ Paket PPPoE</p>
+        <p>Buat paket layanan PPPoE dengan menentukan:</p>
         <ul class="list-disc ml-4 mt-2 space-y-1">
-          <li>Klik <strong>Import dari MikroTik</strong> untuk mengambil daftar profile PPPoE dari router</li>
-          <li>Paket yang dibuat di sini digunakan saat mendaftarkan pelanggan baru</li>
+          <li><strong>Nama Paket</strong> — misal: "10 Mbps Unlimited", "20 Mbps Premium"</li>
+          <li><strong>Kecepatan Upload</strong> — rate limit upload (misal: 10M = 10 Mbps)</li>
+          <li><strong>Kecepatan Download</strong> — rate limit download (misal: 10M = 10 Mbps)</li>
+          <li><strong>Harga Bulanan</strong> — harga berlangganan per bulan</li>
+          <li><strong>Profile MikroTik</strong> — profile PPPoE yang sudah dibuat di router</li>
+        </ul>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2 text-xs text-yellow-800">
+          <strong>💡 Tips:</strong> Gunakan tombol <strong>Import dari MikroTik</strong> untuk mengambil profile PPPoE yang sudah ada di router. Lebih cepat daripada input manual.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">2️⃣ Tambah Pelanggan PPPoE</p>
+        <p>Daftarkan pelanggan baru ke sistem.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Data yang perlu diisi:</p>
+          <ul class="list-disc ml-4 space-y-1 text-xs">
+            <li><strong>Nama Pelanggan</strong> — nama lengkap pelanggan</li>
+            <li><strong>Username PPPoE</strong> — username untuk dial koneksi (unik, tidak boleh sama)</li>
+            <li><strong>Password PPPoE</strong> — password untuk dial koneksi</li>
+            <li><strong>Server MikroTik</strong> — router yang akan digunakan</li>
+            <li><strong>Paket</strong> — paket layanan yang dipilih</li>
+            <li><strong>Nomor WA</strong> — nomor WhatsApp pelanggan (format: 628xxx, tanpa +/spasi) untuk reminder tagihan</li>
+            <li><strong>Alamat</strong> — alamat pelanggan (opsional)</li>
+            <li><strong>Tanggal Bayar</strong> — tanggal jatuh tempo rutin tiap bulan (misal: 1, 5, 10, dst)</li>
+          </ul>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 text-xs text-emerald-800">
+          <strong>✅ Setelah simpan:</strong> Pelanggan otomatis berstatus <strong>Aktif</strong>. Jangan lupa klik tombol <strong>Push ke MikroTik</strong> untuk membuat secret PPPoE di router.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">3️⃣ Push ke MikroTik</p>
+        <p>Agar pelanggan bisa konek, data PPPoE harus di-push ke router.</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Klik tombol <strong>Push ke MikroTik</strong> di halaman pelanggan</li>
+          <li>Sistem akan membuat <strong>PPP Secret</strong> di router dengan username, password, dan profile yang sudah ditentukan</li>
+          <li>Jika berhasil, badge <span class="px-2 py-0.5 rounded bg-green-100 text-green-700 font-semibold text-xs">MikroTik ✓</span> akan muncul</li>
         </ul>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Pelanggan PPPoE</p>
-        <p>Kelola semua pelanggan PPPoE: tambah, edit, suspend, aktifkan, dan push ke MikroTik.</p>
-        <ul class="list-disc ml-4 mt-2 space-y-1">
-          <li><strong>Tambah Pelanggan</strong> — isi nama, username, password PPPoE, pilih paket & server, isi nomor WA untuk notifikasi tagihan</li>
-          <li><strong>Push ke MikroTik</strong> — membuat secret PPPoE di router secara otomatis</li>
-          <li><strong>Status Online</strong> — ikon hijau menandakan pelanggan sedang terkoneksi</li>
-          <li><strong>Import CSV</strong> — impor banyak pelanggan sekaligus lewat file CSV</li>
-          <li><strong>Tgl Bayar</strong> — tanggal jatuh tempo tiap bulan; sistem akan membuat tagihan otomatis</li>
-        </ul>
+        <p class="font-semibold text-gray-700 mb-2">4️⃣ Status Pelanggan</p>
+        <div class="space-y-2 mt-2">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-semibold">Aktif</span>
+            <span class="text-gray-600">— Pelanggan bisa konek, tagihan berjalan normal</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-3 h-3 rounded-full bg-red-500"></span>
+            <span class="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold">Suspend</span>
+            <span class="text-gray-600">— Pelanggan tidak bisa konek (secret disabled di MikroTik)</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-3 h-3 rounded-full bg-green-400 animate-pulse"></span>
+            <span class="text-gray-600">— Ikon hijau berkedip = pelanggan sedang <strong>online</strong></span>
+          </div>
+        </div>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Tagihan PPPoE</p>
-        <p>Sistem membuat tagihan otomatis setiap bulan. Anda juga bisa generate manual.</p>
-        <ul class="list-disc ml-4 mt-2 space-y-1">
-          <li><strong>Generate Tagihan</strong> — buat tagihan untuk bulan tertentu</li>
-          <li><strong>Kirim Link Bayar</strong> — kirim link QRIS/transfer ke WA pelanggan</li>
-          <li><strong>Tandai Lunas</strong> — tandai tagihan yang sudah dibayar manual</li>
-          <li><strong>Reminder</strong> — kirim WA pengingat ke semua pelanggan yang belum bayar</li>
-          <li>Jika tidak bayar dan melewati jatuh tempo, pelanggan akan otomatis di-<strong>suspend</strong> (PPPoE secret dinonaktifkan)</li>
+        <p class="font-semibold text-gray-700 mb-2">5️⃣ Tagihan PPPoE</p>
+        <p>Sistem membuat tagihan otomatis setiap bulan sesuai tanggal bayar pelanggan.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Fitur Tagihan:</p>
+          <ul class="list-disc ml-4 space-y-1 text-xs">
+            <li><strong>Generate Tagihan Manual</strong> — buat tagihan untuk bulan tertentu jika belum ada</li>
+            <li><strong>Kirim Link Bayar</strong> — kirim link pembayaran online (QRIS/transfer) via WA ke pelanggan</li>
+            <li><strong>Tandai Lunas</strong> — tandai tagihan yang sudah dibayar secara manual (cash/transfer langsung)</li>
+            <li><strong>Reminder</strong> — kirim WA pengingat massal ke semua pelanggan yang belum bayar</li>
+            <li><strong>Filter</strong> — filter tagihan berdasarkan bulan, status (unpaid/paid/overdue)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">6️⃣ Suspend Otomatis</p>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-3 mt-2 text-xs text-red-800">
+          <p class="font-semibold mb-1">⚠️ Sistem Suspend Otomatis</p>
+          <p>Setiap hari jam <strong>03:00 WIB</strong>, sistem akan:</p>
+          <ol class="list-decimal ml-4 mt-1 space-y-0.5">
+            <li>Cek tagihan yang sudah melewati jatuh tempo (status <em>overdue</em>)</li>
+            <li>Suspend pelanggan yang tagihan overdue (disabled secret di MikroTik)</li>
+            <li>Pelanggan tidak bisa konek sampai tagihan dibayar</li>
+          </ol>
+          <p class="mt-2"><strong>Reaktivasi:</strong> Setelah tagihan ditandai lunas, pelanggan otomatis diaktifkan kembali.</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">7️⃣ Tagihan Prorate (Tagihan Pertama)</p>
+        <p>Tagihan <strong>pertama</strong> pelanggan dihitung proporsional dari tanggal pasang sampai tanggal bayar rutin.</p>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 space-y-2 text-xs">
+          <p class="font-semibold text-emerald-900">📐 Rumus Prorate</p>
+          <div class="bg-white rounded-lg px-3 py-2 text-center border border-emerald-100">
+            <span class="font-mono font-bold text-gray-800">Harga ÷ 30 × Jumlah Hari</span>
+            <p class="text-gray-400 mt-0.5">Dibulatkan ke kelipatan Rp 500 terdekat</p>
+          </div>
+          <div class="bg-white rounded-lg px-3 py-2 border border-emerald-100 space-y-1">
+            <p class="font-semibold text-gray-700">Contoh:</p>
+            <p class="text-gray-600">Pasang tgl <strong>20 Juni</strong>, bayar rutin tgl <strong>1</strong>, harga <strong>Rp 200.000</strong></p>
+            <p class="text-gray-600">20 Juni → 1 Juli = <strong>11 hari</strong></p>
+            <p class="text-emerald-700 font-semibold">200.000 ÷ 30 × 11 = Rp 73.333 → <strong>Rp 73.500</strong></p>
+          </div>
+          <p class="text-emerald-600">Tagihan bulan berikutnya normal satu bulan penuh. Prorate tidak berlaku jika selisih ≥ 30 hari.</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">8️⃣ Grace Period (Toleransi Keterlambatan)</p>
+        <p>Jumlah hari tambahan setelah tanggal jatuh tempo sebelum pelanggan masuk status <em>overdue</em> dan otomatis di-suspend.</p>
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mt-2 space-y-2 text-xs">
+          <div class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-indigo-100">
+            <span class="text-gray-500">Default grace period</span>
+            <span class="font-black text-indigo-700 text-sm">10 hari</span>
+          </div>
+          <div class="bg-white rounded-lg px-3 py-2 border border-indigo-100">
+            <p class="font-semibold text-gray-700 mb-1">Contoh:</p>
+            <p class="text-gray-600">Tgl bayar <strong>1</strong>, grace period <strong>10 hari</strong></p>
+            <p class="text-gray-600">→ Jatuh tempo efektif: <strong>tgl 11</strong></p>
+            <p class="text-gray-600">→ Reminder WA dikirim H-3, H-1, H+1 dari tgl 11</p>
+            <p class="text-red-600 font-semibold mt-1">→ Suspend otomatis tgl 12 jam 10:00 jika belum bayar</p>
+          </div>
+          <p class="text-indigo-600">Nilai grace period dapat diubah di halaman <strong>Profil → Grace Period</strong> (min 1, maks 30 hari).</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">9️⃣ Import CSV (Bulk Add)</p>
+        <p>Tambah banyak pelanggan sekaligus dengan file CSV.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Format CSV:</p>
+          <pre class="bg-white border border-gray-300 rounded p-2 text-xs overflow-x-auto">nama,username,password,paket_id,telepon,alamat,tgl_bayar
+Budi,budi123,pass123,1,6281234567890,Jl. Merdeka No.1,1
+Ani,ani456,pass456,2,6289876543210,Jl. Sudirman No.5,5</pre>
+          <p class="text-xs text-gray-600 mt-1">Download template CSV dari halaman Pelanggan PPPoE.</p>
+        </div>
+      </div>
+
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mt-3">
+        <p class="font-semibold text-indigo-900 mb-2 text-sm">📚 Workflow Lengkap PPPoE</p>
+        <ol class="list-decimal ml-4 space-y-1 text-xs text-indigo-800">
+          <li>Buat <strong>Paket PPPoE</strong> (atau import dari MikroTik)</li>
+          <li><strong>Tambah Pelanggan</strong> dengan data lengkap (nama, username, password, nomor WA, tgl bayar)</li>
+          <li><strong>Push ke MikroTik</strong> agar pelanggan bisa konek</li>
+          <li>Pelanggan <strong>dial PPPoE</strong> dengan username/password yang diberikan</li>
+          <li>Sistem <strong>generate tagihan otomatis</strong> setiap bulan sesuai tgl bayar (tagihan pertama dihitung <em>prorate</em>)</li>
+          <li>Sistem kirim <strong>reminder WA</strong> H-3, H-1, H-0, H+1 dari jatuh tempo (jam 08:00 WIB)</li>
+          <li>Jika pelanggan bayar, <strong>tandai lunas</strong> (atau otomatis via payment gateway)</li>
+          <li>Jika tidak bayar melewati grace period (default <strong>10 hari</strong> setelah tgl bayar), <strong>suspend otomatis</strong> jam 10:00 WIB</li>
+        </ol>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── REMINDER TAGIHAN ───────────────────────────────── -->
+  <div id="reminder" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center text-sm">🔔</span>
+      Reminder Tagihan Otomatis
+    </h2>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Cara Kerja Reminder</p>
+        <p>Sistem akan mengirim reminder WA otomatis ke pelanggan PPPoE sesuai jadwal berdasarkan <strong>tanggal jatuh tempo</strong> (bukan tanggal bayar).</p>
+      </div>
+
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4">
+        <p class="font-semibold text-gray-800 mb-3">📅 Perhitungan Jatuh Tempo</p>
+        <div class="space-y-2 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-600">Tanggal Bayar Pelanggan:</span>
+            <code class="bg-white px-2 py-0.5 rounded border border-gray-200 text-blue-600 font-mono text-xs">1 Juli</code>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-600">+ Grace Period:</span>
+            <code class="bg-white px-2 py-0.5 rounded border border-gray-200 text-orange-600 font-mono text-xs">10 hari</code>
+          </div>
+          <div class="border-t border-blue-200 my-2"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-700 font-semibold">= Jatuh Tempo:</span>
+            <code class="bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300 text-emerald-700 font-mono text-xs font-bold">11 Juli</code>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">📨 Jadwal Pengiriman Reminder</p>
+        <div class="space-y-2">
+          <div class="flex items-start gap-3 bg-blue-50 rounded-lg p-3 border border-blue-100">
+            <span class="text-xl">🔔</span>
+            <div class="flex-1">
+              <p class="font-semibold text-gray-800">H-3 (3 hari sebelum jatuh tempo)</p>
+              <p class="text-xs text-gray-600 mt-1">Contoh: Jatuh tempo 11 Juli → reminder dikirim <strong>8 Juli</strong></p>
+              <p class="text-xs text-blue-700 mt-1 italic">"Tagihan jatuh tempo 3 hari lagi (11 Jul)"</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+            <span class="text-xl">⚠️</span>
+            <div class="flex-1">
+              <p class="font-semibold text-gray-800">H-1 (1 hari sebelum jatuh tempo)</p>
+              <p class="text-xs text-gray-600 mt-1">Contoh: Jatuh tempo 11 Juli → reminder dikirim <strong>10 Juli</strong></p>
+              <p class="text-xs text-yellow-700 mt-1 italic">"Tagihan jatuh tempo besok (11 Jul)"</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 bg-red-50 rounded-lg p-3 border border-red-100">
+            <span class="text-xl">🚨</span>
+            <div class="flex-1">
+              <p class="font-semibold text-gray-800">H-0 (hari jatuh tempo)</p>
+              <p class="text-xs text-gray-600 mt-1">Contoh: Jatuh tempo 11 Juli → reminder dikirim <strong>11 Juli</strong></p>
+              <p class="text-xs text-red-700 mt-1 italic">"Tagihan jatuh tempo hari ini (11 Jul)"</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 bg-orange-50 rounded-lg p-3 border border-orange-100">
+            <span class="text-xl">❗</span>
+            <div class="flex-1">
+              <p class="font-semibold text-gray-800">H+1 (1 hari setelah jatuh tempo)</p>
+              <p class="text-xs text-gray-600 mt-1">Contoh: Jatuh tempo 11 Juli → reminder dikirim <strong>12 Juli</strong></p>
+              <p class="text-xs text-orange-700 mt-1 italic">"Tagihan sudah melewati jatuh tempo (sejak 11 Jul)"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">⏰ Waktu Eksekusi</p>
+        <ul class="list-disc ml-4 space-y-1">
+          <li>Reminder otomatis berjalan setiap hari jam <strong>08:00 WIB</strong></li>
+          <li>Sistem akan cek semua pelanggan yang jatuh temponya H-3, H-1, H-0, atau H+1 hari itu</li>
+          <li>WA reminder dikirim otomatis beserta link pembayaran online</li>
         </ul>
       </div>
 
-      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
-        <strong>Catatan:</strong> Suspend otomatis berjalan setiap hari pukul 03.00. Setelah pelanggan bayar dan tagihan ditandai lunas, PPPoE akan otomatis diaktifkan kembali.
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800">
+        <strong>💡 Tips:</strong> Pastikan nomor WA pelanggan sudah terisi di data pelanggan agar reminder bisa terkirim. Pelanggan yang tidak punya nomor WA akan di-skip.
       </div>
     </div>
   </div>
@@ -126,39 +342,197 @@
     <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Paket Hotspot</p>
-        <p>Buat paket voucher (nama, durasi, kecepatan, harga). Bisa diimpor dari profile Hotspot MikroTik yang ada.</p>
+        <p class="font-semibold text-gray-700 mb-2">📦 Apa itu Hotspot Voucher?</p>
+        <p>Voucher hotspot adalah kode akses internet sementara yang bisa dijual kepada pelanggan. Setiap voucher punya username & password unik, durasi (waktu), dan kecepatan internet yang sudah ditentukan.</p>
+        <div class="bg-blue-50 rounded-lg p-3 mt-2 text-xs">
+          <strong>Contoh use case:</strong> Warnet, cafe, hotel, RT/RW Net yang menjual paket internet harian/mingguan ke pelanggan.
+        </div>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Generate Voucher</p>
-        <ul class="list-disc ml-4 space-y-1">
-          <li>Pilih <strong>Server</strong> dan <strong>Paket</strong>, tentukan jumlah voucher (maks 500 per batch)</li>
-          <li>Isi <strong>Comment/Batch</strong> sebagai label kelompok (misal: RT 01, Promo Juli)</li>
-          <li>Centang <strong>Push ke MikroTik</strong> untuk langsung membuat user hotspot di router</li>
-          <li>Kolom <strong>Tgl Generate</strong> menunjukkan kapan voucher dibuat</li>
-          <li>Badge <strong>MikroTik ✓</strong> (hijau) = sudah ada di router · <strong>Belum push</strong> (oranye) = belum</li>
+        <p class="font-semibold text-gray-700 mb-2">1️⃣ Paket Hotspot</p>
+        <p>Buat paket voucher dengan menentukan:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1">
+          <li><strong>Nama Paket</strong> — misal: "1 Hari 10 Mbps", "1 Minggu Unlimited"</li>
+          <li><strong>Durasi/Validity</strong> — berapa lama voucher berlaku (1d = 1 hari, 7d = 7 hari, 30d = 1 bulan)</li>
+          <li><strong>Kecepatan Upload/Download</strong> — rate limit untuk paket ini</li>
+          <li><strong>Harga</strong> — harga jual per voucher (untuk agen & halaman toko publik)</li>
+          <li><strong>Profile MikroTik</strong> — profile hotspot yang sudah dibuat di router</li>
+        </ul>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2 text-xs text-yellow-800">
+          <strong>💡 Tips:</strong> Gunakan tombol <strong>Import dari MikroTik</strong> untuk mengambil profile hotspot yang sudah ada di router, jadi tidak perlu input manual.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">2️⃣ Generate Voucher</p>
+        <p>Setelah paket dibuat, Anda bisa generate voucher dalam jumlah banyak sekaligus.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Langkah Generate:</p>
+          <ol class="list-decimal ml-4 space-y-1.5 text-xs">
+            <li>Pilih <strong>Server MikroTik</strong> yang akan digunakan</li>
+            <li>Pilih <strong>Paket Hotspot</strong> (misal: "1 Hari 10 Mbps")</li>
+            <li>Tentukan <strong>Jumlah Voucher</strong> yang mau di-generate (maks 500 per batch)</li>
+            <li>Isi <strong>Comment/Batch</strong> sebagai label kelompok voucher (misal: "RT 01", "Promo Juli", "Warnet A")</li>
+            <li>Centang <strong>Push ke MikroTik</strong> agar voucher langsung dibuat di router (recommended)</li>
+            <li>Klik <strong>Generate</strong></li>
+          </ol>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 text-xs text-emerald-800">
+          <strong>✅ Hasil:</strong> Sistem akan membuat voucher dengan username & password random, lalu push ke MikroTik. Voucher siap dijual!
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">3️⃣ Status & Badge Voucher</p>
+        <p>Setiap voucher punya status yang bisa dilihat dari badge warna:</p>
+        <div class="space-y-2 mt-2">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-semibold">Tersedia</span>
+            <span class="text-gray-600">— Voucher belum dipakai, bisa dijual</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-blue-100 text-blue-700 font-semibold">Dipakai</span>
+            <span class="text-gray-600">— Voucher sudah dipakai pelanggan, sedang aktif</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-gray-100 text-gray-600 font-semibold">Expired</span>
+            <span class="text-gray-600">— Voucher sudah habis masa berlakunya</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-green-100 text-green-700 font-semibold">MikroTik ✓</span>
+            <span class="text-gray-600">— Voucher sudah ada di router</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-orange-100 text-orange-700 font-semibold">Belum push</span>
+            <span class="text-gray-600">— Voucher belum di-push ke router</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">4️⃣ Push Ulang ke MikroTik</p>
+        <p>Jika ada voucher yang gagal push (badge "Belum push"), Anda bisa push ulang:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Pilih <strong>Server</strong> di filter</li>
+          <li>Klik tombol <strong>Push ke MikroTik</strong> (ada di atas tabel voucher)</li>
+          <li>Sistem akan push semua voucher yang belum masuk ke router</li>
         </ul>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Push Ulang ke MikroTik</p>
-        <p>Jika ada voucher yang gagal push, gunakan tombol <strong>Push ke MikroTik</strong> di filter (setelah memilih server) untuk push ulang semua yang belum masuk.</p>
+        <p class="font-semibold text-gray-700 mb-2">5️⃣ Cetak Voucher</p>
+        <p>Voucher yang sudah di-generate bisa dicetak untuk dijual ke pelanggan.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Cara Cetak:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li>Filter voucher berdasarkan <strong>Comment/Batch</strong> (misal: "RT 01")</li>
+            <li>Klik tombol <strong>Cetak</strong></li>
+            <li>Halaman print-friendly akan terbuka dengan desain voucher + QR code</li>
+            <li>Tekan <code class="bg-white px-1 rounded border">Ctrl+P</code> (Windows/Linux) atau <code class="bg-white px-1 rounded border">Cmd+P</code> (Mac) untuk print</li>
+          </ol>
+        </div>
+        <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 mt-2 text-xs text-blue-800">
+          <strong>💡 Tips:</strong> QR code bisa di-scan pelanggan untuk langsung redirect ke halaman login hotspot. Lebih praktis daripada ketik username/password manual.
+        </div>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-2">Cetak Voucher</p>
-        <p>Tombol <strong>Cetak</strong> membuka halaman print-friendly dengan QR code tiap voucher, siap dicetak dan dijual ke pelanggan.</p>
-      </div>
-
-      <div>
-        <p class="font-semibold text-gray-700 mb-2">Filter & Hapus</p>
-        <ul class="list-disc ml-4 space-y-1">
-          <li>Filter berdasarkan Server, Paket, Status (Tersedia/Dipakai/Expired), atau Comment</li>
-          <li><strong>Hapus Tersedia</strong> — hapus semua voucher tersedia di server yang dipilih (juga dihapus dari MikroTik)</li>
-          <li><strong>Hapus per Comment</strong> — hapus satu batch voucher berdasarkan label comment</li>
+        <p class="font-semibold text-gray-700 mb-2">6️⃣ Filter Voucher</p>
+        <p>Gunakan filter untuk mencari voucher tertentu:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li><strong>Server</strong> — filter berdasarkan router MikroTik</li>
+          <li><strong>Paket</strong> — filter berdasarkan paket hotspot</li>
+          <li><strong>Status</strong> — Tersedia / Dipakai / Expired</li>
+          <li><strong>Comment/Batch</strong> — filter berdasarkan label kelompok</li>
+          <li><strong>Cari</strong> — cari berdasarkan username voucher</li>
         </ul>
       </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">7️⃣ Hapus Voucher</p>
+        <p>Voucher yang sudah tidak dipakai bisa dihapus untuk menghemat database & router.</p>
+        <div class="space-y-2 mt-2">
+          <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-red-800 mb-1">⚠️ Hapus Tersedia (Bulk Delete)</p>
+            <p class="text-red-700">Menghapus <strong>semua voucher tersedia</strong> di server yang dipilih. Voucher juga dihapus dari MikroTik.</p>
+            <p class="text-red-600 mt-1 italic">Gunakan dengan hati-hati! Voucher yang dihapus tidak bisa dikembalikan.</p>
+          </div>
+          <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-orange-800 mb-1">🗑️ Hapus per Comment/Batch</p>
+            <p class="text-orange-700">Menghapus satu batch voucher berdasarkan label comment. Lebih aman karena hanya menghapus kelompok tertentu.</p>
+          </div>
+        </div>
+        <div class="bg-gray-100 border border-gray-300 rounded-lg p-3 mt-2 text-xs text-gray-700">
+          <strong>📌 Catatan:</strong> Voucher dengan status <strong>Dipakai</strong> atau <strong>Expired</strong> tidak bisa dihapus untuk menjaga history pemakaian.
+        </div>
+      </div>
+
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mt-3">
+        <p class="font-semibold text-indigo-900 mb-2 text-sm">📚 Workflow Lengkap Hotspot Voucher</p>
+        <ol class="list-decimal ml-4 space-y-1 text-xs text-indigo-800">
+          <li>Buat <strong>Paket Hotspot</strong> (atau import dari MikroTik)</li>
+          <li><strong>Generate Voucher</strong> sesuai kebutuhan (dengan comment/batch)</li>
+          <li><strong>Cetak Voucher</strong> hasil generate</li>
+          <li><strong>Jual</strong> voucher ke pelanggan</li>
+          <li>Pelanggan <strong>login hotspot</strong> dengan username/password voucher</li>
+          <li>Setelah masa berlaku habis, voucher otomatis <strong>expired</strong></li>
+          <li>Hapus voucher expired secara berkala untuk menjaga kebersihan database</li>
+        </ol>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── HOTSPOT BULANAN ───────────────────────────────── -->
+  <div id="hotspot-bulanan" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-sm">📅</span>
+      Hotspot Bulanan
+      <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">Addon +Rp 20.000/bulan</span>
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+
+      <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+        <p class="font-semibold text-indigo-900 mb-1.5">📅 Apa itu Hotspot Bulanan?</p>
+        <p class="text-indigo-700">Fitur untuk mengelola pelanggan hotspot dengan sistem berlangganan bulanan. Berbeda dengan voucher (kode acak sekali pakai), hotspot bulanan punya data pelanggan terdaftar, tagihan otomatis setiap bulan, dan reminder WA.</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Perbedaan Hotspot Voucher vs Hotspot Bulanan</p>
+        <div class="overflow-x-auto rounded-xl border border-gray-100">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100">
+                <th class="px-3 py-2 text-left font-semibold text-gray-600">Aspek</th>
+                <th class="px-3 py-2 text-center font-semibold text-orange-600">Voucher</th>
+                <th class="px-3 py-2 text-center font-semibold text-indigo-600">Bulanan</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <tr><td class="px-3 py-2 text-gray-600">Data pelanggan</td><td class="px-3 py-2 text-center">❌</td><td class="px-3 py-2 text-center">✅</td></tr>
+              <tr><td class="px-3 py-2 text-gray-600">Tagihan otomatis</td><td class="px-3 py-2 text-center">❌</td><td class="px-3 py-2 text-center">✅</td></tr>
+              <tr><td class="px-3 py-2 text-gray-600">Reminder WA</td><td class="px-3 py-2 text-center">❌</td><td class="px-3 py-2 text-center">✅</td></tr>
+              <tr><td class="px-3 py-2 text-gray-600">Cocok untuk</td><td class="px-3 py-2 text-center">Warung, cafe, tamu</td><td class="px-3 py-2 text-center">Pelanggan tetap RT/RW</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">Cara Mengaktifkan</p>
+        <ol class="list-decimal ml-4 space-y-1 text-xs">
+          <li>Buka halaman <strong>Profil</strong></li>
+          <li>Scroll ke bagian <strong>Addon: Hotspot Bulanan</strong></li>
+          <li>Aktifkan toggle — fitur langsung tersedia di menu sidebar</li>
+          <li>Biaya <strong>Rp 20.000/bulan</strong> akan ditambahkan ke tagihan SaaS bulan berikutnya</li>
+        </ol>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700">
+        <strong>⚠️ Catatan Biaya:</strong> Biaya Rp 20.000 dihitung per bulan kalender. Jika diaktifkan di tengah bulan, tagihan tetap berlaku penuh bulan berikutnya. Nonaktifkan sebelum tanggal 1 jika tidak ingin ditagih.
+      </div>
+
     </div>
   </div>
 
@@ -166,35 +540,111 @@
   <div id="agen" class="card p-6 mb-5">
     <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
       <span class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-sm">👥</span>
-      Sistem Agen
+      Sistem Agen (Reseller)
     </h2>
-    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
-      <p>Agen adalah reseller yang bisa generate dan menjual voucher hotspot atas nama ISP. Setiap agen punya saldo yang dipotong saat generate voucher.</p>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
 
-      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
-        <p class="font-semibold text-gray-700">Alur Agen:</p>
-        <ol class="list-decimal ml-4 space-y-1">
-          <li>ISP tambah akun agen di menu <strong>Agen</strong> (nama, username, password, nomor WA)</li>
-          <li>Agen login di <code class="bg-gray-100 px-1 rounded">billing.vpntunel.my.id/beli/[slug]/login</code></li>
-          <li>Agen topup saldo via QRIS/transfer di panel mereka</li>
-          <li>Agen generate voucher — saldo dipotong sesuai harga paket × jumlah</li>
-          <li>Agen cetak dan jual voucher ke pelanggan akhir</li>
-        </ol>
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">🤝 Apa itu Sistem Agen?</p>
+        <p>Agen adalah reseller yang bisa generate dan menjual voucher hotspot atas nama ISP. Agen punya saldo sendiri yang dipotong saat generate voucher, lalu agen jual voucher ke pelanggan akhir dengan margin keuntungan.</p>
+        <div class="bg-blue-50 rounded-lg p-3 mt-2 text-xs">
+          <strong>Contoh use case:</strong> ISP punya agen di berbagai wilayah/RT untuk distribusi voucher. Agen topup saldo, generate voucher sendiri, cetak, dan jual ke pelanggan.
+        </div>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-1">Panel Agen</p>
-        <ul class="list-disc ml-4 space-y-1">
-          <li>Lihat saldo & riwayat generate</li>
-          <li>Pilih paket & server, tentukan jumlah, generate voucher</li>
-          <li>Cetak voucher hasil generate (per batch/comment)</li>
-          <li>Topup saldo lewat payment gateway yang tersedia</li>
+        <p class="font-semibold text-gray-700 mb-2">1️⃣ Tambah Agen (Sisi ISP)</p>
+        <p>ISP menambahkan akun agen baru di menu <strong>Agen</strong>.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Data yang perlu diisi:</p>
+          <ul class="list-disc ml-4 space-y-1 text-xs">
+            <li><strong>Nama Agen</strong> — nama lengkap/toko agen</li>
+            <li><strong>Username</strong> — username untuk login agen (unik)</li>
+            <li><strong>Password</strong> — password login agen</li>
+            <li><strong>Nomor WA</strong> — nomor WhatsApp agen untuk notifikasi</li>
+            <li><strong>Status</strong> — Aktif/Nonaktif (agen nonaktif tidak bisa login)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">2️⃣ Login Agen</p>
+        <p>Setelah akun dibuat, agen login di:</p>
+        <div class="bg-gray-100 rounded-lg p-3 mt-2">
+          <code class="text-sm text-blue-600">https://billing.vpntunel.my.id/beli/<strong>[slug-isp]</strong>/login</code>
+        </div>
+        <p class="text-xs text-gray-600 mt-2">Ganti <code class="bg-gray-100 px-1 rounded">[slug-isp]</code> dengan slug bisnis ISP (bisa dilihat di menu Profil).</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">3️⃣ Topup Saldo Agen</p>
+        <p>Agen perlu topup saldo sebelum bisa generate voucher.</p>
+        <div class="space-y-2 mt-2">
+          <p class="text-xs font-semibold text-gray-700">Cara topup:</p>
+          <ul class="list-disc ml-4 space-y-1 text-xs">
+            <li><strong>Via Panel Agen:</strong> Agen bisa topup sendiri via QRIS/transfer dari panel mereka</li>
+            <li><strong>Via ISP (Manual):</strong> ISP bisa tambah/kurangi saldo agen di menu <strong>Agen → Detail → Tambah/Kurangi Saldo Manual</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">4️⃣ Generate Voucher (Sisi Agen)</p>
+        <p>Setelah punya saldo, agen bisa generate voucher dari panel mereka.</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Langkah generate:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li>Pilih <strong>Paket Hotspot</strong> yang tersedia</li>
+            <li>Pilih <strong>Server</strong> (jika ISP punya banyak router)</li>
+            <li>Tentukan <strong>Jumlah Voucher</strong></li>
+            <li>Klik <strong>Generate</strong></li>
+            <li>Saldo agen dipotong sesuai: <code class="bg-white px-1 rounded border font-mono">harga_paket × jumlah</code></li>
+          </ol>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 text-xs text-emerald-800">
+          <strong>✅ Hasil:</strong> Voucher masuk ke database dengan label comment otomatis (username agen). Agen bisa cetak voucher untuk dijual.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">5️⃣ Cetak Voucher Agen</p>
+        <p>Agen bisa cetak voucher hasil generate dari panel mereka.</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Klik <strong>Riwayat Generate</strong> di panel agen</li>
+          <li>Pilih batch voucher yang mau dicetak</li>
+          <li>Klik <strong>Cetak</strong> untuk print voucher dengan QR code</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">6️⃣ Monitoring Agen (Sisi ISP)</p>
+        <p>ISP bisa monitor aktivitas agen:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li><strong>Saldo Agen</strong> — lihat sisa saldo tiap agen</li>
+          <li><strong>Riwayat Generate</strong> — lihat voucher yang sudah di-generate agen</li>
+          <li><strong>Riwayat Topup</strong> — lihat history topup saldo agen</li>
+          <li><strong>Nonaktifkan Agen</strong> — agen yang dinonaktifkan tidak bisa login & generate</li>
         </ul>
       </div>
 
       <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
-        <strong>Perhatian:</strong> Agen yang dinonaktifkan tidak bisa login. Saldo agen bisa diatur manual oleh ISP di menu <strong>Agen → Detail</strong>.
+        <strong>⚠️ Perhatian:</strong> Agen yang dinonaktifkan tidak bisa login. Saldo agen tetap tersimpan dan bisa diaktifkan kembali kapan saja.
       </div>
+
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mt-3">
+        <p class="font-semibold text-indigo-900 mb-2 text-sm">📚 Workflow Lengkap Sistem Agen</p>
+        <ol class="list-decimal ml-4 space-y-1 text-xs text-indigo-800">
+          <li>ISP <strong>tambah akun agen</strong> (nama, username, password)</li>
+          <li>Agen <strong>login</strong> di <code class="bg-white px-1 rounded">billing.../beli/[slug]/login</code></li>
+          <li>Agen <strong>topup saldo</strong> via panel atau minta ISP isi manual</li>
+          <li>Agen <strong>generate voucher</strong> sesuai kebutuhan (saldo dipotong otomatis)</li>
+          <li>Agen <strong>cetak voucher</strong> dari panel</li>
+          <li>Agen <strong>jual voucher</strong> ke pelanggan akhir dengan harga + margin</li>
+          <li>Pelanggan <strong>pakai voucher</strong> untuk login hotspot</li>
+          <li>ISP bisa <strong>monitor</strong> aktivitas & saldo agen kapan saja</li>
+        </ol>
+      </div>
+
     </div>
   </div>
 
@@ -204,22 +654,102 @@
       <span class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-sm">💬</span>
       WhatsApp Gateway
     </h2>
-    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
-      <p>Sistem menggunakan WA pribadi Anda untuk mengirim notifikasi tagihan, link bayar, dan konfirmasi pembayaran ke pelanggan.</p>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
 
-      <div class="bg-gray-50 rounded-xl p-4 space-y-2">
-        <p class="font-semibold text-gray-700">Cara menghubungkan WA:</p>
-        <ol class="list-decimal ml-4 space-y-1">
-          <li>Buka menu <strong>WA Gateway</strong></li>
-          <li>Klik tombol <strong>Hubungkan / Scan QR</strong></li>
-          <li>Buka WhatsApp di HP → <strong>Perangkat Tertaut → Tautkan Perangkat</strong></li>
-          <li>Scan QR yang muncul di layar</li>
-          <li>Status akan berubah menjadi <span class="text-emerald-600 font-semibold">Terhubung</span></li>
-        </ol>
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">📱 Apa itu WhatsApp Gateway?</p>
+        <p>WhatsApp Gateway memungkinkan sistem mengirim notifikasi otomatis ke pelanggan via WhatsApp, seperti:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Reminder tagihan (H-3, H-1, H-0, H+1)</li>
+          <li>Link pembayaran online (QRIS/transfer)</li>
+          <li>Konfirmasi pembayaran diterima</li>
+          <li>Notifikasi aktivasi/suspend akun</li>
+        </ul>
       </div>
 
       <div>
-        <p class="font-semibold text-gray-700 mb-1">Template Pesan WA</p>
+        <p class="font-semibold text-gray-700 mb-2">1️⃣ Cara Menghubungkan WhatsApp</p>
+        <div class="bg-gray-50 rounded-xl p-4 mt-2 space-y-2">
+          <p class="font-semibold text-gray-800 text-xs">Langkah setup:</p>
+          <ol class="list-decimal ml-4 space-y-1.5 text-xs">
+            <li>Buka menu <strong>WA Gateway</strong> di sidebar</li>
+            <li>Klik tombol <strong>Scan QR Code</strong></li>
+            <li>QR code akan muncul di layar</li>
+            <li>Buka WhatsApp di HP Anda</li>
+            <li>Tap <strong>⋮ (titik tiga)</strong> → <strong>Perangkat Tertaut</strong></li>
+            <li>Tap <strong>Tautkan Perangkat</strong></li>
+            <li>Scan QR code yang muncul di layar billing</li>
+            <li>Tunggu sampai status berubah jadi <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Connected</span></li>
+          </ol>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 text-xs text-emerald-800">
+          <strong>✅ Berhasil:</strong> Status akan berubah jadi "Connected" dan nomor WA Anda akan tampil. Sistem siap kirim notifikasi!
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">2️⃣ Status Koneksi</p>
+        <div class="space-y-2 mt-2">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-semibold">Connected</span>
+            <span class="text-gray-600">— WA terhubung, sistem bisa kirim notifikasi</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold">Disconnected</span>
+            <span class="text-gray-600">— WA terputus, perlu scan QR ulang</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-gray-100 text-gray-600 font-semibold">Not Setup</span>
+            <span class="text-gray-600">— Belum pernah di-setup, perlu scan QR</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">3️⃣ Test Kirim Pesan</p>
+        <p>Setelah terhubung, test apakah WA bisa kirim pesan:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Di halaman WA Gateway, masukkan <strong>nomor tujuan</strong> (format: 628xxx, tanpa +)</li>
+          <li>Ketik <strong>pesan test</strong></li>
+          <li>Klik <strong>Kirim Test</strong></li>
+          <li>Cek HP tujuan, pastikan pesan masuk</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">4️⃣ Notifikasi Otomatis yang Dikirim</p>
+        <div class="space-y-2 mt-2">
+          <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-blue-800 mb-1">📅 Reminder Tagihan</p>
+            <p class="text-blue-700">Dikirim otomatis H-3, H-1, H-0, H+1 dari jatuh tempo (jam 08:00 WIB) ke pelanggan PPPoE yang belum bayar.</p>
+          </div>
+          <div class="bg-green-50 border border-green-100 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-green-800 mb-1">✅ Konfirmasi Pembayaran</p>
+            <p class="text-green-700">Dikirim otomatis setelah pelanggan bayar via payment gateway (QRIS/transfer).</p>
+          </div>
+          <div class="bg-orange-50 border border-orange-100 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-orange-800 mb-1">🎉 Aktivasi Akun</p>
+            <p class="text-orange-700">Dikirim saat pelanggan baru didaftarkan (berisi username, password, tanggal bayar).</p>
+          </div>
+          <div class="bg-red-50 border border-red-100 rounded-lg p-3 text-xs">
+            <p class="font-semibold text-red-800 mb-1">⚠️ Suspend/Reaktivasi</p>
+            <p class="text-red-700">Dikirim saat akun pelanggan di-suspend atau diaktifkan kembali.</p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">5️⃣ Disconnect/Logout WA</p>
+        <p>Jika ingin ganti nomor WA atau troubleshoot koneksi:</p>
+        <ul class="list-disc ml-4 mt-2 space-y-1 text-xs">
+          <li>Klik tombol <strong>Disconnect</strong> di halaman WA Gateway</li>
+          <li>Refresh halaman (F5)</li>
+          <li>Scan QR code ulang dengan nomor WA yang baru</li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">6️⃣ Template Pesan WA</p>
         <p>Di menu <strong>Template WA</strong>, Anda bisa mengubah teks notifikasi yang dikirim ke pelanggan. Variabel yang tersedia:</p>
         <div class="grid grid-cols-2 gap-2 mt-2">
           {% set vars = [
@@ -238,8 +768,20 @@
       </div>
 
       <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800">
-        <strong>Tips:</strong> Gunakan nomor WA yang tidak terlalu aktif untuk kirim notifikasi agar tidak terkena limit atau banned oleh WhatsApp. Jika QR expired, refresh halaman dan scan ulang.
+        <strong>⚠️ Penting:</strong> Jangan logout WA di HP saat sistem masih terhubung, karena akan memutus koneksi gateway. Gunakan tombol <strong>Disconnect</strong> di panel billing terlebih dahulu.
       </div>
+
+      <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
+        <strong>🚫 Jika WA Sering Terputus:</strong>
+        <ul class="list-disc ml-4 mt-1 space-y-0.5">
+          <li>Pastikan HP tidak mati/kehabisan baterai</li>
+          <li>Pastikan HP tetap terhubung internet (WiFi/data seluler)</li>
+          <li>Jangan logout WA di HP</li>
+          <li>Jangan hapus chat/perangkat tertaut di HP</li>
+          <li>Gunakan nomor WA khusus untuk gateway (bukan WA pribadi yang sering dipakai)</li>
+        </ul>
+      </div>
+
     </div>
   </div>
 
@@ -348,6 +890,154 @@
       <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
         <strong>Perhatian:</strong> Mengubah slug akan mengubah URL toko publik. Pastikan Anda memperbarui link yang sudah dibagikan ke pelanggan atau agen.
       </div>
+    </div>
+  </div>
+
+  <!-- ── FAQ ────────────────────────────────────────────── -->
+  <div id="faq" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center text-sm">❓</span>
+      FAQ (Pertanyaan Umum)
+    </h2>
+    <div class="space-y-4 text-sm text-gray-600 leading-relaxed">
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Kenapa pelanggan tidak dapat reminder WA?</p>
+        <p class="text-gray-600">A: Cek hal berikut:</p>
+        <ul class="list-disc ml-4 mt-1 space-y-0.5 text-xs">
+          <li>Nomor WA pelanggan sudah terisi dengan format 628xxx (tanpa +, tanpa spasi)</li>
+          <li>WA Gateway sudah terhubung dan status <span class="text-emerald-600 font-semibold">Connected</span></li>
+          <li>Tagihan pelanggan statusnya <strong>unpaid</strong> (bukan paid)</li>
+          <li>Belum sampai H-3 dari jatuh tempo (cek perhitungan di bagian Reminder Tagihan)</li>
+        </ul>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Bagaimana cara ubah tanggal bayar pelanggan?</p>
+        <p class="text-gray-600">A: Masuk ke menu <strong>Pelanggan PPPoE</strong> → klik tombol <strong>Edit</strong> pada pelanggan yang ingin diubah → ubah field <strong>Tgl Bayar</strong> → <strong>Simpan</strong>. Jatuh tempo otomatis dihitung ulang.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Apa bedanya suspend manual vs otomatis?</p>
+        <p class="text-gray-600">A: <strong>Suspend manual</strong> dilakukan oleh ISP dengan klik tombol suspend. <strong>Suspend otomatis</strong> dilakukan sistem setiap hari jam 03:00 WIB untuk pelanggan yang tagihan statusnya <em>overdue</em> (melewati jatuh tempo dan belum bayar).</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Voucher yang sudah di-generate bisa dihapus?</p>
+        <p class="text-gray-600">A: Bisa. Gunakan tombol <strong>Hapus Tersedia</strong> untuk hapus semua voucher dengan status <em>Tersedia</em> di server tertentu, atau <strong>Hapus per Comment</strong> untuk hapus satu batch voucher. Voucher yang sudah dipakai tidak bisa dihapus.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Pelanggan bayar manual (cash/transfer), bagaimana tandai lunas?</p>
+        <p class="text-gray-600">A: Masuk ke menu <strong>Tagihan PPPoE</strong> → pilih bulan tagihan → klik tombol <strong>Tandai Lunas</strong> pada tagihan yang bersangkutan → isi metode bayar dan keterangan → <strong>Simpan</strong>. Pelanggan otomatis diaktifkan kembali jika sebelumnya di-suspend.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Agen generate voucher tapi tidak muncul di list voucher ISP?</p>
+        <p class="text-gray-600">A: Voucher yang di-generate agen masuk ke sistem dan bisa dilihat di menu <strong>Hotspot Voucher</strong>. Filter berdasarkan <strong>Comment</strong> atau <strong>Server</strong> untuk melihat voucher hasil generate agen.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Bagaimana cara menambah saldo agen?</p>
+        <p class="text-gray-600">A: Masuk ke menu <strong>Agen</strong> → klik nama agen → di halaman detail, ada form <strong>Tambah/Kurangi Saldo Manual</strong>. Isi nominal dan keterangan, lalu simpan. Saldo agen akan terupdate otomatis.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Router MikroTik tidak bisa terhubung (status merah)?</p>
+        <p class="text-gray-600">A: Cek troubleshooting di bagian <strong>Troubleshooting</strong> di bawah untuk panduan lengkap koneksi MikroTik.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── TROUBLESHOOTING ────────────────────────────────── -->
+  <div id="troubleshoot" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center text-sm">🛠️</span>
+      Troubleshooting
+    </h2>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">🖥️ Router MikroTik Tidak Terhubung</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs font-semibold text-gray-700">Langkah pengecekan:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li><strong>Pastikan API MikroTik aktif:</strong> Winbox → IP → Services → pastikan service <em>api</em> atau <em>api-ssl</em> enabled di port 8728</li>
+            <li><strong>Cek Firewall MikroTik:</strong> pastikan IP server billing (<code class="bg-white px-1 rounded border">IP_SERVER_BILLING</code>) diizinkan akses ke port 8728</li>
+            <li><strong>User API harus punya permission:</strong> Winbox → System → Users → pastikan user yang dipakai punya group <em>full</em> atau minimal akses <em>api, read, write</em></li>
+            <li><strong>Test koneksi manual:</strong> dari server billing, coba ping ke IP VPN router: <code class="bg-white px-1 rounded border font-mono text-xs">ping [IP_VPN_ROUTER]</code></li>
+            <li><strong>Cek username/password:</strong> pastikan tidak ada typo di form tambah server</li>
+          </ol>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">💬 WhatsApp Gateway Terputus (QR Expired)</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs">Jika QR code expired atau WA terputus:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li>Buka menu <strong>WA Gateway</strong></li>
+            <li>Klik tombol <strong>Disconnect</strong> atau <strong>Logout</strong></li>
+            <li>Refresh halaman (F5)</li>
+            <li>Klik <strong>Scan QR</strong> lagi</li>
+            <li>Buka WA di HP → Perangkat Tertaut → Tautkan Perangkat → scan QR baru</li>
+          </ol>
+          <p class="text-xs text-yellow-700 mt-2"><strong>Catatan:</strong> Jangan logout WA di HP saat sistem masih terhubung, karena akan memutus koneksi gateway.</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">📡 Pelanggan PPPoE Tidak Bisa Konek</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs">Cek urut dari atas:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li><strong>Status pelanggan:</strong> pastikan status <em>Aktif</em> di sistem billing (ikon hijau)</li>
+            <li><strong>Secret MikroTik:</strong> cek di Winbox → PPP → Secrets → pastikan username pelanggan ada dan tidak disabled</li>
+            <li><strong>Profile PPPoE:</strong> pastikan profile pelanggan sudah dibuat di MikroTik dan rate limit sudah sesuai</li>
+            <li><strong>Push ulang:</strong> jika belum, klik tombol <strong>Push ke MikroTik</strong> di halaman pelanggan</li>
+            <li><strong>Cek dari sisi pelanggan:</strong> pastikan username & password yang dimasukkan di dial PPPoE benar</li>
+          </ol>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">🎟️ Voucher Hotspot Tidak Valid (Invalid Username/Password)</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs">Kemungkinan penyebab:</p>
+          <ul class="list-disc ml-4 space-y-1 text-xs">
+            <li><strong>Voucher belum di-push ke MikroTik:</strong> di halaman voucher, filter server lalu klik tombol <strong>Push ke MikroTik</strong></li>
+            <li><strong>User hotspot terhapus di MikroTik:</strong> cek Winbox → IP → Hotspot → Users → pastikan username voucher ada</li>
+            <li><strong>Profile hotspot tidak ada:</strong> pastikan profile yang dipakai voucher sudah dibuat di MikroTik dengan rate limit yang sesuai</li>
+            <li><strong>Voucher expired:</strong> cek kolom <em>Expired</em> di list voucher, voucher yang sudah expired tidak bisa dipakai lagi</li>
+          </ul>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">💰 Pembayaran QRIS/Transfer Tidak Masuk</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs">Jika pelanggan sudah bayar tapi status tagihan masih unpaid:</p>
+          <ol class="list-decimal ml-4 space-y-1 text-xs">
+            <li>Cek menu <strong>Transaksi</strong> → lihat status pembayaran (pending/success/failed)</li>
+            <li>Jika status <em>pending</em> lebih dari 15 menit, kemungkinan webhook payment gateway gagal</li>
+            <li>Hubungi support payment gateway (Mayar/Midtrans/Duitku) untuk cek status transaksi</li>
+            <li>Jika sudah confirmed pembayaran valid, tandai tagihan <strong>Lunas Manual</strong> di menu Tagihan PPPoE</li>
+          </ol>
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">🔐 Lupa Password Login ISP</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-2">
+          <p class="text-xs">Hubungi administrator VPNTunel via WhatsApp/Telegram untuk reset password. Siapkan data verifikasi (username, nomor WA yang terdaftar).</p>
+        </div>
+      </div>
+
+      <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
+        <strong>⚠️ Masalah Lain:</strong> Jika masalah yang Anda hadapi tidak tercakup di atas, hubungi support VPNTunel dengan menyertakan screenshot error atau deskripsi lengkap masalahnya.
+      </div>
+
     </div>
   </div>
 

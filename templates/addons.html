@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Add-On & Fitur Tambahan{% endblock %}
-{% block header %}🛒 Add-On & Fitur Tambahan{% endblock %}
+{% block header %}🛒 Add-On{% endblock %}
 
 {% block content %}
 {% if ok %}
@@ -14,160 +14,104 @@
 </div>
 {% endif %}
 
-<!-- Banner Pengembangan -->
-<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
-  <div style="font-size:24px;">🚧</div>
-  <div>
-    <div style="font-weight:700;color:#92400e;font-size:13px;">Fitur Sedang Dikembangkan</div>
-    <div style="font-size:12px;color:#b45309;margin-top:2px;">Add-on belum tersedia untuk saat ini. Kami sedang mempersiapkan fitur ini. Pantau terus pembaruan kami!</div>
+<!-- Hero Saldo -->
+<div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 60%,#06b6d4 100%);border-radius:16px;padding:20px;margin-bottom:24px;color:#fff;position:relative;overflow:hidden;">
+  <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;background:rgba(255,255,255,.08);border-radius:50%;"></div>
+  <div style="position:absolute;bottom:-30px;right:40px;width:80px;height:80px;background:rgba(255,255,255,.06);border-radius:50%;"></div>
+  <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Saldo Anda</div>
+  <div style="font-size:28px;font-weight:800;margin-bottom:2px;">Rp {{ "{:,}".format(user.saldo|int) }}</div>
+  <div style="font-size:12px;opacity:.7;margin-top:8px;">
+    Saldo dipotong otomatis tiap bulan ·
+    <a href="/saldo" style="color:#bfdbfe;font-weight:600;">Topup →</a>
   </div>
 </div>
 
-<!-- Info Saldo -->
-<div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;">
-  <div style="display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:12px;opacity:.8;margin-bottom:4px;">Saldo Tersedia</div>
-      <div style="font-size:24px;font-weight:700;">Rp {{ "{:,}".format(user.saldo|int) }}</div>
-    </div>
-    <div style="font-size:36px;">💰</div>
-  </div>
-  <div style="margin-top:12px;font-size:12px;opacity:.8;">
-    Saldo digunakan untuk mengaktifkan Add-On. <a href="/saldo" style="color:#bfdbfe;">Topup saldo →</a>
-  </div>
+<!-- Judul seksi -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+  <div style="width:4px;height:20px;background:linear-gradient(180deg,#3b82f6,#06b6d4);border-radius:2px;"></div>
+  <div style="font-size:14px;font-weight:700;color:#1e293b;">Pilih Add-On untuk bisnis ISP Anda</div>
 </div>
 
-<!-- Add-on Aktif -->
-{% set ada_aktif = aktif|length > 0 %}
-{% if ada_aktif %}
-<h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">✅ Add-On Aktif</h3>
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:24px;">
-  {% for addon in addons %}
-  {% if addon.id in aktif %}
-  {% set info = aktif[addon.id] %}
-  <div class="card" style="border:2px solid #22c55e;position:relative;">
-    <div style="position:absolute;top:12px;right:12px;">
-      <span class="badge-up">● AKTIF</span>
-    </div>
-    <div style="font-size:28px;margin-bottom:8px;">{{ addon.ikon }}</div>
-    <div style="font-weight:700;font-size:15px;color:#1e293b;margin-bottom:4px;">{{ addon.nama }}</div>
-    <div style="font-size:12px;color:#64748b;margin-bottom:12px;">{{ addon.deskripsi }}</div>
-    <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">
-      Berlaku s/d: <b>{{ info.expires_at }}</b>
-    </div>
+<!-- Grid Add-On -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;">
 
-    {% if addon.code == 'vpn_remote' and vpn_akun %}
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;">
-      <div style="font-weight:600;color:#15803d;margin-bottom:8px;">🔐 Kredensial VPN L2TP</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="color:#64748b;padding:2px 0;">Server</td><td><code style="color:#1e293b;">103.93.162.154</code></td></tr>
-        <tr><td style="color:#64748b;padding:2px 0;">Username</td><td><code style="color:#1e293b;">{{ vpn_akun.vpn_username }}</code></td></tr>
-        <tr><td style="color:#64748b;padding:2px 0;">Password</td><td><code style="color:#1e293b;">{{ vpn_akun.vpn_password }}</code></td></tr>
-        <tr><td style="color:#64748b;padding:2px 0;">IPSec PSK</td><td><code style="color:#1e293b;">vpntunel123</code></td></tr>
-        <tr><td style="color:#64748b;padding:2px 0;">Tipe</td><td><code style="color:#1e293b;">L2TP/IPSec</code></td></tr>
-      </table>
-      <div style="margin-top:8px;padding:8px;background:#fff;border-radius:6px;font-family:monospace;font-size:11px;color:#475569;">
-        MikroTik CMD:<br>
-        /interface l2tp-client add name=vpn-tunel connect-to=103.93.162.154 user={{ vpn_akun.vpn_username }} password={{ vpn_akun.vpn_password }} use-ipsec=yes ipsec-secret=vpntunel123 disabled=no
+<!-- ── Card: Hotspot Bulanan ── -->
+{% set hb_aktif = user.fitur_hotspot_bulanan %}
+<div style="border-radius:16px;border:2px solid {% if hb_aktif %}#10b981{% else %}#e2e8f0{% endif %};background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:{% if hb_aktif %}0 4px 20px rgba(0,0,0,.08){% else %}0 1px 4px rgba(0,0,0,.04){% endif %};">
+  <div style="background:linear-gradient(135deg,#059669,#10b981);padding:20px 20px 16px;color:#fff;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-15px;right:-15px;width:80px;height:80px;background:rgba(255,255,255,.1);border-radius:50%;"></div>
+    <div style="font-size:32px;margin-bottom:8px;">📅</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:3px;">Hotspot Bulanan</div>
+    <div style="font-size:11px;opacity:.85;line-height:1.5;">Kelola pelanggan hotspot berlangganan bulanan dengan data pelanggan, tagihan otomatis, dan reminder WA.</div>
+    {% if hb_aktif %}
+    <div style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.25);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.5px;">● AKTIF</div>
+    {% endif %}
+  </div>
+  <div style="padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;">
+    {% if hb_aktif %}
+    <div style="display:flex;flex-direction:column;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;font-size:12px;">
+      {% for f in ['Data pelanggan hotspot terdaftar','Tagihan otomatis setiap bulan','Reminder WA jatuh tempo','Menu Hotspot Bulanan di sidebar'] %}
+      <div style="display:flex;align-items:center;gap:6px;color:#166534;"><span style="color:#16a34a;font-weight:700;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#64748b;">
+      {% for f in ['Data pelanggan hotspot terdaftar','Tagihan otomatis setiap bulan','Reminder WA jatuh tempo','Menu Hotspot Bulanan di sidebar'] %}
+      <div style="display:flex;align-items:center;gap:6px;"><span style="color:#cbd5e1;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+      <div>
+        <span style="font-size:20px;font-weight:800;color:#1e293b;">Rp 20.000</span>
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">/bulan</span>
       </div>
-    </div>
-
-    {% if server %}
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;">
-      <div style="font-weight:600;color:#1d4ed8;margin-bottom:8px;">🖥️ Akses Remote MikroTik</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <td style="color:#64748b;padding:3px 0;width:80px;">API</td>
-          <td><code style="color:#1e293b;">{{ server.vpn_ip }}:{{ server.api_port }}</code></td>
-        </tr>
-        {% if server.winbox_host %}
-        <tr>
-          <td style="color:#64748b;padding:3px 0;">Winbox</td>
-          <td>
-            <a href="winbox://{{ server.winbox_host }}" style="color:#2563eb;font-family:monospace;text-decoration:none;">
-              {{ server.winbox_host }} 🔗
-            </a>
-          </td>
-        </tr>
-        {% endif %}
-        {% if server.web_host %}
-        <tr>
-          <td style="color:#64748b;padding:3px 0;">Web</td>
-          <td>
-            <a href="http://{{ server.web_host }}" target="_blank" style="color:#059669;font-family:monospace;text-decoration:none;">
-              {{ server.web_host }} 🔗
-            </a>
-          </td>
-        </tr>
-        {% endif %}
-        <tr>
-          <td style="color:#64748b;padding:3px 0;">User API</td>
-          <td><code style="color:#1e293b;">{{ server.api_user }}</code></td>
-        </tr>
-      </table>
-    </div>
-    {% endif %}
-    {% endif %}
-
-    <button onclick="nonaktifkan({{ addon.id }}, '{{ addon.nama }}')"
-      class="btn-danger" style="width:100%;justify-content:center;">
-      Nonaktifkan
-    </button>
-  </div>
-  {% endif %}
-  {% endfor %}
-</div>
-{% endif %}
-
-<!-- Add-on Tersedia -->
-<h3 style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px;">💡 Add-On Tersedia</h3>
-
-{% set kategori_list = [] %}
-{% for addon in addons %}
-  {% if addon.kategori not in kategori_list %}{% set _ = kategori_list.append(addon.kategori) %}{% endif %}
-{% endfor %}
-
-{% for kat in ['jaringan','komunikasi','billing','laporan','premium'] %}
-{% set kat_addons = addons | selectattr('kategori','eq',kat) | list %}
-{% if kat_addons %}
-<div style="margin-bottom:20px;">
-  <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
-    {% if kat=='jaringan' %}🌐 Jaringan
-    {% elif kat=='komunikasi' %}💬 Komunikasi
-    {% elif kat=='billing' %}🧾 Billing
-    {% elif kat=='laporan' %}📊 Laporan
-    {% elif kat=='premium' %}⭐ Premium
-    {% else %}{{ kat }}{% endif %}
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-    {% for addon in kat_addons %}
-    {% set is_aktif = addon.id in aktif %}
-    <div class="card" style="{% if is_aktif %}opacity:.6;{% endif %}position:relative;">
-      {% if is_aktif %}
-      <div style="position:absolute;top:12px;right:12px;"><span class="badge-up">● AKTIF</span></div>
-      {% endif %}
-      <div style="font-size:28px;margin-bottom:8px;">{{ addon.ikon }}</div>
-      <div style="font-weight:700;font-size:14px;color:#1e293b;margin-bottom:4px;">{{ addon.nama }}</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.5;">{{ addon.deskripsi }}</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;">
-        <div>
-          <span style="font-size:18px;font-weight:700;color:#1e293b;">Rp {{ "{:,}".format(addon.harga) }}</span>
-          <span style="font-size:11px;color:#94a3b8;">/bulan</span>
-        </div>
-        <button disabled style="padding:6px 14px;border-radius:8px;background:#f1f5f9;color:#94a3b8;font-size:12px;font-weight:600;cursor:not-allowed;border:none;">
-          🚧 Segera Hadir
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;font-weight:600;color:{% if hb_aktif %}#10b981{% else %}#94a3b8{% endif %};">{{ '● Aktif' if hb_aktif else 'OFF' }}</span>
+        <button onclick="toggleHotspotBulanan(this)" id="btn-hb-toggle"
+          style="position:relative;width:52px;height:28px;border-radius:14px;border:none;background:{% if hb_aktif %}#10b981{% else %}#d1d5db{% endif %};cursor:pointer;transition:background .2s;"
+          title="{{ 'Nonaktifkan' if hb_aktif else 'Aktifkan' }}">
+          <span style="position:absolute;top:4px;{% if hb_aktif %}right:4px{% else %}left:4px{% endif %};width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s,right .2s;"></span>
         </button>
       </div>
     </div>
-    {% endfor %}
   </div>
 </div>
-{% endif %}
+
+<!-- ── Addon lain: Sedang Pengembangan ── -->
+{% for addon in addons %}
+<div style="border-radius:16px;border:2px solid #e2e8f0;background:#f8fafc;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.04);opacity:.75;">
+  <div style="background:linear-gradient(135deg,#94a3b8,#cbd5e1);padding:20px 20px 16px;color:#fff;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-15px;right:-15px;width:80px;height:80px;background:rgba(255,255,255,.1);border-radius:50%;"></div>
+    <div style="font-size:32px;margin-bottom:8px;">{{ addon.ikon }}</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:3px;">{{ addon.nama }}</div>
+    <div style="font-size:11px;opacity:.85;line-height:1.5;">{{ addon.deskripsi }}</div>
+    <div style="position:absolute;top:12px;right:14px;background:rgba(0,0,0,.2);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px;">🚧 DEV</div>
+  </div>
+  <div style="padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;">
+    <div style="background:#fff;border:1px dashed #cbd5e1;border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:20px;margin-bottom:6px;">🚧</div>
+      <div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:4px;">Sedang Pengembangan</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.5;">Fitur ini sedang kami kembangkan dan akan segera tersedia. Nantikan pembaruan berikutnya!</div>
+    </div>
+    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+      <div>
+        <span style="font-size:20px;font-weight:800;color:#94a3b8;">Rp {{ "{:,}".format(addon.harga) }}</span>
+        <span style="font-size:11px;color:#cbd5e1;font-weight:400;">/bulan</span>
+      </div>
+      <button disabled style="position:relative;width:52px;height:28px;border-radius:14px;border:none;background:#e2e8f0;cursor:not-allowed;opacity:.6;">
+        <span style="position:absolute;top:4px;left:4px;width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
+      </button>
+    </div>
+  </div>
+</div>
 {% endfor %}
 
+</div>
+
 <!-- Modal Konfirmasi -->
-<div id="modal-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="card" style="max-width:400px;width:90%;margin:0 auto;">
+<div id="modal-confirm" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);">
+  <div class="card" style="max-width:380px;width:90%;margin:0 auto;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
     <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;" id="modal-title">Konfirmasi</h3>
     <p style="font-size:13px;color:#64748b;margin-bottom:20px;" id="modal-body"></p>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -178,10 +122,19 @@
 </div>
 
 <script>
-let _pendingAddonId = null;
+async function toggleHotspotBulanan(btn) {
+  btn.disabled = true;
+  const r = await fetch('/profil/fitur-hotspot-bulanan', { method: 'POST' });
+  const d = await r.json();
+  if (d.ok) {
+    location.href = '/addons?ok=' + encodeURIComponent(d.aktif ? 'Hotspot Bulanan diaktifkan (+Rp 20.000/bulan)' : 'Hotspot Bulanan dinonaktifkan');
+  } else {
+    alert('❌ ' + (d.msg || 'Gagal ubah setting'));
+    btn.disabled = false;
+  }
+}
 
 function aktifkan(id, nama, harga) {
-  _pendingAddonId = id;
   document.getElementById('modal-title').textContent = '🛒 Aktifkan ' + nama;
   document.getElementById('modal-body').textContent =
     'Saldo Rp ' + harga.toLocaleString('id') + '/bulan akan dipotong. Lanjutkan?';
@@ -191,10 +144,9 @@ function aktifkan(id, nama, harga) {
 }
 
 function nonaktifkan(id, nama) {
-  _pendingAddonId = id;
   document.getElementById('modal-title').textContent = '⚠️ Nonaktifkan ' + nama;
   document.getElementById('modal-body').textContent =
-    'Add-on akan dinonaktifkan dan akun terkait dihapus. Yakin?';
+    'Add-on akan dinonaktifkan. Yakin?';
   document.getElementById('modal-ok-btn').textContent = 'Ya, Nonaktifkan';
   document.getElementById('modal-ok-btn').onclick = () => doNonaktifkan(id);
   document.getElementById('modal-confirm').style.display = 'flex';
@@ -208,22 +160,16 @@ async function doAktifkan(id) {
   tutupModal();
   const res = await fetch(`/addons/${id}/aktifkan`, {method:'POST'});
   const data = await res.json();
-  if (data.ok) {
-    location.href = '/addons?ok=' + encodeURIComponent(data.msg);
-  } else {
-    alert('❌ ' + data.msg);
-  }
+  if (data.ok) location.href = '/addons?ok=' + encodeURIComponent(data.msg);
+  else alert('❌ ' + data.msg);
 }
 
 async function doNonaktifkan(id) {
   tutupModal();
   const res = await fetch(`/addons/${id}/nonaktifkan`, {method:'POST'});
   const data = await res.json();
-  if (data.ok) {
-    location.href = '/addons?ok=' + encodeURIComponent(data.msg);
-  } else {
-    alert('❌ ' + data.msg);
-  }
+  if (data.ok) location.href = '/addons?ok=' + encodeURIComponent(data.msg);
+  else alert('❌ ' + data.msg);
 }
 </script>
 {% endblock %}

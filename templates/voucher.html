@@ -52,10 +52,17 @@
       </svg>
       Cetak
     </a>
+    <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
+      class="btn-secondary px-4 py-2.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Tambah
+    </button>
     <button onclick="document.getElementById('modal-generate').classList.remove('hidden')"
       class="btn-primary px-4 py-2.5 text-sm">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
       </svg>
       Generate Voucher
     </button>
@@ -328,6 +335,79 @@
 </div>
 {% endif %}
 
+<!-- Modal Tambah Voucher (1 per 1) -->
+<div id="modal-tambah" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h3 class="font-bold text-gray-900 text-lg">Tambah Voucher</h3>
+        <p class="text-xs text-gray-400 mt-0.5">Buat voucher satu per satu</p>
+      </div>
+      <button onclick="document.getElementById('modal-tambah').classList.add('hidden')"
+        class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="space-y-4" id="form-tambah">
+      <div>
+        <label class="form-label">Server MikroTik</label>
+        <select id="tv-server" class="form-select" required>
+          <option value="">Pilih Server</option>
+          {% for s in servers %}
+          <option value="{{ s.id }}" {% if sel_server==s.id %}selected{% endif %}>{{ s.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Paket Hotspot</label>
+        <select id="tv-paket" class="form-select" required>
+          <option value="">Pilih Paket</option>
+          {% for p in pakets %}
+          <option value="{{ p.id }}">{{ p.nama }} — {{ p.harga | rp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Kode Voucher</label>
+        <div class="flex gap-2">
+          <input id="tv-kode" type="text" placeholder="Kosongkan untuk auto-generate"
+            class="form-input flex-1" maxlength="20" style="text-transform:uppercase">
+          <button type="button" onclick="tvAutoKode()"
+            class="btn-ghost px-3 py-2 text-xs whitespace-nowrap">Auto</button>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Huruf kapital & angka, maks 20 karakter</p>
+      </div>
+      <div>
+        <label class="form-label">Comment <span class="text-gray-400 font-normal">(opsional)</span></label>
+        <input id="tv-comment" type="text" placeholder="Contoh: RT 01" class="form-input">
+      </div>
+      <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" id="tv-push" class="mt-0.5 rounded" checked>
+          <div>
+            <p class="text-sm font-semibold text-blue-800">Push ke MikroTik</p>
+            <p class="text-xs text-blue-500 mt-0.5">Langsung buat user hotspot di router</p>
+          </div>
+        </label>
+      </div>
+      <div id="tv-result" class="hidden rounded-xl p-3 text-sm font-semibold text-center"></div>
+    </div>
+    <div class="flex gap-3 mt-6">
+      <button type="button" onclick="document.getElementById('modal-tambah').classList.add('hidden')"
+        class="btn-secondary flex-1 py-2.5 justify-center">Tutup</button>
+      <button type="button" onclick="tvSimpan()" id="tv-btn-simpan"
+        class="btn-primary flex-1 py-2.5 justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Simpan
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Generate -->
 <div id="modal-generate" class="hidden modal-overlay">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -405,6 +485,57 @@
 <script>
 function copyKode(kode) {
   navigator.clipboard.writeText(kode).then(() => showToast('Kode disalin: ' + kode));
+}
+
+function tvAutoKode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let k = '';
+  for (let i = 0; i < 8; i++) k += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('tv-kode').value = k;
+}
+
+async function tvSimpan() {
+  const server = document.getElementById('tv-server').value;
+  const paket  = document.getElementById('tv-paket').value;
+  const kode   = document.getElementById('tv-kode').value.trim().toUpperCase();
+  const comment = document.getElementById('tv-comment').value.trim();
+  const push   = document.getElementById('tv-push').checked;
+  const res_el = document.getElementById('tv-result');
+  const btn    = document.getElementById('tv-btn-simpan');
+
+  if (!server) { showToast('Pilih server terlebih dahulu', 'error'); return; }
+  if (!paket)  { showToast('Pilih paket terlebih dahulu', 'error');  return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Menyimpan...';
+
+  const fd = new FormData();
+  fd.append('server_id', server);
+  fd.append('paket_id', paket);
+  fd.append('kode', kode);
+  fd.append('comment', comment);
+  if (push) fd.append('push_mikrotik', '1');
+
+  try {
+    const r = await fetch('/hotspot/voucher/tambah', { method: 'POST', body: fd });
+    const d = await r.json();
+    res_el.classList.remove('hidden');
+    if (d.ok) {
+      res_el.className = 'rounded-xl p-3 text-sm font-semibold text-center bg-emerald-50 text-emerald-700 border border-emerald-200';
+      res_el.innerHTML = 'Voucher <span class="font-black tracking-widest">' + d.kode + '</span> berhasil disimpan'
+        + (d.pushed ? ' &amp; dipush ke MikroTik.' : '.');
+      document.getElementById('tv-kode').value = '';
+      document.getElementById('tv-comment').value = '';
+      setTimeout(() => location.reload(), 1800);
+    } else {
+      res_el.className = 'rounded-xl p-3 text-sm font-semibold text-center bg-red-50 text-red-700 border border-red-200';
+      res_el.textContent = d.msg || 'Gagal menyimpan voucher.';
+    }
+  } catch(e) {
+    showToast('Tidak dapat terhubung ke server', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Simpan';
 }
 
 function filterVoucher(q) {

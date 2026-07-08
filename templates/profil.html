@@ -123,6 +123,44 @@
   </div>
   {% endif %}
 
+  {% if user.role == 'admin' %}
+  <div class="card p-6">
+    <h2 class="font-bold text-gray-800 mb-1">Reminder Otomatis PPPoE</h2>
+    <p class="text-sm text-gray-500 mb-4">Kirim WA reminder tagihan otomatis ke pelanggan PPPoE setiap hari jam 08:00 WIB.</p>
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="text-sm font-medium text-gray-700">Status Reminder Otomatis</p>
+        <p class="text-xs text-gray-400 mt-0.5" id="reminder-status-text">
+          {{ 'Aktif — reminder dikirim otomatis jam 08:00 WIB' if auto_reminder else 'Nonaktif — tagihan dikirim manual' }}
+        </p>
+      </div>
+      <button id="btn-toggle-reminder" onclick="toggleReminder()"
+        class="relative inline-flex items-center rounded-full transition-colors focus:outline-none"
+        style="width:52px;height:28px;background-color:{{ '#4f46e5' if auto_reminder else '#d1d5db' }};transition:background-color 0.2s;">
+        <span id="toggle-dot"
+          class="inline-block rounded-full bg-white shadow"
+          style="width:20px;height:20px;transform:{{ 'translateX(28px)' if auto_reminder else 'translateX(4px)' }};transition:transform 0.2s;"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card p-6">
+    <h2 class="font-bold text-gray-800 mb-1">Grace Period Tagihan PPPoE</h2>
+    <p class="text-sm text-gray-500 mb-4">Jumlah hari toleransi setelah tanggal jatuh tempo sebelum pelanggan masuk status overdue & auto-suspend. Berlaku untuk semua pelanggan Anda.</p>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <input type="number" id="input-grace-period" min="1" max="30" value="{{ grace_period }}"
+          class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          oninput="this.value=Math.max(1,Math.min(30,parseInt(this.value)||1))">
+        <span class="text-sm text-gray-600">hari</span>
+      </div>
+      <button onclick="simpanGracePeriod()" class="btn-primary px-4 py-2 text-sm">Simpan</button>
+      <span class="text-xs text-gray-400 ml-auto">Min 1 hari, Maks 30 hari</span>
+    </div>
+    <p class="text-xs text-slate-400 mt-3">Contoh: grace period <strong>10 hari</strong>, tgl bayar <strong>1</strong> → jatuh tempo <strong>tgl 11</strong>. Setelah itu tagihan menjadi overdue.</p>
+  </div>
+  {% endif %}
+
   <div class="flex justify-end">
     <button onclick="simpanProfil()" id="btn-simpan"
       class="btn-primary px-6 py-2.5">
@@ -139,6 +177,38 @@
 function togglePw(id, eyeId) {
   const el = document.getElementById(id);
   el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function toggleReminder() {
+  const btn = document.getElementById('btn-toggle-reminder');
+  const dot = document.getElementById('toggle-dot');
+  const txt = document.getElementById('reminder-status-text');
+  const r = await fetch('/profil/reminder-toggle', { method: 'POST' });
+  const d = await r.json();
+  if (d.ok) {
+    const on = d.auto_reminder === 1;
+    btn.style.backgroundColor = on ? '#4f46e5' : '#d1d5db';
+    dot.style.transform = on ? 'translateX(28px)' : 'translateX(4px)';
+    txt.textContent = on ? 'Aktif — reminder dikirim otomatis jam 08:00 WIB' : 'Nonaktif — tagihan dikirim manual';
+    showToast(on ? 'Reminder otomatis diaktifkan' : 'Reminder otomatis dinonaktifkan', 'success');
+  } else {
+    showToast(d.msg || 'Gagal ubah setting', 'error');
+  }
+}
+
+async function simpanGracePeriod() {
+  const val = parseInt(document.getElementById('input-grace-period').value) || 10;
+  const r = await fetch('/profil/grace-period', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ grace_period: val })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    showToast('Grace period disimpan: ' + d.grace_period + ' hari', 'success');
+  } else {
+    showToast(d.msg || 'Gagal simpan', 'error');
+  }
 }
 
 async function ubahFeeMode(mode) {

@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}{{ app_name }}{% endblock %}</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css"/>
+<style>
+  .tippy-box[data-theme~='billing']{background:#1e293b;color:#f8fafc;font-size:12px;border-radius:8px;padding:2px 4px}
+  .tippy-box[data-theme~='billing'][data-placement^='top']>.tippy-arrow::before{border-top-color:#1e293b}
+  .tippy-box[data-theme~='billing'][data-placement^='bottom']>.tippy-arrow::before{border-bottom-color:#1e293b}
+</style>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style type="text/tailwindcss">
   @layer base {
@@ -90,10 +96,10 @@
         </div>
       </div>
       {% if user.role != 'teknisi' %}
-      <div class="mt-2 pt-2 flex items-center justify-between" style="border-top:1px solid rgba(255,255,255,0.05)">
+      <a href="/saldo" class="mt-2 pt-2 flex items-center justify-between hover:opacity-80 transition-opacity" style="border-top:1px solid rgba(255,255,255,0.05)">
         <span class="text-gray-500 text-xs">Saldo</span>
         <span class="text-emerald-400 text-xs font-bold">{{ user.saldo | rp }}</span>
-      </div>
+      </a>
       {% endif %}
     </div>
 
@@ -114,12 +120,7 @@
         Dashboard
       </a>
 
-      <a href="/laporan" class="nav-link {% if active=='laporan' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        Laporan
-      </a>
-
-      {% if user.role != 'sub_agen' %}
+{% if user.role != 'sub_agen' %}
       <a href="/servers" class="nav-link {% if active=='servers' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>
         Server MikroTik
@@ -128,14 +129,23 @@
         <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         WA Gateway
       </a>
+      <a href="/wa-log" class="nav-link {% if active=='wa_log' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        Pesan Otomatis
+      </a>
       {% endif %}
 
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">PPPoE</p>
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Pelanggan</p>
 
       {% if user.role != 'sub_agen' %}
       <a href="/pppoe/paket" class="nav-link {% if active=='pppoe_paket' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
         Paket PPPoE
+      </a>
+
+      <a href="/odp" class="nav-link {% if active=='odp' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        ODP
       </a>
       {% endif %}
 
@@ -149,23 +159,10 @@
         Monitor Online
       </a>
 
-      <a href="/pppoe/monitoring" class="nav-link {% if active=='pppoe_monitoring' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        Monitoring & Laporan
-      </a>
-
       <a href="/pppoe/tagihan" class="nav-link {% if active=='pppoe_tagihan' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-        Tagihan PPPoE
+        Transaksi PPPoE
       </a>
-
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Jaringan</p>
-
-      <a href="/odp" class="nav-link {% if active=='odp' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        ODP
-      </a>
-
 
       <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Hotspot</p>
 
@@ -181,10 +178,12 @@
         Voucher Hotspot
       </a>
 
+      {% if user.fitur_hotspot_bulanan %}
       <a href="/hotspot/bulanan" class="nav-link {% if active=='hotspot_bulanan' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Hotspot Bulanan
       </a>
+      {% endif %}
 
       <!-- Link Toko Online (untuk agen & sub_agen) -->
       {% if user.role in ('agen','sub_agen') %}
@@ -204,17 +203,7 @@
       </a>
       {% endif %}
 
-      <a href="/transaksi" class="nav-link {% if active=='transaksi' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-        Transaksi
-      </a>
-
-      <a href="/saldo" class="nav-link {% if active=='saldo' %}active{% endif %}">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Saldo
-      </a>
-
-      <a href="/addons" class="nav-link {% if active=='addons' %}active{% endif %}">
+<a href="/addons" class="nav-link {% if active=='addons' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
         Add-On
       </a>
@@ -284,11 +273,13 @@
 const DESKTOP = 768;
 function isMobile() { return window.innerWidth < DESKTOP; }
 
-function applyLayout() {
+function applyLayout(animate) {
   const sidebar = document.getElementById('sidebar');
   const main = document.getElementById('main-content');
   const hamburger = document.getElementById('btn-hamburger');
   const btnClose = document.getElementById('btn-close-sidebar');
+  // Disable transition during initial layout to prevent slide-in on page load
+  if (!animate) sidebar.style.transition = 'none';
   if (isMobile()) {
     sidebar.style.transform = 'translateX(-100%)';
     main.style.marginLeft = '0';
@@ -301,6 +292,7 @@ function applyLayout() {
     btnClose.style.display = 'none';
     document.getElementById('sidebar-overlay').style.display = 'none';
   }
+  if (!animate) requestAnimationFrame(() => { sidebar.style.transition = 'transform 0.2s ease'; });
 }
 
 function openSidebar() {
@@ -312,8 +304,8 @@ function closeSidebar() {
   document.getElementById('sidebar-overlay').style.display = 'none';
 }
 
-applyLayout();
-window.addEventListener('resize', applyLayout);
+applyLayout(false);
+window.addEventListener('resize', () => applyLayout(false));
 
 // Clock
 (function tick(){
@@ -348,5 +340,15 @@ document.addEventListener('click', e => {
 });
 </script>
 {% block scripts %}{% endblock %}
+<script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
+<script src="https://unpkg.com/tippy.js@6/dist/tippy.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    tippy('[data-tip]', {
+      content: el => el.getAttribute('data-tip'),
+      theme: 'billing', placement: 'top', arrow: true, delay: [200, 0]
+    });
+  });
+</script>
 </body>
 </html>

@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Pesan Otomatis — {{ app_name }}{% endblock %}
+{% block topbar_title %}Pesan Otomatis{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="flex items-start gap-4">
+    <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
+      style="background:linear-gradient(135deg,#dcfce7,#bbf7d0)">
+      <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+      </svg>
+    </div>
+    <div>
+      <h1 class="page-title">Pesan Otomatis</h1>
+      <p class="page-sub">Log pengiriman WA — PPPoE &amp; Hotspot</p>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+{% set sent_count   = logs | selectattr('status','eq','sent')   | list | length %}
+{% set failed_count = logs | selectattr('status','eq','failed') | list | length %}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="card p-4">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-gray-400 font-bold uppercase tracking-wide">Total</p>
+      <div class="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
+        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+      </div>
+    </div>
+    <p class="text-2xl font-black text-gray-900">{{ logs | length }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">pesan terkirim</p>
+  </div>
+  <div class="card p-4" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-emerald-600 font-bold uppercase tracking-wide">Terkirim</p>
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(16,185,129,0.15)">
+        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      </div>
+    </div>
+    <p class="text-2xl font-black text-emerald-700">{{ sent_count }}</p>
+    <p class="text-xs text-emerald-500 mt-0.5">berhasil dikirim</p>
+  </div>
+  <div class="card p-4" style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border-color:#fecdd3">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-red-500 font-bold uppercase tracking-wide">Gagal</p>
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(239,68,68,0.12)">
+        <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </div>
+    </div>
+    <p class="text-2xl font-black text-red-600">{{ failed_count }}</p>
+    <p class="text-xs text-red-400 mt-0.5">tidak terkirim</p>
+  </div>
+  <div class="card p-4" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-color:#bfdbfe">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs text-blue-600 font-bold uppercase tracking-wide">Sukses Rate</p>
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(59,130,246,0.12)">
+        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </div>
+    </div>
+    <p class="text-2xl font-black text-blue-700">
+      {% if logs | length > 0 %}{{ ((sent_count / (logs|length)) * 100) | int }}%{% else %}—{% endif %}
+    </p>
+    <p class="text-xs text-blue-400 mt-0.5">tingkat keberhasilan</p>
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="card p-4 mb-5">
+  <form method="get" action="/wa-log" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="form-label">Tipe Pesan</label>
+      <select name="tipe" class="form-select w-48" onchange="this.form.submit()">
+        <option value="">Semua Tipe</option>
+        <optgroup label="── PPPoE ──">
+          <option value="reminder"        {% if sel_tipe=='reminder'        %}selected{% endif %}>Reminder Otomatis</option>
+          <option value="reminder_manual" {% if sel_tipe=='reminder_manual' %}selected{% endif %}>Reminder Manual</option>
+          <option value="suspend"         {% if sel_tipe=='suspend'         %}selected{% endif %}>Suspend / Blokir</option>
+          <option value="pembayaran"      {% if sel_tipe=='pembayaran'      %}selected{% endif %}>Konfirmasi Bayar</option>
+          <option value="link_bayar"      {% if sel_tipe=='link_bayar'      %}selected{% endif %}>Link Bayar</option>
+        </optgroup>
+        <optgroup label="── Hotspot ──">
+          <option value="hotspot_voucher"  {% if sel_tipe=='hotspot_voucher'  %}selected{% endif %}>Voucher Hotspot</option>
+          <option value="hotspot_bayar"    {% if sel_tipe=='hotspot_bayar'    %}selected{% endif %}>Konfirmasi Bayar Hotspot</option>
+          <option value="hotspot_reminder" {% if sel_tipe=='hotspot_reminder' %}selected{% endif %}>Reminder Hotspot</option>
+        </optgroup>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select w-36" onchange="this.form.submit()">
+        <option value="">Semua</option>
+        <option value="sent"   {% if sel_status=='sent'   %}selected{% endif %}>Terkirim</option>
+        <option value="failed" {% if sel_status=='failed' %}selected{% endif %}>Gagal</option>
+      </select>
+    </div>
+    <div class="flex-1 min-w-[180px]">
+      <label class="form-label">Cari Nomor / Isi Pesan</label>
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="Nomor HP atau kata kunci..."
+          class="form-input pl-9">
+      </div>
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2.5 self-end">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+      Filter
+    </button>
+    <a href="/wa-log" class="btn-ghost px-3 py-2.5 self-end text-xs">Reset</a>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card overflow-hidden">
+  {% if logs %}
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100" style="background:linear-gradient(90deg,#f8fafc,#f1f5f9)">
+          <th class="th">Waktu</th>
+          <th class="th">Nomor</th>
+          <th class="th">Tipe</th>
+          <th class="th">Pesan</th>
+          <th class="th">Status</th>
+          <th class="th text-right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        {% set is_failed = l.status == 'failed' %}
+        <tr id="row-{{ l.id }}" class="border-b border-gray-50 hover:bg-gray-50/60 transition-colors
+          {% if is_failed %}bg-red-50/30{% endif %}">
+
+          <!-- Waktu -->
+          <td class="td whitespace-nowrap">
+            <p class="text-sm font-semibold text-gray-700">{{ l.created_at | datetimeformat('%d %b %Y') }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">{{ l.created_at | datetimeformat('%H:%M:%S') }}</p>
+          </td>
+
+          <!-- Nomor -->
+          <td class="td">
+            <a href="https://wa.me/{{ l.nomor }}" target="_blank"
+              class="inline-flex items-center gap-1.5 text-sm font-mono font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.549 4.107 1.51 5.845L.036 23.737a.5.5 0 00.61.637l6.11-1.597A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.792 9.792 0 01-5.028-1.385l-.36-.214-3.733.977.993-3.63-.235-.374A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+              {{ l.nomor }}
+            </a>
+          </td>
+
+          <!-- Tipe -->
+          <td class="td">
+            {% if l.tipe == 'reminder' %}
+              <span class="badge badge-blue">Reminder</span>
+            {% elif l.tipe == 'reminder_manual' %}
+              <span class="badge" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe">Reminder Manual</span>
+            {% elif l.tipe == 'suspend' %}
+              <span class="badge badge-orange">Suspend</span>
+            {% elif l.tipe == 'pembayaran' %}
+              <span class="badge badge-green">Konfirmasi Bayar</span>
+            {% elif l.tipe == 'link_bayar' %}
+              <span class="badge" style="background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe">Link Bayar</span>
+            {% else %}
+              <span class="badge badge-gray">{{ l.tipe or '—' }}</span>
+            {% endif %}
+          </td>
+
+          <!-- Pesan (preview) -->
+          <td class="td max-w-xs">
+            <p class="text-xs text-gray-600 leading-relaxed cursor-pointer hover:text-gray-900 select-none"
+              onclick="togglePesan({{ l.id }})">
+              <span id="pesan-short-{{ l.id }}" class="line-clamp-2">{{ l.pesan[:120] }}{% if l.pesan|length > 120 %}<span class="text-blue-400 ml-1 text-[10px] font-medium">baca selengkapnya</span>{% endif %}</span>
+              <span id="pesan-full-{{ l.id }}" class="hidden whitespace-pre-wrap">{{ l.pesan }}<span class="text-blue-400 ml-1 text-[10px] font-medium"> [tutup]</span></span>
+            </p>
+          </td>
+
+          <!-- Status -->
+          <td class="td whitespace-nowrap">
+            {% if l.status == 'sent' %}
+            <span class="badge badge-green">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              Terkirim
+            </span>
+            {% else %}
+            <div class="space-y-1">
+              <span class="badge badge-red">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                Gagal
+              </span>
+              {% if l.error %}
+              <p class="text-[10px] text-red-400 max-w-[160px] truncate" title="{{ l.error }}">{{ l.error }}</p>
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+
+          <!-- Aksi -->
+          <td class="td">
+            <div class="flex items-center gap-1 justify-end">
+              {% if is_failed %}
+              <button onclick="kirimUlang({{ l.id }}, this)"
+                class="btn-primary text-xs px-3 py-1.5"
+                title="Kirim Ulang">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Kirim Ulang
+              </button>
+              {% endif %}
+              <button onclick="hapusPesan({{ l.id }}, this)"
+                class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                title="Hapus pesan ini">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+    <p class="text-xs text-gray-400">Menampilkan <span class="font-semibold text-gray-600" id="total-count">{{ logs | length }}</span> pesan</p>
+    {% if failed_count > 0 %}
+    <p class="text-xs text-red-400 font-medium">{{ failed_count }} pesan gagal perlu perhatian</p>
+    {% else %}
+    <p class="text-xs text-emerald-500 font-medium">Semua pesan berhasil dikirim</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="py-16 text-center">
+    <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+      style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+      <svg class="w-8 h-8 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+    </div>
+    <p class="text-gray-600 font-semibold">Belum ada pesan otomatis</p>
+    <p class="text-xs text-gray-400 mt-1.5 max-w-sm mx-auto">Pesan akan muncul di sini setelah sistem mengirim reminder PPPoE/Hotspot, notifikasi suspend, atau konfirmasi pembayaran.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePesan(id) {
+  document.getElementById('pesan-short-' + id).classList.toggle('hidden');
+  document.getElementById('pesan-full-'  + id).classList.toggle('hidden');
+}
+
+async function kirimUlang(lid, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...';
+  try {
+    const res  = await fetch(`/wa-log/${lid}/kirim-ulang`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Pesan berhasil dikirim ulang ✓', 'success');
+      setTimeout(() => window.location.reload(), 1000);
+    } else {
+      showToast(data.msg || 'Gagal kirim ulang', 'error');
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  } catch(e) {
+    showToast('Error koneksi', 'error');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function hapusPesan(lid, btn) {
+  if (!confirm('Hapus pesan ini dari log?')) return;
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`/wa-log/${lid}/hapus`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      const row = document.getElementById('row-' + lid);
+      if (row) {
+        row.style.transition = 'opacity 0.3s';
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          const cnt = document.getElementById('total-count');
+          if (cnt) cnt.textContent = parseInt(cnt.textContent) - 1;
+        }, 300);
+      }
+      showToast('Pesan dihapus', 'success');
+    } else {
+      showToast(data.msg || 'Gagal hapus', 'error');
+      btn.disabled = false;
+    }
+  } catch(e) {
+    showToast('Error koneksi', 'error');
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

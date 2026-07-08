@@ -3,196 +3,343 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bayar Tagihan Internet — {{ t.isp_nama }}</title>
+<title>Tagihan Internet — {{ t.isp_nama }}</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style type="text/tailwindcss">
   @layer base { * { font-family: 'Inter', sans-serif; } }
-  @layer components {
-    .card { @apply bg-white rounded-2xl border border-gray-100 shadow-sm; }
-    .btn-primary { @apply inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all px-4 py-3 cursor-pointer shadow-sm; }
+</style>
+<style>
+  .gradient-hero {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #6366f1 100%);
+  }
+  .gradient-hero-overdue {
+    background: linear-gradient(135deg, #991b1b 0%, #dc2626 50%, #f97316 100%);
+  }
+  .gradient-hero-paid {
+    background: linear-gradient(135deg, #065f46 0%, #10b981 50%, #34d399 100%);
+  }
+  .invoice-card {
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px -10px rgba(0,0,0,0.15), 0 4px 20px -4px rgba(0,0,0,0.08);
+  }
+  .shimmer-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent);
+  }
+  .btn-pay {
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    box-shadow: 0 8px 24px -4px rgba(79,70,229,0.5);
+    transition: all 0.2s;
+  }
+  .btn-pay:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -4px rgba(79,70,229,0.6);
+  }
+  .btn-pay:active {
+    transform: translateY(0);
+  }
+  .pulse-dot {
+    animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
+  }
+  .float-anim {
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
   }
 </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen">
 
-<!-- Header -->
-<header class="bg-white border-b border-gray-200 shadow-sm">
-  <div class="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
-    <div class="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
+{% if sukses or t.status == 'paid' %}
+<!-- ════════════════════ SUKSES ════════════════════ -->
+<div class="gradient-hero-paid min-h-screen flex flex-col">
+
+  <!-- Top bar -->
+  <div class="px-5 pt-6 pb-2 flex items-center gap-3">
+    <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
       <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
       </svg>
     </div>
-    <div>
-      <p class="font-bold text-gray-900 text-sm leading-tight">{{ t.isp_nama }}</p>
-      <p class="text-xs text-gray-400">Pembayaran Tagihan Internet</p>
+    <p class="text-white/80 text-sm font-medium">{{ t.isp_nama }}</p>
+  </div>
+
+  <!-- Hero sukses -->
+  <div class="flex-1 flex flex-col items-center justify-center px-5 py-10 text-center">
+    <div class="float-anim mb-6">
+      <div class="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center ring-4 ring-white/30">
+        <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+      </div>
+    </div>
+    <h1 class="text-3xl font-black text-white mb-2">Lunas!</h1>
+    <p class="text-emerald-100 text-sm max-w-xs">Pembayaran tagihan internet berhasil dikonfirmasi. Terima kasih!</p>
+  </div>
+
+  <!-- Receipt card -->
+  <div class="px-4 pb-8">
+    <div class="invoice-card p-5">
+      <!-- Receipt header -->
+      <div class="flex items-center gap-3 mb-4 pb-4 border-b border-dashed border-gray-100">
+        <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="font-bold text-gray-900 text-sm">Bukti Pembayaran</p>
+          <p class="text-xs text-gray-400">{{ t.isp_nama }}</p>
+        </div>
+        <span class="ml-auto bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">LUNAS</span>
+      </div>
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Pelanggan</span>
+          <span class="font-semibold text-gray-900">{{ t.nama_pelanggan }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Paket</span>
+          <span class="font-semibold text-gray-900">{{ t.paket_nama or '—' }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Periode</span>
+          <span class="font-semibold text-gray-900">{{ t.bulan }}</span>
+        </div>
+        <div class="shimmer-line my-2"></div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-600 font-semibold">Total Dibayar</span>
+          <span class="font-black text-emerald-600 text-xl">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
+        </div>
+      </div>
+      <p class="text-center text-xs text-gray-400 mt-4 pt-3 border-t border-gray-50">
+        Terima kasih sudah membayar tepat waktu 🙏
+      </p>
     </div>
   </div>
-</header>
 
-<div class="max-w-lg mx-auto px-4 py-10">
+</div>
 
-  {% if sukses or t.status == 'paid' %}
-  <!-- ── SUDAH LUNAS ── -->
-  <div class="text-center mb-6">
-    <div class="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-100">
-      <svg class="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+{% elif t.status == 'unpaid' or t.status == 'overdue' %}
+<!-- ════════════════════ FORM BAYAR ════════════════════ -->
+
+{% set is_overdue = t.status == 'overdue' %}
+
+<!-- Hero -->
+<div class="{{ 'gradient-hero-overdue' if is_overdue else 'gradient-hero' }} relative overflow-hidden">
+  <!-- Dekorasi lingkaran -->
+  <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-white/5"></div>
+  <div class="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-white/5"></div>
+
+  <!-- ISP brand -->
+  <div class="relative px-5 pt-5 pb-1 flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
       </svg>
     </div>
-    <h1 class="text-2xl font-black text-gray-900 mb-1">Pembayaran Berhasil!</h1>
-    <p class="text-gray-500 text-sm">Tagihan internet kamu sudah lunas. Terima kasih!</p>
-  </div>
-
-  <div class="card p-5 mb-6">
-    <div class="absolute top-0 left-0 w-full h-1 bg-emerald-400 rounded-t-2xl"></div>
-    <h3 class="font-semibold text-gray-700 text-sm mb-4">Rincian Tagihan</h3>
-    <div class="space-y-3 text-sm">
-      <div class="flex justify-between">
-        <span class="text-gray-500">Pelanggan</span>
-        <span class="font-semibold text-gray-900">{{ t.nama_pelanggan }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span class="text-gray-500">Paket</span>
-        <span class="font-semibold text-gray-900">{{ t.paket_nama or '—' }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span class="text-gray-500">Bulan</span>
-        <span class="font-semibold text-gray-900">{{ t.bulan }}</span>
-      </div>
-      <div class="flex justify-between border-t border-gray-100 pt-3 mt-1">
-        <span class="text-gray-500">Total Dibayar</span>
-        <span class="font-black text-emerald-600 text-base">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="text-center text-xs text-gray-400">
-    Bukti pembayaran telah dikirim ke WhatsApp kamu.<br>
-    Terima kasih sudah membayar tepat waktu 🙏
-  </div>
-
-  {% elif t.status == 'unpaid' or t.status == 'overdue' %}
-  <!-- ── FORM BAYAR ── -->
-  <div class="text-center mb-6">
-    {% if t.status == 'overdue' %}
-    <div class="inline-flex items-center gap-2 bg-red-100 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-      </svg>
-      Tagihan Terlambat
-    </div>
-    {% else %}
-    <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-      </svg>
-      Tagihan Bulan Ini
-    </div>
+    <p class="text-white/80 text-sm font-medium">{{ t.isp_nama }}</p>
+    {% if is_overdue %}
+    <span class="ml-auto flex items-center gap-1.5 bg-red-900/40 text-red-200 text-xs font-bold px-2.5 py-1 rounded-full">
+      <span class="w-1.5 h-1.5 rounded-full bg-red-300 pulse-dot"></span>
+      Terlambat
+    </span>
     {% endif %}
-    <h1 class="text-2xl font-black text-gray-900 mb-1">Tagihan Internet</h1>
-    <p class="text-gray-500 text-sm">Halo <strong>{{ t.nama_pelanggan }}</strong>, selesaikan pembayaran bulan <strong>{{ t.bulan }}</strong>.</p>
   </div>
 
-  <!-- Invoice card -->
-  <div class="card p-5 mb-5 relative overflow-hidden">
-    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+  <!-- Tagihan amount -->
+  <div class="relative px-5 pt-6 pb-10 text-center">
+    <p class="text-white/70 text-sm mb-1">Tagihan Internet · {{ t.bulan }}</p>
+    <p class="text-5xl font-black text-white tracking-tight mb-2">
+      Rp {{ "{:,}".format(t.amount).replace(",",".") }}
+    </p>
+    <p class="text-white/80 text-sm">Halo, <strong class="text-white">{{ t.nama_pelanggan }}</strong> 👋</p>
+  </div>
+</div>
+
+<!-- Invoice card (overlap hero) -->
+<div class="px-4 -mt-5 mb-5">
+  <div class="invoice-card p-5">
+
+    <!-- Header card -->
+    <div class="flex items-center gap-3 mb-4 pb-3.5 border-b border-gray-50">
+      <div class="w-9 h-9 rounded-xl {{ 'bg-red-100' if is_overdue else 'bg-blue-100' }} flex items-center justify-center flex-shrink-0">
+        <svg class="w-4.5 h-4.5 {{ 'text-red-600' if is_overdue else 'text-blue-600' }}" style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-gray-900 text-sm">Rincian Tagihan</p>
+        <p class="text-xs text-gray-400">Invoice bulan {{ t.bulan }}</p>
+      </div>
+    </div>
+
+    <!-- Detail rows -->
     <div class="space-y-3 text-sm">
-      <div class="flex justify-between">
+      <div class="flex justify-between items-center">
         <span class="text-gray-500">Pelanggan</span>
         <span class="font-semibold text-gray-900">{{ t.nama_pelanggan }}</span>
       </div>
-      <div class="flex justify-between">
+      <div class="flex justify-between items-center">
         <span class="text-gray-500">Paket</span>
-        <span class="font-semibold text-gray-900">{{ t.paket_nama or '—' }}{% if t.kecepatan %} · {{ t.kecepatan }}{% endif %}</span>
+        <div class="text-right">
+          <p class="font-semibold text-gray-900">{{ t.paket_nama or '—' }}</p>
+          {% if t.kecepatan %}<p class="text-xs text-gray-400">{{ t.kecepatan }}</p>{% endif %}
+        </div>
       </div>
-      <div class="flex justify-between">
+      {% if t.server_nama %}
+      <div class="flex justify-between items-center">
         <span class="text-gray-500">Server</span>
-        <span class="font-semibold text-gray-900">{{ t.server_nama or '—' }}</span>
+        <span class="font-semibold text-gray-900">{{ t.server_nama }}</span>
       </div>
-      <div class="flex justify-between">
+      {% endif %}
+      <div class="flex justify-between items-center">
         <span class="text-gray-500">Periode</span>
         <span class="font-semibold text-gray-900">{{ t.bulan }}</span>
       </div>
-      <div class="flex justify-between border-t border-gray-100 pt-3 mt-1">
-        <span class="text-gray-600 font-semibold">Total Tagihan</span>
-        <span class="font-black text-blue-700 text-xl">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
+
+      <!-- Total -->
+      <div class="rounded-xl p-3.5 mt-1 {{ 'bg-red-50' if is_overdue else 'bg-blue-50' }}">
+        <div class="flex justify-between items-center">
+          <span class="{{ 'text-red-700' if is_overdue else 'text-blue-700' }} font-semibold text-sm">Total Tagihan</span>
+          <span class="font-black {{ 'text-red-700' if is_overdue else 'text-blue-700' }} text-xl">
+            Rp {{ "{:,}".format(t.amount).replace(",",".") }}
+          </span>
+        </div>
+        {% if mayar_enabled and mayar_fee %}
+        <div class="mt-2 pt-2 border-t {{ 'border-red-100' if is_overdue else 'border-blue-100' }} flex justify-between items-center text-xs">
+          <span class="{{ 'text-red-500' if is_overdue else 'text-blue-500' }}">+ Biaya admin online</span>
+          <span class="{{ 'text-red-600' if is_overdue else 'text-blue-600' }} font-semibold">Rp {{ "{:,}".format(mayar_fee).replace(",",".") }}</span>
+        </div>
+        <div class="mt-1.5 flex justify-between items-center text-sm">
+          <span class="{{ 'text-red-700' if is_overdue else 'text-blue-700' }} font-bold">Total bayar online</span>
+          <span class="{{ 'text-red-700' if is_overdue else 'text-blue-700' }} font-black">Rp {{ "{:,}".format(t.amount + mayar_fee).replace(",",".") }}</span>
+        </div>
+        {% endif %}
       </div>
-      {% if mayar_enabled and mayar_fee %}
-      <div class="flex justify-between text-xs text-amber-600 mt-1">
-        <span>+ Biaya admin online</span>
-        <span class="font-semibold">Rp {{ "{:,}".format(mayar_fee).replace(",",".") }}</span>
-      </div>
-      <div class="flex justify-between text-sm font-bold text-orange-700 mt-1 pt-1 border-t border-dashed border-gray-100">
-        <span>Total bayar online</span>
-        <span>Rp {{ "{:,}".format(t.amount + mayar_fee).replace(",",".") }}</span>
-      </div>
-      {% endif %}
     </div>
   </div>
+</div>
 
-  <!-- Bayar Online via Mayar -->
+<!-- Payment section -->
+<div class="px-4 mb-5">
+
   {% if mayar_enabled %}
-  <a href="/bayar/tagihan/{{ t.id }}/bayar-online"
-     class="btn-primary w-full mb-3 text-base py-3.5">
+  <!-- Bayar Online -->
+  <a href="/bayar/tagihan/{{ t.id }}/bayar-online" class="btn-pay w-full flex items-center justify-center gap-2.5 text-white font-bold rounded-2xl py-4 text-base mb-3 no-underline">
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
     </svg>
     Bayar Online Sekarang
+    <svg class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+    </svg>
   </a>
+  <!-- Payment methods -->
+  <div class="flex items-center justify-center gap-3 mb-4 text-xs text-gray-400">
+    <span class="flex items-center gap-1">
+      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      QRIS
+    </span>
+    <span class="text-gray-200">·</span>
+    <span class="flex items-center gap-1">
+      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      Transfer Bank
+    </span>
+    <span class="text-gray-200">·</span>
+    <span class="flex items-center gap-1">
+      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      e-Wallet
+    </span>
+  </div>
   {% if mayar_fee %}
-  <p class="text-center text-xs text-amber-600 mb-3">Biaya admin Rp {{ "{:,}".format(mayar_fee).replace(",",".") }} ditanggung pelanggan</p>
-  {% else %}
-  <p class="text-center text-xs text-gray-400 mb-3">Tanpa biaya admin tambahan</p>
-  {% endif %}
-  <p class="text-center text-xs text-gray-400 mb-4">QRIS · Transfer Bank · e-Wallet — otomatis aktif setelah bayar</p>
+  <p class="text-center text-xs text-amber-600 mb-4">* Biaya admin Rp {{ "{:,}".format(mayar_fee).replace(",",".") }} ditanggung pelanggan</p>
   {% endif %}
 
-  <!-- Instruksi pembayaran manual -->
-  <div class="card p-4 mb-4 text-sm text-gray-600">
-    <p class="font-semibold text-gray-800 mb-2">{% if mayar_enabled %}Atau Bayar Manual:{% else %}Cara Pembayaran:{% endif %}</p>
-    <ol class="list-decimal list-inside space-y-1 text-gray-500">
-      <li>Transfer ke rekening / QRIS yang diberikan oleh ISP.</li>
-      <li>Kirim bukti transfer via WhatsApp ke ISP.</li>
-      <li>ISP akan mengkonfirmasi dalam 1×24 jam.</li>
+  <!-- Divider -->
+  <div class="flex items-center gap-3 mb-4">
+    <div class="flex-1 h-px bg-gray-200"></div>
+    <span class="text-xs text-gray-400 font-medium">atau</span>
+    <div class="flex-1 h-px bg-gray-200"></div>
+  </div>
+  {% endif %}
+
+  <!-- Bayar Manual -->
+  <div class="invoice-card p-4" style="box-shadow:0 4px 20px -4px rgba(0,0,0,0.08)">
+    <div class="flex items-center gap-2.5 mb-3">
+      <div class="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+        <svg class="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <p class="font-semibold text-gray-800 text-sm">{% if mayar_enabled %}Bayar Manual{% else %}Cara Pembayaran{% endif %}</p>
+    </div>
+    <ol class="space-y-2">
+      <li class="flex gap-3 text-sm">
+        <span class="w-5 h-5 rounded-full bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+        <span class="text-gray-500">Transfer ke rekening / QRIS yang diberikan ISP.</span>
+      </li>
+      <li class="flex gap-3 text-sm">
+        <span class="w-5 h-5 rounded-full bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+        <span class="text-gray-500">Kirim bukti transfer via WhatsApp ke ISP.</span>
+      </li>
+      <li class="flex gap-3 text-sm">
+        <span class="w-5 h-5 rounded-full bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+        <span class="text-gray-500">ISP akan konfirmasi dalam 1×24 jam.</span>
+      </li>
     </ol>
   </div>
-
-  <!-- Trust -->
-  <div class="grid grid-cols-3 gap-3 mt-4">
-    <div class="card p-3 text-center">
-      <svg class="w-4 h-4 text-blue-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-600">Aman</p>
-    </div>
-    <div class="card p-3 text-center">
-      <svg class="w-4 h-4 text-emerald-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M13 10V3L4 14h7v7l9-11h-7z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-600">Instan</p>
-    </div>
-    <div class="card p-3 text-center">
-      <svg class="w-4 h-4 text-purple-500 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-      </svg>
-      <p class="text-xs font-semibold text-gray-600">Konfirmasi WA</p>
-    </div>
-  </div>
-
-  {% else %}
-  <!-- Status tidak dikenal -->
-  <div class="text-center">
-    <p class="text-gray-500">Status tagihan tidak valid.</p>
-  </div>
-  {% endif %}
 </div>
+
+<!-- Trust badges -->
+<div class="px-4 pb-10">
+  <div class="grid grid-cols-3 gap-3">
+    <div class="bg-white rounded-2xl p-3 text-center" style="box-shadow:0 2px 12px -2px rgba(0,0,0,0.06)">
+      <div class="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center mx-auto mb-1.5">
+        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+      </div>
+      <p class="text-xs font-semibold text-gray-700">Aman</p>
+      <p class="text-[10px] text-gray-400 leading-tight mt-0.5">Terenkripsi</p>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center" style="box-shadow:0 2px 12px -2px rgba(0,0,0,0.06)">
+      <div class="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-1.5">
+        <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+      </div>
+      <p class="text-xs font-semibold text-gray-700">Instan</p>
+      <p class="text-[10px] text-gray-400 leading-tight mt-0.5">Auto aktif</p>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-center" style="box-shadow:0 2px 12px -2px rgba(0,0,0,0.06)">
+      <div class="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center mx-auto mb-1.5">
+        <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+      </div>
+      <p class="text-xs font-semibold text-gray-700">Notif WA</p>
+      <p class="text-[10px] text-gray-400 leading-tight mt-0.5">Konfirmasi</p>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- Status tidak valid -->
+<div class="flex items-center justify-center min-h-screen">
+  <div class="text-center">
+    <p class="text-gray-400 text-lg">Tagihan tidak ditemukan.</p>
+  </div>
+</div>
+{% endif %}
 
 </body>
 </html>

@@ -9,7 +9,7 @@
     <p class="page-sub">Ringkasan omzet PPPoE & Voucher</p>
   </div>
   <!-- Tab switch -->
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-2 flex-wrap">
     <a href="/laporan?mode=bulanan&tahun={{ tahun }}"
       class="px-4 py-2 rounded-lg text-sm font-semibold transition
         {% if mode == 'bulanan' %}bg-blue-600 text-white shadow{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
@@ -19,6 +19,11 @@
       class="px-4 py-2 rounded-lg text-sm font-semibold transition
         {% if mode == 'harian' %}bg-blue-600 text-white shadow{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
       Per Hari
+    </a>
+    <a href="/laporan?mode=riwayat&bulan={{ bulan }}"
+      class="px-4 py-2 rounded-lg text-sm font-semibold transition
+        {% if mode == 'riwayat' %}bg-indigo-600 text-white shadow{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">
+      Riwayat Bayar
     </a>
   </div>
 </div>
@@ -209,7 +214,8 @@
       <thead>
         <tr class="border-b border-gray-100">
           <th class="th">Tanggal</th>
-          <th class="th text-right">PPPoE</th>
+          <th class="th text-right">PPPoE Manual</th>
+          <th class="th text-right">PPPoE Online</th>
           <th class="th text-right">Voucher</th>
           <th class="th text-right bg-indigo-50 text-indigo-700">QRIS Manual</th>
           <th class="th text-right bg-blue-50 text-blue-700">Total</th>
@@ -221,17 +227,17 @@
         {% if h.total > 0 %}
         {% set has_any.v = true %}
         <tr class="hover:bg-gray-50 transition-colors">
-          <td class="td font-semibold text-gray-800">
-            {{ h.tgl }}
-            <span class="text-xs text-gray-400 ml-1">
-              {% set hari_names = ['Sen','Sel','Rab','Kam','Jum','Sab','Min'] %}
-              {%- set dt_parts = h.tgl.split('-') -%}
-            </span>
+          <td class="td font-semibold text-gray-800">{{ h.tgl }}</td>
+          <td class="td text-right text-gray-700">
+            {% if h.omzet_pppoe_manual %}
+            <span class="font-medium">Rp {{ "{:,}".format(h.omzet_pppoe_manual).replace(",",".") }}</span>
+            <span class="text-xs text-gray-400 ml-1">({{ h.lunas_pppoe_manual }})</span>
+            {% else %}—{% endif %}
           </td>
           <td class="td text-right text-gray-700">
-            {% if h.omzet_pppoe %}
-            <span class="font-medium">Rp {{ "{:,}".format(h.omzet_pppoe).replace(",",".") }}</span>
-            <span class="text-xs text-gray-400 ml-1">({{ h.lunas_pppoe }})</span>
+            {% if h.omzet_pppoe_online %}
+            <span class="font-medium text-emerald-600">Rp {{ "{:,}".format(h.omzet_pppoe_online).replace(",",".") }}</span>
+            <span class="text-xs text-gray-400 ml-1">({{ h.lunas_pppoe_online }})</span>
             {% else %}—{% endif %}
           </td>
           <td class="td text-right text-gray-700">
@@ -250,14 +256,17 @@
         {% endif %}
         {% endfor %}
         {% if not has_any.v %}
-        <tr><td colspan="5" class="td text-center text-gray-400 py-8">Belum ada transaksi di bulan ini</td></tr>
+        <tr><td colspan="6" class="td text-center text-gray-400 py-8">Belum ada transaksi di bulan ini</td></tr>
         {% endif %}
       </tbody>
       <tfoot>
         <tr class="bg-gray-50 border-t-2 border-gray-200">
           <td class="td font-bold text-gray-900">Total {{ bulan | label_bulan }}</td>
           <td class="td text-right font-bold text-gray-700">
-            Rp {{ "{:,}".format(harian | sum(attribute='omzet_pppoe')).replace(",",".") }}
+            Rp {{ "{:,}".format(harian | sum(attribute='omzet_pppoe_manual')).replace(",",".") }}
+          </td>
+          <td class="td text-right font-bold text-emerald-700">
+            Rp {{ "{:,}".format(harian | sum(attribute='omzet_pppoe_online')).replace(",",".") }}
           </td>
           <td class="td text-right font-bold text-gray-700">
             Rp {{ "{:,}".format(harian | sum(attribute='omzet_voucher')).replace(",",".") }}
@@ -270,6 +279,103 @@
           </td>
         </tr>
       </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if mode == 'riwayat' %}
+<!-- Filter Riwayat -->
+<form method="get" action="/laporan" class="flex flex-wrap gap-3 items-end mb-5">
+  <input type="hidden" name="mode" value="riwayat">
+  <div>
+    <label class="form-label">Bulan</label>
+    <select name="bulan" class="form-select" onchange="this.form.submit()">
+      {% for b in bulan_list %}
+      <option value="{{ b }}" {% if b == bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="form-label">Metode</label>
+    <select name="metode" class="form-select" onchange="this.form.submit()">
+      <option value="" {% if metode == '' %}selected{% endif %}>Semua</option>
+      <option value="manual" {% if metode == 'manual' %}selected{% endif %}>Manual</option>
+      <option value="online" {% if metode == 'online' %}selected{% endif %}>Online</option>
+    </select>
+  </div>
+</form>
+
+<!-- Stats riwayat -->
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
+  <div class="card p-4 border-l-4 border-indigo-400">
+    <p class="text-xs text-indigo-600 font-medium uppercase tracking-wide">Total Terbayar</p>
+    <p class="text-2xl font-black text-indigo-700 mt-1">Rp {{ "{:,}".format(total_riwayat).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">{{ riwayat | length }} transaksi</p>
+  </div>
+  <div class="card p-4 border-l-4 border-gray-400">
+    <p class="text-xs text-gray-600 font-medium uppercase tracking-wide">Manual</p>
+    <p class="text-xl font-black text-gray-700 mt-1">Rp {{ "{:,}".format(riwayat | selectattr('metode_bayar', 'in', ['Manual', '', none]) | sum(attribute='amount')).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">{{ riwayat | selectattr('metode_bayar', 'in', ['Manual', '', none]) | list | length }} transaksi</p>
+  </div>
+  <div class="card p-4 border-l-4 border-emerald-400">
+    <p class="text-xs text-emerald-600 font-medium uppercase tracking-wide">Online / Gateway</p>
+    <p class="text-xl font-black text-emerald-700 mt-1">Rp {{ "{:,}".format(riwayat | rejectattr('metode_bayar', 'in', ['Manual', '', none]) | sum(attribute='amount')).replace(",",".") }}</p>
+    <p class="text-xs text-gray-400 mt-0.5">{{ riwayat | rejectattr('metode_bayar', 'in', ['Manual', '', none]) | list | length }} transaksi</p>
+  </div>
+</div>
+
+<!-- Tabel riwayat -->
+<div class="card overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100">
+    <h3 class="text-sm font-semibold text-gray-700">Riwayat Pembayaran PPPoE — {{ bulan | label_bulan }}</h3>
+    <p class="text-xs text-gray-400 mt-0.5">{{ riwayat | length }} transaksi</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="th">Pelanggan</th>
+          <th class="th">Username</th>
+          <th class="th">Paket</th>
+          <th class="th text-right">Nominal</th>
+          <th class="th text-center">Metode</th>
+          <th class="th">Keterangan</th>
+          <th class="th">Tgl Bayar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in riwayat %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="td font-semibold text-gray-800">{{ r.nama_pelanggan or '—' }}</td>
+          <td class="td font-mono text-xs text-gray-500">{{ r.pppoe_username or '—' }}</td>
+          <td class="td text-xs text-gray-600">{{ r.paket_nama or '—' }}</td>
+          <td class="td text-right font-bold text-gray-800">Rp {{ "{:,}".format(r.amount).replace(",",".") }}</td>
+          <td class="td text-center">
+            {% if r.metode_bayar and r.metode_bayar not in ('Manual', '') %}
+            <span class="badge text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">{{ r.metode_bayar }}</span>
+            {% else %}
+            <span class="badge text-xs bg-gray-100 text-gray-600 border border-gray-200">Manual</span>
+            {% endif %}
+          </td>
+          <td class="td text-xs text-gray-500">{{ r.keterangan_bayar or '—' }}</td>
+          <td class="td text-xs text-gray-600">
+            {% if r.paid_at %}{{ r.paid_at | datetimeformat }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="td text-center text-gray-400 py-8">Belum ada data pembayaran di bulan ini</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if riwayat %}
+      <tfoot>
+        <tr class="bg-gray-50 border-t-2 border-gray-200">
+          <td class="td font-bold text-gray-900" colspan="3">Total</td>
+          <td class="td text-right font-black text-blue-700">Rp {{ "{:,}".format(total_riwayat).replace(",",".") }}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
     </table>
   </div>
 </div>

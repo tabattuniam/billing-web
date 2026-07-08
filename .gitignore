@@ -17,3 +17,6 @@ configs/billing.yaml
 # OS
 .DS_Store
 Thumbs.db
+
+*.db
+data/uploads/

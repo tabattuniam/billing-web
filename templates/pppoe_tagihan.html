@@ -1,52 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Tagihan PPPoE — {{ app_name }}{% endblock %}
-{% block topbar_title %}Tagihan PPPoE{% endblock %}
+{% block title %}Transaksi PPPoE — {{ app_name }}{% endblock %}
+{% block topbar_title %}Transaksi PPPoE{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <div>
-    <h1 class="page-title">Tagihan PPPoE</h1>
-    <p class="page-sub">Invoice bulanan & WA reminder pelanggan</p>
-  </div>
-  <div class="flex items-center gap-2 flex-wrap">
-    <button onclick="openGenerate()" class="btn-primary px-4 py-2">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 4v16m8-8H4"/>
-      </svg>
-      Generate Tagihan
-    </button>
-    <button onclick="kirimReminder()" class="btn-warning px-4 py-2" id="btn-reminder">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-      </svg>
-      WA Reminder
+  <div class="flex items-center gap-2">
+    <div>
+      <h1 class="page-title">Transaksi PPPoE</h1>
+      <p class="page-sub">Riwayat pembayaran pelanggan PPPoE</p>
+    </div>
+    <button onclick="document.getElementById('modal-help-prorate').classList.remove('hidden')"
+      class="w-6 h-6 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 text-xs font-black flex items-center justify-center transition flex-shrink-0 mt-1" title="Bantuan sistem tagihan">
+      ?
     </button>
   </div>
+  <button onclick="openBayarPelanggan()" class="btn-primary px-4 py-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+    Bayar Pelanggan
+  </button>
 </div>
 
 <!-- Stats -->
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-  <div class="card p-4">
-    <p class="text-xs text-gray-400 font-medium uppercase tracking-wide">Total</p>
-    <p class="text-2xl font-black text-gray-900 mt-1">{{ stats.total }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">pelanggan</p>
+  <div class="card p-4" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0">
+    <p class="text-xs text-emerald-600 font-bold uppercase tracking-wide">Sudah Bayar</p>
+    <p class="text-2xl font-black text-emerald-700 mt-1">{{ stats.paid }}</p>
+    <p class="text-xs text-emerald-500 mt-0.5">pelanggan lunas</p>
   </div>
-  <div class="card p-4">
-    <p class="text-xs text-emerald-500 font-medium uppercase tracking-wide">Lunas</p>
-    <p class="text-2xl font-black text-emerald-600 mt-1">{{ stats.paid }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">Rp {{ "{:,}".format(stats.omzet).replace(",",".") }}</p>
+  <div class="card p-4" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0">
+    <p class="text-xs text-emerald-600 font-bold uppercase tracking-wide">Total Diterima</p>
+    <p class="text-2xl font-black text-emerald-700 mt-1">{{ stats.omzet | rp }}</p>
+    <p class="text-xs text-emerald-500 mt-0.5">bulan {{ bulan }}</p>
   </div>
-  <div class="card p-4">
-    <p class="text-xs text-amber-500 font-medium uppercase tracking-wide">Belum Bayar</p>
-    <p class="text-2xl font-black text-amber-600 mt-1">{{ stats.unpaid }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+  <div class="card p-4" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
+    <p class="text-xs text-amber-600 font-bold uppercase tracking-wide">Belum Bayar</p>
+    <p class="text-2xl font-black text-amber-700 mt-1">{{ stats.unpaid }}</p>
+    <p class="text-xs text-amber-500 mt-0.5">tagihan pending</p>
   </div>
-  <div class="card p-4">
-    <p class="text-xs text-red-500 font-medium uppercase tracking-wide">Terlambat</p>
+  <div class="card p-4" style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border-color:#fecdd3">
+    <p class="text-xs text-red-500 font-bold uppercase tracking-wide">Terlambat</p>
     <p class="text-2xl font-black text-red-600 mt-1">{{ stats.overdue }}</p>
-    <p class="text-xs text-gray-400 mt-0.5">tagihan</p>
+    <p class="text-xs text-red-400 mt-0.5">jatuh tempo lewat</p>
   </div>
 </div>
 
@@ -63,11 +57,20 @@
     </div>
     <div>
       <label class="form-label">Status</label>
-      <select name="status" class="form-select w-36" onchange="this.form.submit()">
-        <option value="">Semua</option>
+      <select name="status" class="form-select w-40" onchange="this.form.submit()">
+        <option value="paid"    {% if sel_status=='paid'    %}selected{% endif %}>Sudah Bayar</option>
+        <option value=""        {% if sel_status==''       %}selected{% endif %}>Semua</option>
         <option value="unpaid"  {% if sel_status=='unpaid'  %}selected{% endif %}>Belum Bayar</option>
-        <option value="paid"    {% if sel_status=='paid'    %}selected{% endif %}>Lunas</option>
         <option value="overdue" {% if sel_status=='overdue' %}selected{% endif %}>Terlambat</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Metode Bayar</label>
+      <select name="metode" class="form-select w-40" onchange="this.form.submit()">
+        <option value="" {% if not sel_metode %}selected{% endif %}>Semua Metode</option>
+        {% for m in all_metode %}
+        <option value="{{ m }}" {% if sel_metode==m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="flex-1 min-w-[180px]">
@@ -92,46 +95,92 @@
   <div class="overflow-x-auto">
     <table class="w-full">
       <thead>
-        <tr class="border-b border-gray-100">
+        <tr class="border-b border-gray-100" style="background:linear-gradient(90deg,#f8fafc,#f1f5f9)">
+          <th class="th">#</th>
           <th class="th">Pelanggan</th>
           <th class="th">Paket</th>
-          <th class="th">Jatuh Tempo</th>
-          <th class="th">Tagihan</th>
+          <th class="th">Nominal</th>
+          <th class="th">Tgl Bayar</th>
+          <th class="th">Metode</th>
           <th class="th">Status</th>
-          <th class="th">Aksi</th>
+          <th class="th text-right">Aksi</th>
         </tr>
       </thead>
       <tbody>
         {% for t in tagihan %}
-        <tr id="row-{{ t.id }}" class="hover:bg-gray-50 transition-colors">
-          <td class="td">
-            <p class="font-semibold text-gray-900 text-sm">{{ t.nama_pelanggan }}</p>
-            <p class="text-xs text-gray-400">{{ t.pppoe_username }} · {{ t.telepon or '—' }}</p>
+        <tr id="row-{{ t.id }}" class="hover:bg-gray-50 transition-colors border-b border-gray-50
+          {% if t.status in ('paid','lunas') %}bg-emerald-50/20{% elif t.status == 'overdue' %}bg-red-50/20{% endif %}">
+
+          <!-- Nomor -->
+          <td class="td w-10">
+            <span class="text-xs text-gray-400 font-medium">{{ loop.index }}</span>
           </td>
+
+          <!-- Pelanggan -->
+          <td class="td">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-sm
+                {% if t.status in ('paid','lunas') %}bg-emerald-500 text-white{% elif t.status=='overdue' %}bg-red-400 text-white{% else %}bg-amber-400 text-white{% endif %}">
+                {{ t.nama_pelanggan[0]|upper if t.nama_pelanggan else '?' }}
+              </div>
+              <div>
+                <p class="font-semibold text-gray-900 text-sm leading-tight">{{ t.nama_pelanggan }}</p>
+                <p class="text-xs text-gray-400 font-mono mt-0.5">{{ t.pppoe_username }}</p>
+              </div>
+            </div>
+          </td>
+
+          <!-- Paket -->
           <td class="td">
             <p class="text-sm text-gray-700 font-medium">{{ t.paket_nama or '—' }}</p>
-            <p class="text-xs text-gray-400">{{ t.kecepatan or '' }}</p>
+            {% if t.kecepatan %}
+            <span class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full font-medium">{{ t.kecepatan }}</span>
+            {% endif %}
           </td>
+
+          <!-- Nominal -->
           <td class="td">
-            <span class="text-sm text-gray-700">Tgl {{ t.tgl_bayar if t.tgl_bayar else '?' }} setiap bulan</span>
+            <span class="font-bold text-gray-900 text-sm">{{ t.amount | rp }}</span>
           </td>
+
+          <!-- Tanggal Bayar -->
           <td class="td">
-            <span class="font-bold text-gray-900">Rp {{ "{:,}".format(t.amount).replace(",",".") }}</span>
+            {% if t.paid_at %}
+            <p class="text-sm font-semibold text-gray-700">
+              {{ t.paid_at | datetimeformat('%d %b %Y') if t.paid_at | string | length > 8 else t.paid_at }}
+            </p>
+            <p class="text-xs text-gray-400 mt-0.5">
+              {{ t.paid_at | datetimeformat('%H:%M') if t.paid_at | string | length > 8 else '' }}
+            </p>
+            {% else %}
+            <span class="text-xs text-gray-300">—</span>
+            {% endif %}
           </td>
+
+          <!-- Metode -->
+          <td class="td">
+            {% if t.metode_bayar %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
+              {{ t.metode_bayar }}
+            </span>
+            {% if t.keterangan_bayar %}
+            <p class="text-xs text-gray-400 mt-0.5">{{ t.keterangan_bayar }}</p>
+            {% endif %}
+            {% else %}
+            <span class="text-xs text-gray-300">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Status -->
           <td class="td" id="status-{{ t.id }}">
-            {% if t.status == 'paid' %}
-            <div>
-              <span class="badge badge-green">
-                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                Lunas
-              </span>
-              {% if t.metode_bayar %}
-              <p class="text-xs text-slate-400 mt-0.5">{{ t.metode_bayar }}{% if t.keterangan_bayar %} · {{ t.keterangan_bayar }}{% endif %}</p>
-              {% endif %}
-            </div>
+            {% if t.status in ('paid', 'lunas') %}
+            <span class="badge badge-green">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              Lunas
+            </span>
             {% elif t.status == 'overdue' %}
             <span class="badge badge-red">
-              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               Terlambat
             </span>
             {% else %}
@@ -141,36 +190,57 @@
             </span>
             {% endif %}
           </td>
+
+          <!-- Aksi -->
           <td class="td">
-            <div class="flex items-center gap-2">
-              {% if t.status != 'paid' %}
+            <div class="flex items-center gap-1 justify-end">
+              {% if t.status not in ('paid', 'lunas') %}
               <button onclick="openBayar({{ t.id }}, '{{ t.nama_pelanggan|e }}', {{ t.amount }})"
-                class="btn-success text-xs px-3 py-1.5" title="Input Pembayaran">
+                class="btn-success text-xs px-3 py-1.5" data-tip="Konfirmasi pembayaran — tandai tagihan ini sebagai lunas">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
                 Bayar
               </button>
-              {% endif %}
-              {% if t.status != 'paid' and t.telepon %}
+              {% if t.telepon %}
               <button onclick="kirimLink({{ t.id }}, this)"
-                class="btn-primary text-xs px-3 py-1.5" title="Generate & kirim link bayar via WA">
+                class="btn-primary text-xs px-2.5 py-1.5" data-tip="Kirim link bayar via WhatsApp ke pelanggan">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                 </svg>
-                Kirim Link
               </button>
               {% endif %}
-              {% if t.telepon %}
-              <a href="https://wa.me/{{ t.telepon.lstrip('0') if not t.telepon.startswith('62') else t.telepon }}"
-                target="_blank"
-                class="btn-ghost text-xs px-2.5 py-1.5" title="Buka WA pelanggan">
-                <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              {% else %}
+              <!-- Tombol Nota (hanya untuk tagihan lunas) -->
+              <a href="/nota/{{ t.id }}" target="_blank"
+                class="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-500 hover:text-emerald-700 transition" data-tip="Lihat nota pembayaran (buka tab baru)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
               </a>
+              {% if t.telepon %}
+              <button onclick="kirimNota({{ t.id }}, this)"
+                class="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 hover:text-blue-700 transition" data-tip="Kirim nota lunas ke pelanggan via WhatsApp">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.557 4.115 1.532 5.84L.054 23.25a.75.75 0 00.917.917l5.41-1.478A11.952 11.952 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.88 0-3.638-.516-5.143-1.415l-.36-.213-3.733 1.019 1.02-3.733-.214-.361A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                </svg>
+              </button>
               {% endif %}
+              {% endif %}
+              <button onclick="openEdit({{ t.id }}, {{ t.amount }}, '{{ t.status }}', '{{ t.nama_pelanggan|e }}')"
+                class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition" data-tip="Edit nominal atau status tagihan">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </button>
+              <button onclick="hapusTagihan({{ t.id }}, '{{ t.nama_pelanggan|e }}')"
+                class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 transition" data-tip="Hapus tagihan ini secara permanen">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
             </div>
           </td>
         </tr>
@@ -178,81 +248,377 @@
       </tbody>
     </table>
   </div>
+  <!-- Footer tabel -->
+  <div class="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+    <p class="text-xs text-gray-500">{{ tagihan | length }} transaksi ditampilkan</p>
+    {% set lunas = tagihan | selectattr('status', 'in', ['paid', 'lunas']) | list %}
+    <p class="text-xs font-semibold text-emerald-600">
+      Total lunas: {{ lunas | sum(attribute='amount') | rp }}
+    </p>
+  </div>
   {% else %}
   <div class="py-16 text-center">
-    <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-    </svg>
-    <p class="text-gray-500 font-medium">Belum ada tagihan bulan ini</p>
-    <p class="text-xs text-gray-400 mt-1 mb-4">Klik "Generate Tagihan" untuk membuat tagihan semua pelanggan aktif.</p>
-    <button onclick="openGenerate()" class="btn-primary px-5 py-2">Generate Sekarang</button>
+    <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <svg class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+      </svg>
+    </div>
+    {% if sel_status == 'paid' or sel_status == '' %}
+    <p class="text-gray-500 font-medium">Belum ada pelanggan yang membayar bulan ini</p>
+    <p class="text-xs text-gray-400 mt-1 mb-4">Generate tagihan terlebih dahulu, lalu konfirmasi pembayaran.</p>
+    {% else %}
+    <p class="text-gray-500 font-medium">Tidak ada tagihan dengan filter ini</p>
+    <p class="text-xs text-gray-400 mt-1 mb-4">Coba ubah filter bulan atau status.</p>
+    {% endif %}
+    <button onclick="openGenerate()" class="btn-primary px-5 py-2">Generate Tagihan</button>
   </div>
   {% endif %}
 </div>
 
-<!-- ── Modal Generate ── -->
-<div id="modal-generate" class="modal-overlay hidden" style="background:rgba(0,0,0,0.4)">
-  <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
-    <h3 class="font-bold text-gray-900 mb-4">Generate Tagihan</h3>
-    <div class="mb-4">
-      <label class="form-label">Bulan</label>
-      <select id="gen-bulan" class="form-select">
-        {% for b in bulans %}
-        <option value="{{ b }}" {% if b==bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
-        {% endfor %}
-      </select>
+<!-- Modal Input Pembayaran Manual -->
+<div id="modal-bayar" class="modal-overlay hidden" style="background:rgba(0,0,0,0.5);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+    <!-- Header gradient -->
+    <div style="background:linear-gradient(135deg,#059669,#10b981)" class="px-6 pt-5 pb-6 relative overflow-hidden">
+      <div class="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/10"></div>
+      <div class="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-white/10"></div>
+      <div class="relative flex items-start justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-white font-bold text-base">Konfirmasi Pembayaran</p>
+            <p id="bayar-info" class="text-emerald-100 text-xs mt-0.5"></p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('modal-bayar').classList.add('hidden')"
+          class="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <!-- Nominal besar -->
+      <div class="relative mt-4 text-center">
+        <p class="text-white/70 text-xs mb-1">Total Tagihan</p>
+        <p id="bayar-nominal" class="text-4xl font-black text-white tracking-tight"></p>
+      </div>
     </div>
-    <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-5 text-sm text-blue-700">
-      Tagihan akan dibuat untuk semua pelanggan PPPoE aktif. Pelanggan yang sudah punya tagihan bulan ini tidak akan digandakan.
-    </div>
-    <div class="flex gap-3">
-      <button onclick="document.getElementById('modal-generate').classList.add('hidden')"
-        class="btn-ghost flex-1 py-2.5">Batal</button>
-      <button onclick="doGenerate()" id="btn-gen" class="btn-primary flex-1 py-2.5">Generate</button>
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-4">
+      <div>
+        <label class="form-label">Metode Pembayaran</label>
+        <div class="grid grid-cols-4 gap-2 mt-1.5" id="bayar-metode-grid">
+          {% for m in [('Tunai','💵'),('Transfer Bank','🏦'),('QRIS','📱'),('GoPay','🟢'),('OVO','🟣'),('Dana','🔵'),('ShopeePay','🟠'),('Lainnya','•••')] %}
+          <button type="button" onclick="setBayarMetode(this, '{{ m[0] }}')"
+            data-val="{{ m[0] }}"
+            class="bayar-metode-btn flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-gray-100 bg-gray-50 py-2 px-1 text-center hover:border-emerald-400 hover:bg-emerald-50 transition text-xs font-semibold text-gray-600 cursor-pointer">
+            <span class="text-lg leading-none">{{ m[1] }}</span>
+            <span class="leading-tight text-[10px]">{{ m[0] }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="bayar-metode" value="Tunai">
+      </div>
+      <div>
+        <label class="form-label">Keterangan <span class="text-gray-400 font-normal">(opsional)</span></label>
+        <input id="bayar-ket" type="text" placeholder="Contoh: Transfer BCA 08xx" class="form-input">
+      </div>
+      <div class="flex gap-3 pt-1">
+        <button onclick="document.getElementById('modal-bayar').classList.add('hidden')"
+          class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button onclick="konfirmasiBayar()" id="btn-konfirmasi-bayar"
+          style="background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 4px 12px -2px rgba(16,185,129,0.4)"
+          class="flex-1 py-2.5 inline-flex items-center justify-center gap-2 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Konfirmasi Lunas
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Modal Input Pembayaran Manual -->
-<div id="modal-bayar" class="modal-overlay hidden" style="background:rgba(0,0,0,0.45)">
+<!-- Modal Edit Tagihan -->
+<div id="modal-edit" class="modal-overlay hidden" style="background:rgba(0,0,0,0.45)">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
     <div class="flex items-center justify-between mb-4">
-      <h3 class="font-bold text-slate-900 text-lg">Input Pembayaran</h3>
-      <button onclick="document.getElementById('modal-bayar').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+      <h3 class="font-bold text-slate-900 text-lg">Edit Tagihan</h3>
+      <button onclick="document.getElementById('modal-edit').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
     <div class="bg-slate-50 rounded-xl px-4 py-3 mb-4">
-      <p id="bayar-info" class="text-sm font-semibold text-slate-700"></p>
-      <p id="bayar-nominal" class="text-2xl font-black text-emerald-600 mt-0.5"></p>
+      <p id="edit-info" class="text-sm font-semibold text-slate-700"></p>
     </div>
     <div class="space-y-3">
       <div>
-        <label class="form-label">Metode Pembayaran</label>
-        <select id="bayar-metode" class="form-select">
-          <option value="Tunai">Tunai / Cash</option>
-          <option value="Transfer Bank">Transfer Bank</option>
-          <option value="QRIS">QRIS</option>
-          <option value="GoPay">GoPay</option>
-          <option value="OVO">OVO</option>
-          <option value="Dana">Dana</option>
-          <option value="ShopeePay">ShopeePay</option>
-          <option value="Lainnya">Lainnya</option>
-        </select>
+        <label class="form-label">Nominal Tagihan</label>
+        <input id="edit-amount" type="number" placeholder="0" class="form-input">
       </div>
       <div>
-        <label class="form-label">Keterangan (opsional)</label>
-        <input id="bayar-ket" type="text" placeholder="Contoh: Dibayar via BCA 08xx" class="form-input">
+        <label class="form-label">Status</label>
+        <select id="edit-status" class="form-select">
+          <option value="unpaid">Belum Bayar</option>
+          <option value="paid">Lunas</option>
+          <option value="overdue">Terlambat</option>
+        </select>
       </div>
     </div>
     <div class="flex gap-3 mt-5">
-      <button onclick="document.getElementById('modal-bayar').classList.add('hidden')"
+      <button onclick="document.getElementById('modal-edit').classList.add('hidden')"
         class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
-      <button onclick="konfirmasiBayar()" id="btn-konfirmasi-bayar"
-        class="btn-success flex-1 py-2.5 justify-center">
+      <button onclick="simpanEdit()" id="btn-simpan-edit"
+        class="btn-primary flex-1 py-2.5 justify-center">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-        Konfirmasi Lunas
+        Simpan
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Bayar Pelanggan -->
+<div id="modal-bayar-pelanggan" class="modal-overlay hidden" style="background:rgba(0,0,0,0.5);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md" style="overflow:visible;max-height:92vh;display:flex;flex-direction:column">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e40af,#3b82f6,#6366f1)" class="px-6 pt-5 pb-5 relative overflow-hidden">
+      <div class="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-white/10"></div>
+      <div class="relative flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-white font-bold text-base">Bayar Pelanggan</p>
+            <p class="text-blue-100 text-xs mt-0.5">Input pembayaran manual</p>
+          </div>
+        </div>
+        <button onclick="closeBayarPelanggan()" class="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 overflow-y-auto flex-1" style="overflow:visible">
+
+      <!-- Loading state -->
+      <div id="bp-loading" class="py-8 text-center text-gray-400 text-sm">
+        <svg class="w-8 h-8 animate-spin mx-auto mb-3 text-blue-400" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <p class="font-medium">Memuat data pelanggan...</p>
+      </div>
+
+      <!-- Empty state -->
+      <div id="bp-empty" class="hidden py-8 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+          <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <p class="text-gray-700 font-bold text-sm">Semua Sudah Lunas!</p>
+        <p class="text-xs text-gray-400 mt-1">Tidak ada tagihan yang belum dibayar bulan ini.</p>
+      </div>
+
+      <!-- Form -->
+      <div id="bp-form" class="hidden space-y-4">
+        <!-- Autocomplete pelanggan -->
+        <div>
+          <label class="form-label">Cari & Pilih Pelanggan <span id="bp-count" class="text-gray-400 font-normal text-xs"></span></label>
+          <div class="relative" id="bp-autocomplete-wrap">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input id="bp-search" type="text" placeholder="Ketik nama atau username..."
+              autocomplete="off"
+              class="form-input pl-9 pr-8"
+              oninput="onBpSearchInput(this.value)"
+              onfocus="onBpSearchInput(this.value)"
+              onkeydown="onBpSearchKey(event)">
+            <button id="bp-clear-btn" onclick="clearBpSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 flex items-center justify-center transition">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+            <!-- Dropdown hasil -->
+            <div id="bp-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden z-50" style="max-height:360px;overflow-y:auto">
+              <div id="bp-dropdown-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail pelanggan terpilih -->
+        <div id="bp-detail" class="hidden rounded-2xl overflow-hidden border border-gray-100">
+          <!-- Nominal header -->
+          <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)" class="px-4 py-3 border-b border-emerald-100">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-emerald-600 font-semibold">Total Tagihan</p>
+                <p id="bp-nominal" class="text-2xl font-black text-emerald-700 leading-tight"></p>
+              </div>
+              <div id="bp-status-badge"></div>
+            </div>
+          </div>
+          <!-- Info rows -->
+          <div class="px-4 py-3 space-y-2 bg-gray-50">
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-500">Username</span>
+              <span id="bp-username" class="font-mono font-semibold text-gray-800 text-xs bg-gray-200 px-2 py-0.5 rounded-md"></span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-500">Paket</span>
+              <span id="bp-paket" class="font-semibold text-gray-800 text-xs"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metode & keterangan -->
+        <div id="bp-metode-wrap" class="hidden space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label">Metode Pembayaran</label>
+              <select id="bp-metode" class="form-select">
+                <option value="Tunai">💵 Tunai / Cash</option>
+                <option value="Transfer Bank">🏦 Transfer Bank</option>
+                <option value="QRIS">📱 QRIS</option>
+                <option value="GoPay">🟢 GoPay</option>
+                <option value="OVO">🟣 OVO</option>
+                <option value="Dana">🔵 Dana</option>
+                <option value="ShopeePay">🟠 ShopeePay</option>
+                <option value="Lainnya">••• Lainnya</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Keterangan <span class="text-gray-400 font-normal">(opsional)</span></label>
+              <input id="bp-ket" type="text" placeholder="No. rek / keterangan" class="form-input">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-1">
+          <button type="button" onclick="closeBayarPelanggan()" class="btn-ghost flex-1 py-2.5 justify-center">Batal</button>
+          <button onclick="konfirmasiBayarPelanggan()" id="btn-bp-konfirmasi"
+            disabled
+            style="background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 4px 12px -2px rgba(16,185,129,0.4)"
+            class="flex-1 py-2.5 inline-flex items-center justify-center gap-2 rounded-xl text-white font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            Konfirmasi Lunas
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal Help Prorate -->
+<div id="modal-help-prorate" class="modal-overlay hidden" style="background:rgba(0,0,0,0.5);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e40af,#6366f1)" class="px-6 pt-5 pb-5 relative overflow-hidden">
+      <div class="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10"></div>
+      <div class="relative flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-white font-bold text-base">Sistem Tagihan Prorate</p>
+            <p class="text-blue-200 text-xs mt-0.5">Cara penghitungan tagihan pertama</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('modal-help-prorate').classList.add('hidden')"
+          class="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-4 text-sm">
+
+      <!-- Penjelasan -->
+      <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+        <p class="font-bold text-blue-900 mb-1.5">Apa itu Prorate?</p>
+        <p class="text-blue-700 leading-relaxed">Tagihan pertama pelanggan dihitung <strong>proporsional</strong> dari tanggal pasang sampai tanggal bayar rutin, bukan langsung satu bulan penuh.</p>
+      </div>
+
+      <!-- Contoh -->
+      <div>
+        <p class="font-bold text-gray-800 mb-3">Contoh Kasus</p>
+        <div class="rounded-2xl border border-gray-100 overflow-hidden">
+          <div class="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Skenario</p>
+          </div>
+          <div class="px-4 py-3 space-y-2">
+            <div class="flex justify-between">
+              <span class="text-gray-500">Tgl Pasang</span>
+              <span class="font-semibold text-gray-800">20 Juni 2026</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Tgl Bayar Rutin</span>
+              <span class="font-semibold text-gray-800">Tgl 1 setiap bulan</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Harga Paket</span>
+              <span class="font-semibold text-gray-800">Rp 200.000 / bulan</span>
+            </div>
+          </div>
+          <div class="bg-emerald-50 border-t border-emerald-100 px-4 py-3 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-emerald-700 font-semibold">Tagihan Pertama</span>
+              <span class="font-black text-emerald-700">Rp 73.500</span>
+            </div>
+            <p class="text-xs text-emerald-600">20 Juni → 1 Juli = 11 hari<br>200.000 ÷ 30 × 11 = 73.333 → dibulatkan ke Rp 73.500</p>
+          </div>
+          <div class="bg-blue-50 border-t border-blue-100 px-4 py-3">
+            <div class="flex justify-between items-center">
+              <span class="text-blue-700 font-semibold">Tagihan Bulan Berikutnya</span>
+              <span class="font-black text-blue-700">Rp 200.000</span>
+            </div>
+            <p class="text-xs text-blue-500 mt-0.5">Normal satu bulan penuh</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rumus -->
+      <div class="bg-gray-50 rounded-2xl px-4 py-3 text-center">
+        <p class="text-xs text-gray-500 mb-1">Rumus Prorate</p>
+        <p class="font-mono text-sm font-bold text-gray-800">Harga ÷ 30 × Jumlah Hari</p>
+        <p class="text-xs text-gray-400 mt-1">Dibulatkan ke kelipatan Rp 500 terdekat</p>
+      </div>
+
+      <!-- Catatan Prorate -->
+      <div class="flex gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+        <svg class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-xs text-amber-700 leading-relaxed">Prorate hanya berlaku untuk <strong>tagihan pertama</strong>. Jika tgl pasang sama dengan tgl bayar atau selisih ≥ 30 hari, dikenakan harga penuh.</p>
+      </div>
+
+      <!-- Grace Period -->
+      <div>
+        <p class="font-bold text-gray-800 mb-2">Grace Period (Toleransi Keterlambatan)</p>
+        <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-2">
+          <p class="text-indigo-700 text-xs leading-relaxed">Jumlah hari tambahan setelah tanggal jatuh tempo sebelum pelanggan masuk status <strong>Overdue</strong> dan otomatis di-suspend.</p>
+          <div class="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-indigo-100">
+            <span class="text-xs text-gray-500">Default grace period</span>
+            <span class="font-black text-indigo-700 text-sm">10 hari</span>
+          </div>
+          <div class="rounded-xl bg-indigo-100/60 px-3 py-2 text-xs text-indigo-700">
+            <strong>Contoh:</strong> Tgl bayar <strong>1</strong>, grace period <strong>10 hari</strong> → pelanggan suspend otomatis tgl <strong>11</strong> jika belum bayar.
+          </div>
+          <p class="text-xs text-indigo-500">Nilai ini dapat diubah di halaman <strong>Profil → Grace Period</strong>.</p>
+        </div>
+      </div>
+
+      <button onclick="document.getElementById('modal-help-prorate').classList.add('hidden')"
+        class="w-full py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm transition">
+        Mengerti
       </button>
     </div>
   </div>
@@ -264,30 +630,195 @@
 <script>
 const BULAN = "{{ bulan }}";
 
-function openGenerate() {
-  document.getElementById('modal-generate').classList.remove('hidden');
+// ── Bayar Pelanggan ──────────────────────────────────────────────────────────
+let _bpData = [];
+let _bpTid  = null;
+
+async function openBayarPelanggan() {
+  document.getElementById('modal-bayar-pelanggan').classList.remove('hidden');
+  document.getElementById('bp-loading').classList.remove('hidden');
+  document.getElementById('bp-empty').classList.add('hidden');
+  document.getElementById('bp-form').classList.add('hidden');
+
+  const res  = await fetch(`/pppoe/tagihan/belum-bayar?bulan=${BULAN}`);
+  const data = await res.json();
+  document.getElementById('bp-loading').classList.add('hidden');
+
+  _bpData = data.data || [];
+  if (_bpData.length === 0) {
+    document.getElementById('bp-empty').classList.remove('hidden');
+    return;
+  }
+
+  renderBpOptions(_bpData);
+
+  _bpTid = null;
+  document.getElementById('bp-detail').classList.add('hidden');
+  document.getElementById('bp-metode-wrap').classList.add('hidden');
+  document.getElementById('btn-bp-konfirmasi').disabled = true;
+  document.getElementById('bp-metode').value = 'Tunai';
+  document.getElementById('bp-ket').value = '';
+  document.getElementById('bp-search').value = '';
+  document.getElementById('bp-clear-btn').classList.add('hidden');
+  document.getElementById('bp-dropdown').classList.add('hidden');
+  renderBpOptions(_bpData);
+  document.getElementById('bp-form').classList.remove('hidden');
 }
 
-async function doGenerate() {
-  const bulan = document.getElementById('gen-bulan').value;
-  const btn = document.getElementById('btn-gen');
+function closeBayarPelanggan() {
+  document.getElementById('modal-bayar-pelanggan').classList.add('hidden');
+}
+
+let _bpHighlight = -1;
+
+function renderBpOptions(list) {
+  const count = document.getElementById('bp-count');
+  if (count) count.textContent = list.length > 0 ? `(${list.length} belum bayar)` : '';
+}
+
+function onBpSearchInput(q) {
+  const kw = q.toLowerCase().trim();
+  const clearBtn = document.getElementById('bp-clear-btn');
+  clearBtn.classList.toggle('hidden', !q);
+
+  const filtered = kw
+    ? _bpData.filter(t =>
+        t.nama.toLowerCase().includes(kw) ||
+        t.username.toLowerCase().includes(kw)
+      )
+    : _bpData;
+
+  const list = document.getElementById('bp-dropdown-list');
+  const drop = document.getElementById('bp-dropdown');
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 text-center">Tidak ditemukan</div>';
+    drop.classList.remove('hidden');
+    return;
+  }
+
+  list.innerHTML = filtered.map((t, i) => {
+    const badge = t.status === 'overdue'
+      ? '<span class="text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full ml-1">Terlambat</span>'
+      : '<span class="text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded-full ml-1">Belum Bayar</span>';
+    const nominal = 'Rp ' + t.amount.toLocaleString('id-ID');
+    return `<div class="bp-drop-item px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition flex items-center justify-between gap-3 border-b border-gray-50 last:border-0"
+      data-id="${t.id}" data-index="${i}" onmousedown="selectBpItem(${t.id})">
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-gray-900 truncate">${t.nama} ${badge}</p>
+        <p class="text-xs text-gray-400 font-mono">${t.username}</p>
+      </div>
+      <span class="text-sm font-black text-emerald-600 flex-shrink-0">${nominal}</span>
+    </div>`;
+  }).join('');
+
+  _bpHighlight = -1;
+  drop.classList.remove('hidden');
+}
+
+function onBpSearchKey(e) {
+  const items = document.querySelectorAll('.bp-drop-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _bpHighlight = Math.min(_bpHighlight + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _bpHighlight = Math.max(_bpHighlight - 1, 0);
+  } else if (e.key === 'Enter' && _bpHighlight >= 0) {
+    e.preventDefault();
+    const id = parseInt(items[_bpHighlight].dataset.id);
+    if (id) selectBpItem(id);
+    return;
+  } else if (e.key === 'Escape') {
+    document.getElementById('bp-dropdown').classList.add('hidden');
+    return;
+  } else { return; }
+  items.forEach((el, i) => {
+    el.classList.toggle('bg-blue-50', i === _bpHighlight);
+  });
+}
+
+function selectBpItem(id) {
+  const t = _bpData.find(x => x.id === id);
+  if (!t) return;
+  _bpTid = t.id;
+  document.getElementById('bp-search').value = `${t.nama} (${t.username})`;
+  document.getElementById('bp-clear-btn').classList.remove('hidden');
+  document.getElementById('bp-dropdown').classList.add('hidden');
+
+  document.getElementById('bp-username').textContent = t.username;
+  document.getElementById('bp-paket').textContent    = t.paket || '—';
+  document.getElementById('bp-nominal').textContent  = 'Rp ' + t.amount.toLocaleString('id-ID');
+
+  const badge = document.getElementById('bp-status-badge');
+  badge.innerHTML = t.status === 'overdue'
+    ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-500 border border-red-100">⚠ Terlambat</span>'
+    : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-500 border border-amber-200">Belum Bayar</span>';
+
+  document.getElementById('bp-detail').classList.remove('hidden');
+  document.getElementById('bp-metode-wrap').classList.remove('hidden');
+  document.getElementById('btn-bp-konfirmasi').disabled = false;
+}
+
+function clearBpSearch() {
+  document.getElementById('bp-search').value = '';
+  document.getElementById('bp-clear-btn').classList.add('hidden');
+  document.getElementById('bp-dropdown').classList.add('hidden');
+  document.getElementById('bp-detail').classList.add('hidden');
+  document.getElementById('bp-metode-wrap').classList.add('hidden');
+  document.getElementById('btn-bp-konfirmasi').disabled = true;
+  _bpTid = null;
+  document.getElementById('bp-search').focus();
+}
+
+// Tutup dropdown kalau klik di luar
+document.addEventListener('click', e => {
+  if (!document.getElementById('bp-autocomplete-wrap')?.contains(e.target)) {
+    document.getElementById('bp-dropdown')?.classList.add('hidden');
+  }
+});
+
+
+async function konfirmasiBayarPelanggan() {
+  if (!_bpTid) return;
+  const metode = document.getElementById('bp-metode').value;
+  const ket    = document.getElementById('bp-ket').value.trim();
+  const btn    = document.getElementById('btn-bp-konfirmasi');
   btn.disabled = true;
-  btn.textContent = 'Memproses...';
-  const fd = new FormData();
-  fd.append('bulan', bulan);
-  const res = await fetch('/pppoe/tagihan/generate', { method: 'POST', body: fd });
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Menyimpan...';
+
+  const res  = await fetch(`/pppoe/tagihan/${_bpTid}/lunas`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ metode, keterangan: ket })
+  });
   const data = await res.json();
+
   btn.disabled = false;
-  btn.textContent = 'Generate';
-  document.getElementById('modal-generate').classList.add('hidden');
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Konfirmasi Lunas';
+
   if (data.ok) {
-    showToast(`${data.dibuat} tagihan baru dibuat untuk ${bulan}`, 'success');
-    setTimeout(() => window.location.href = '/pppoe/tagihan?bulan=' + bulan, 1200);
+    closeBayarPelanggan();
+    showToast(`Pembayaran via ${metode} dicatat ✓`, 'success');
+    setTimeout(() => window.location.reload(), 900);
   } else {
-    showToast('Gagal generate tagihan', 'error');
+    showToast('Gagal memperbarui status', 'error');
   }
 }
 
+// ── Helper: tombol metode pembayaran ─────────────────────────────────────────
+function setBayarMetode(el, val) {
+  document.getElementById('bayar-metode').value = val;
+  document.querySelectorAll('.bayar-metode-btn').forEach(b => {
+    b.classList.remove('border-emerald-500','bg-emerald-50','text-emerald-700');
+    b.classList.add('border-gray-100','bg-gray-50','text-gray-600');
+  });
+  el.classList.remove('border-gray-100','bg-gray-50','text-gray-600');
+  el.classList.add('border-emerald-500','bg-emerald-50','text-emerald-700');
+}
+
+
+// ── Bayar per baris (dari tabel) ─────────────────────────────────────────────
 let _bayarTid = null;
 
 function openBayar(tid, nama, nominal) {
@@ -296,7 +827,60 @@ function openBayar(tid, nama, nominal) {
   document.getElementById('bayar-nominal').textContent = 'Rp ' + nominal.toLocaleString('id-ID');
   document.getElementById('bayar-metode').value = 'Tunai';
   document.getElementById('bayar-ket').value = '';
+  // Reset tombol metode ke default Tunai
+  document.querySelectorAll('.bayar-metode-btn').forEach(b => {
+    b.classList.remove('border-emerald-500','bg-emerald-50','text-emerald-700');
+    b.classList.add('border-gray-100','bg-gray-50','text-gray-600');
+  });
+  const tunaiBtn = document.querySelector('.bayar-metode-btn[data-val="Tunai"]');
+  if (tunaiBtn) tunaiBtn.click();
   document.getElementById('modal-bayar').classList.remove('hidden');
+}
+
+let _editTid = null;
+
+function openEdit(tid, amount, status, nama) {
+  _editTid = tid;
+  document.getElementById('edit-info').textContent = nama;
+  document.getElementById('edit-amount').value = amount;
+  document.getElementById('edit-status').value = status || 'unpaid';
+  document.getElementById('modal-edit').classList.remove('hidden');
+}
+
+async function simpanEdit() {
+  const amount = parseInt(document.getElementById('edit-amount').value);
+  const status = document.getElementById('edit-status').value;
+  if (isNaN(amount) || amount < 0) { showToast('Nominal tidak valid', 'error'); return; }
+  const btn = document.getElementById('btn-simpan-edit');
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Menyimpan...';
+  const res = await fetch(`/pppoe/tagihan/${_editTid}/edit`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ amount, status })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Simpan';
+  if (data.ok) {
+    document.getElementById('modal-edit').classList.add('hidden');
+    showToast('Tagihan berhasil diupdate', 'success');
+    setTimeout(() => window.location.reload(), 800);
+  } else {
+    showToast(data.msg || 'Gagal update tagihan', 'error');
+  }
+}
+
+async function hapusTagihan(tid, nama) {
+  if (!confirm(`Yakin hapus tagihan ${nama}?`)) return;
+  const res = await fetch(`/pppoe/tagihan/${tid}/hapus`, { method: 'POST' });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById(`row-${tid}`)?.remove();
+    showToast('Tagihan dihapus', 'success');
+  } else {
+    showToast(data.msg || 'Gagal hapus', 'error');
+  }
 }
 
 async function konfirmasiBayar() {
@@ -315,17 +899,8 @@ async function konfirmasiBayar() {
   btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Konfirmasi Lunas';
   if (data.ok) {
     document.getElementById('modal-bayar').classList.add('hidden');
-    document.getElementById(`status-${_bayarTid}`).innerHTML = `
-      <div>
-        <span class="badge badge-green">
-          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-          Lunas
-        </span>
-        <p class="text-xs text-slate-400 mt-0.5">${metode}${ket ? ' · ' + ket : ''}</p>
-      </div>`;
-    const row = document.getElementById(`row-${_bayarTid}`);
-    row?.querySelector('button[onclick^="openBayar"]')?.remove();
     showToast(`Pembayaran via ${metode} dicatat`, 'success');
+    setTimeout(() => window.location.reload(), 800);
   } else {
     showToast('Gagal memperbarui status', 'error');
   }
@@ -346,21 +921,20 @@ async function kirimLink(tid, btn) {
   }
 }
 
-async function kirimReminder() {
-  const btn = document.getElementById('btn-reminder');
+async function kirimNota(tid, btn) {
+  const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengirim...`;
-  const fd = new FormData();
-  fd.append('bulan', BULAN);
-  const res = await fetch('/pppoe/tagihan/reminder', { method: 'POST', body: fd });
+  btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>';
+  const res = await fetch(`/pppoe/tagihan/${tid}/kirim-nota`, { method: 'POST' });
   const data = await res.json();
   btn.disabled = false;
-  btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg> WA Reminder`;
+  btn.innerHTML = orig;
   if (data.ok) {
-    showToast(`${data.terkirim} WA reminder terkirim`, data.terkirim > 0 ? 'success' : 'warning');
+    showToast('Nota pembayaran dikirim via WA ✓', 'success');
   } else {
-    showToast('Gagal mengirim reminder', 'error');
+    showToast(data.msg || 'Gagal kirim nota', 'error');
   }
 }
+
 </script>
 {% endblock %}
