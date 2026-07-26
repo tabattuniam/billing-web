@@ -29,3 +29,8 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Config dengan kredensial
+configs/*.yaml
+configs/*.db
+!configs/*.yaml.example
