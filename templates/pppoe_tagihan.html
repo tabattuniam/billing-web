@@ -14,10 +14,17 @@
       ?
     </button>
   </div>
-  <button onclick="openBayarPelanggan()" class="btn-primary px-4 py-2">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-    Bayar Pelanggan
-  </button>
+  <div class="flex gap-2">
+    <a href="/pppoe/tagihan/export?bulan={{ bulan_filter or '' }}" id="btn-export"
+      class="btn-secondary px-4 py-2 flex items-center gap-1.5 text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      Export CSV
+    </a>
+    <button onclick="openBayarPelanggan()" class="btn-primary px-4 py-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      Bayar Pelanggan
+    </button>
+  </div>
 </div>
 
 <!-- Stats -->
@@ -46,18 +53,28 @@
 
 <!-- Filter -->
 <div class="card p-4 mb-5">
-  <form method="get" action="/pppoe/tagihan" class="flex flex-wrap gap-3 items-end">
+  <form method="get" action="/pppoe/tagihan" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
     <div>
-      <label class="form-label">Bulan</label>
-      <select name="bulan" class="form-select w-44" onchange="this.form.submit()">
+      <label class="form-label flex items-center gap-1">
+        Bulan
+        <span data-tip="Bulan tagihan yang ingin dilihat. Tagihan dibuat otomatis jam 07:00 pada tanggal Tgl Bayar setiap pelanggan." class="cursor-help text-gray-400 hover:text-blue-500">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </span>
+      </label>
+      <select name="bulan" class="form-select" onchange="this.form.submit();document.getElementById('btn-export').href='/pppoe/tagihan/export?bulan='+this.value">
         {% for b in bulans %}
         <option value="{{ b }}" {% if b==bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
         {% endfor %}
       </select>
     </div>
     <div>
-      <label class="form-label">Status</label>
-      <select name="status" class="form-select w-40" onchange="this.form.submit()">
+      <label class="form-label flex items-center gap-1">
+        Status
+        <span data-tip="Status pembayaran: Sudah Bayar (lunas) / Belum Bayar (grace period masih aktif) / Terlambat (overdue, sudah isolir di MT)." class="cursor-help text-gray-400 hover:text-blue-500">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </span>
+      </label>
+      <select name="status" class="form-select" onchange="this.form.submit()">
         <option value="paid"    {% if sel_status=='paid'    %}selected{% endif %}>Sudah Bayar</option>
         <option value=""        {% if sel_status==''       %}selected{% endif %}>Semua</option>
         <option value="unpaid"  {% if sel_status=='unpaid'  %}selected{% endif %}>Belum Bayar</option>
@@ -65,32 +82,110 @@
       </select>
     </div>
     <div>
-      <label class="form-label">Metode Bayar</label>
-      <select name="metode" class="form-select w-40" onchange="this.form.submit()">
-        <option value="" {% if not sel_metode %}selected{% endif %}>Semua Metode</option>
+      <label class="form-label flex items-center gap-1">
+        Metode
+        <span data-tip="Metode pembayaran yang digunakan: Tunai, Transfer, E-wallet, dll. Filter berdasarkan metode pembayaran." class="cursor-help text-gray-400 hover:text-blue-500">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </span>
+      </label>
+      <select name="metode" class="form-select" onchange="this.form.submit()">
+        <option value="" {% if not sel_metode %}selected{% endif %}>Semua</option>
         {% for m in all_metode %}
         <option value="{{ m }}" {% if sel_metode==m %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="flex-1 min-w-[180px]">
-      <label class="form-label">Cari Pelanggan</label>
+    <div>
+      <label class="form-label">Cari</label>
       <div class="relative">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" name="q" value="{{ q or '' }}" placeholder="Nama / username..."
-          class="form-input pl-9">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="Nama / user..." class="form-input pl-9">
       </div>
     </div>
-    <button type="submit" class="btn-primary px-4 py-2.5 self-end">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
-      Filter
-    </button>
-    <a href="/pppoe/tagihan" class="btn-ghost px-3 py-2.5 self-end text-xs">Reset</a>
+    <div class="col-span-2 sm:col-span-4 flex gap-2">
+      <button type="submit" class="btn-primary px-4 py-2.5 text-sm flex-1 sm:flex-none justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+        Filter
+      </button>
+      <a href="/pppoe/tagihan" class="btn-ghost px-3 py-2.5 text-xs flex-1 sm:flex-none justify-center">Reset</a>
+    </div>
   </form>
 </div>
 
-<!-- Table -->
-<div class="card overflow-hidden">
+<!-- Mobile Card List (hidden md+) -->
+{% if tagihan %}
+{% set lunas_mobile = tagihan | selectattr('status', 'in', ['paid', 'lunas']) | list %}
+<div class="md:hidden flex items-center justify-between mb-3 px-1">
+  <p class="text-xs text-gray-500">{{ tagihan | length }} transaksi</p>
+  <p class="text-xs font-semibold text-emerald-600">Lunas: {{ lunas_mobile | sum(attribute='amount') | rp }}</p>
+</div>
+<div class="md:hidden space-y-2 mb-4">
+  {% for t in tagihan %}
+  <div class="card p-4 {% if t.status in ('paid','lunas') %}border-l-4 border-l-emerald-400{% elif t.status=='overdue' %}border-l-4 border-l-red-400{% else %}border-l-4 border-l-amber-400{% endif %}">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm shadow-sm
+          {% if t.status in ('paid','lunas') %}bg-emerald-500 text-white{% elif t.status=='overdue' %}bg-red-400 text-white{% else %}bg-amber-400 text-white{% endif %}">
+          {{ t.nama_pelanggan[0]|upper if t.nama_pelanggan else '?' }}
+        </div>
+        <div class="min-w-0">
+          <p class="font-semibold text-gray-900 text-sm leading-tight truncate">{{ t.nama_pelanggan }}</p>
+          <p class="text-xs text-gray-400 font-mono">{{ t.pppoe_username }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">{{ t.paket_nama or '—' }}{% if t.kecepatan %} · {{ t.kecepatan }}{% endif %}</p>
+        </div>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <p class="font-bold text-gray-900 text-base">{{ t.amount | rp }}</p>
+        {% if t.status in ('paid','lunas') %}
+        <span class="badge badge-green text-xs">✓ Lunas</span>
+        {% elif t.status == 'overdue' %}
+        <span class="badge badge-red text-xs">Terlambat</span>
+        {% else %}
+        <span class="badge badge-orange text-xs">Belum Bayar</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if t.paid_at or t.metode_bayar %}
+    <div class="flex items-center gap-3 mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400">
+      {% if t.paid_at %}<span>📅 {{ t.paid_at | datetimeformat('%d %b %Y') if t.paid_at | string | length > 8 else t.paid_at }}</span>{% endif %}
+      {% if t.metode_bayar %}<span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">{{ t.metode_bayar }}</span>{% endif %}
+    </div>
+    {% endif %}
+    <div class="flex items-center gap-2 mt-3 pt-2 border-t border-gray-50">
+      {% if t.status not in ('paid', 'lunas') %}
+      <button onclick="openBayar({{ t.id }}, '{{ t.nama_pelanggan|e }}', {{ t.amount }})"
+        class="btn-success text-xs px-3 py-2 flex-1 justify-center">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Bayar
+      </button>
+      {% if t.telepon %}
+      <button onclick="kirimLink({{ t.id }}, this)" class="btn-primary text-xs px-3 py-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+        Link
+      </button>
+      {% endif %}
+      {% else %}
+      <a href="/nota/{{ t.id }}" target="_blank" class="btn-success text-xs px-3 py-2 flex-1 justify-center">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Nota
+      </a>
+      {% endif %}
+      <button onclick="openEdit({{ t.id }}, {{ t.amount }}, '{{ t.status }}', '{{ t.nama_pelanggan|e }}')"
+        class="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      </button>
+      <button onclick="hapusTagihan({{ t.id }}, '{{ t.nama_pelanggan|e }}')"
+        class="w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Desktop Table (hidden on mobile) -->
+<div class="card overflow-hidden hidden md:block">
   {% if tagihan %}
   <div class="overflow-x-auto">
     <table class="w-full">
@@ -256,25 +351,27 @@
       Total lunas: {{ lunas | sum(attribute='amount') | rp }}
     </p>
   </div>
-  {% else %}
-  <div class="py-16 text-center">
-    <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-      <svg class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-      </svg>
-    </div>
-    {% if sel_status == 'paid' or sel_status == '' %}
-    <p class="text-gray-500 font-medium">Belum ada pelanggan yang membayar bulan ini</p>
-    <p class="text-xs text-gray-400 mt-1 mb-4">Generate tagihan terlebih dahulu, lalu konfirmasi pembayaran.</p>
-    {% else %}
-    <p class="text-gray-500 font-medium">Tidak ada tagihan dengan filter ini</p>
-    <p class="text-xs text-gray-400 mt-1 mb-4">Coba ubah filter bulan atau status.</p>
-    {% endif %}
-    <button onclick="openGenerate()" class="btn-primary px-5 py-2">Generate Tagihan</button>
-  </div>
   {% endif %}
 </div>
+
+{% if not tagihan %}
+<div class="card py-16 text-center">
+  <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+    </svg>
+  </div>
+  {% if sel_status == 'paid' or sel_status == '' %}
+  <p class="text-gray-500 font-medium">Belum ada pelanggan yang membayar bulan ini</p>
+  <p class="text-xs text-gray-400 mt-1 mb-4">Generate tagihan terlebih dahulu, lalu konfirmasi pembayaran.</p>
+  {% else %}
+  <p class="text-gray-500 font-medium">Tidak ada tagihan dengan filter ini</p>
+  <p class="text-xs text-gray-400 mt-1 mb-4">Coba ubah filter bulan atau status.</p>
+  {% endif %}
+  <button onclick="openGenerate()" class="btn-primary px-5 py-2">Generate Tagihan</button>
+</div>
+{% endif %}
 
 <!-- Modal Input Pembayaran Manual -->
 <div id="modal-bayar" class="modal-overlay hidden" style="background:rgba(0,0,0,0.5);backdrop-filter:blur(4px)">
@@ -309,7 +406,12 @@
     <!-- Body -->
     <div class="px-6 py-5 space-y-4">
       <div>
-        <label class="form-label">Metode Pembayaran</label>
+        <label class="form-label flex items-center gap-1">
+          Metode Pembayaran
+          <span data-tip="Pilih metode pembayaran yang digunakan pelanggan. Untuk audit dan pencatatan pembayaran." class="cursor-help text-gray-400 hover:text-emerald-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </label>
         <div class="grid grid-cols-4 gap-2 mt-1.5" id="bayar-metode-grid">
           {% for m in [('Tunai','💵'),('Transfer Bank','🏦'),('QRIS','📱'),('GoPay','🟢'),('OVO','🟣'),('Dana','🔵'),('ShopeePay','🟠'),('Lainnya','•••')] %}
           <button type="button" onclick="setBayarMetode(this, '{{ m[0] }}')"
@@ -323,7 +425,12 @@
         <input type="hidden" id="bayar-metode" value="Tunai">
       </div>
       <div>
-        <label class="form-label">Keterangan <span class="text-gray-400 font-normal">(opsional)</span></label>
+        <label class="form-label flex items-center gap-1">
+          Keterangan <span class="text-gray-400 font-normal">(opsional)</span>
+          <span data-tip="Catatan pembayaran untuk referensi. Contoh: no rekening, nama pengirim, atau referensi transaksi." class="cursor-help text-gray-400 hover:text-emerald-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </label>
         <input id="bayar-ket" type="text" placeholder="Contoh: Transfer BCA 08xx" class="form-input">
       </div>
       <div class="flex gap-3 pt-1">
@@ -354,11 +461,21 @@
     </div>
     <div class="space-y-3">
       <div>
-        <label class="form-label">Nominal Tagihan</label>
+        <label class="form-label flex items-center gap-1">
+          Nominal Tagihan
+          <span data-tip="Jumlah tagihan yang harus dibayar. Ubah jika ada perubahan paket atau diskon khusus." class="cursor-help text-gray-400 hover:text-blue-500">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </label>
         <input id="edit-amount" type="number" placeholder="0" class="form-input">
       </div>
       <div>
-        <label class="form-label">Status</label>
+        <label class="form-label flex items-center gap-1">
+          Status
+          <span data-tip="Status tagihan: unpaid (belum bayar) / paid (sudah bayar) / overdue (terlambat/kena isolir)." class="cursor-help text-gray-400 hover:text-blue-500">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </span>
+        </label>
         <select id="edit-status" class="form-select">
           <option value="unpaid">Belum Bayar</option>
           <option value="paid">Lunas</option>

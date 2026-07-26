@@ -47,6 +47,7 @@ body { font-family: Arial, sans-serif; background: #fff; }
   <label>Filter Comment:</label>
   <select id="sel-comment" onchange="filterComment(this.value)">
     <option value="">— Semua —</option>
+    <option value="__none__" {% if sel_comment == '__none__' %}selected{% endif %}>— Tanpa Keterangan —</option>
     {% for c in comments %}
     <option value="{{ c }}" {% if sel_comment == c %}selected{% endif %}>{{ c }}</option>
     {% endfor %}

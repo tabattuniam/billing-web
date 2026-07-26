@@ -1,22 +1,31 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.venv/
-venv/
-*.egg-info/
-
-# Database & data
-
-# Config dengan kredensial
-configs/billing.yaml
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
 
 # Logs
 *.log
+*.log.*
+logs/
+
+# Environment
+.env
+*.env
+config.local.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Upload files
+static/uploads/
+static/logo_lembaga/
+uploads/
 
 # OS
 .DS_Store
 Thumbs.db
-
-*.db
-data/uploads/

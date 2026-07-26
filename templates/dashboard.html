@@ -47,7 +47,7 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-5">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-5">
 
     {% set pc_cards = [
       ('Pelanggan',         pelanggan_cards.total,             '#3b82f6', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', '#eff6ff', '#bfdbfe', 'Total seluruh pelanggan terdaftar',  '/pppoe/users'),
@@ -62,8 +62,9 @@
     ] %}
 
     {% for label, val, color, icon_path, bg, border, desc, card_url in pc_cards %}
-    <a href="{{ card_url }}" class="relative overflow-hidden rounded-2xl border p-4 hover:shadow-md transition-all group block"
-       style="background:{{ bg }};border-color:{{ border }}">
+    <a href="{{ card_url }}" class="relative overflow-hidden rounded-2xl border p-4 group block transition-all duration-200 hover:-translate-y-0.5"
+       style="background:{{ bg }};border-color:{{ border }};box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+      <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-2xl" style="box-shadow:0 8px 20px rgba(0,0,0,0.08)"></div>
       <!-- blob dekorasi pojok kanan -->
       <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-20 transition-all group-hover:opacity-30"
            style="background:{{ color }}"></div>

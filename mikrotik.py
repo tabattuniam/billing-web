@@ -93,7 +93,7 @@ class MikroTik:
     def list_pppoe_secrets(self) -> list[dict]:
         try:
             api = self._conn()
-            rows = api.get_resource("/ppp/secret").get(service="pppoe")
+            rows = api.get_resource("/ppp/secret").get()
             return [dict(r) for r in rows]
         except Exception:
             return []
@@ -202,6 +202,57 @@ class MikroTik:
             return result
         except Exception:
             return []
+
+    def list_hotspot_users(self, profile: str = "", username: str = "", comment: str = "") -> list[dict]:
+        try:
+            api = self._conn()
+            kwargs = {}
+            if profile:
+                kwargs["profile"] = profile
+            rows = api.get_resource("/ip/hotspot/user").get(**kwargs)
+            result = []
+            for r in rows:
+                name = r.get("name", "")
+                cmt  = r.get("comment", "")
+                if username and username.lower() not in name.lower():
+                    continue
+                if comment and comment.lower() not in cmt.lower():
+                    continue
+                result.append({
+                    "id":           r.get("id", ""),
+                    "name":         name,
+                    "password":     r.get("password", ""),
+                    "profile":      r.get("profile", ""),
+                    "comment":      cmt,
+                    "disabled":     r.get("disabled", "false"),
+                    "limit_uptime": r.get("limit-uptime", ""),
+                    "uptime":       r.get("uptime", ""),
+                })
+            return result
+        except Exception:
+            return []
+
+    def edit_hotspot_user(self, mt_id: str, profile: str = "", comment: str = "",
+                          password: str = "", limit_uptime: str = "") -> bool:
+        try:
+            api = self._conn()
+            kwargs: dict = {"id": mt_id}
+            if profile:      kwargs["profile"]       = profile
+            if comment:      kwargs["comment"]       = comment
+            if password:     kwargs["password"]      = password
+            if limit_uptime: kwargs["limit-uptime"]  = limit_uptime
+            api.get_resource("/ip/hotspot/user").set(**kwargs)
+            return True
+        except Exception:
+            return False
+
+    def remove_hotspot_user_by_id(self, mt_id: str) -> bool:
+        try:
+            api = self._conn()
+            api.get_resource("/ip/hotspot/user").remove(id=mt_id)
+            return True
+        except Exception:
+            return False
 
     def list_hotspot_active(self) -> list[dict]:
         try:

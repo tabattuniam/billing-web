@@ -48,15 +48,21 @@
 <div id="tab-tagihan">
   <div class="flex flex-wrap items-center gap-2 mb-4">
     <form method="get" class="flex gap-2 flex-wrap">
-      <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-input w-40"
-             onchange="this.form.submit()">
-      <select name="status" class="form-select w-36" onchange="this.form.submit()">
-        <option value="">Semua Status</option>
-        <option value="unpaid" {% if sel_status=='unpaid' %}selected{% endif %}>Belum Bayar</option>
-        <option value="paid"   {% if sel_status=='paid'   %}selected{% endif %}>Lunas</option>
-      </select>
+      <div class="relative">
+        <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-input w-40"
+               onchange="this.form.submit()">
+      </div>
+      <div class="relative">
+        <select name="status" class="form-select w-36" onchange="this.form.submit()">
+          <option value="">Semua Status</option>
+          <option value="unpaid" {% if sel_status=='unpaid' %}selected{% endif %}>Belum Bayar</option>
+          <option value="paid"   {% if sel_status=='paid'   %}selected{% endif %}>Lunas</option>
+        </select>
+      </div>
     </form>
-    <button onclick="generateTagihan()" class="btn-secondary px-4 py-2.5 text-sm">
+    <button onclick="generateTagihan()"
+      data-tip="Generate tagihan bulanan otomatis untuk semua pelanggan hotspot aktif. Hanya untuk bulan yang belum ada tagihan."
+      class="btn-secondary px-4 py-2.5 text-sm cursor-help">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       Generate Tagihan
     </button>
@@ -128,12 +134,12 @@
       <table class="w-full">
         <thead>
           <tr>
-            <th class="th">Nama</th>
-            <th class="th">Username</th>
-            <th class="th">Profile</th>
-            <th class="th text-right">Harga/Bulan</th>
-            <th class="th text-center">Jatuh Tempo</th>
-            <th class="th text-center">Status</th>
+            <th class="th" data-tip="Nama pelanggan dan nomor WhatsApp untuk kontak.">Nama</th>
+            <th class="th" data-tip="Username yang digunakan pelanggan untuk login ke hotspot.">Username</th>
+            <th class="th" data-tip="Profile hotspot di MikroTik yang mengatur kecepatan & durasi koneksi.">Profile</th>
+            <th class="th text-right" data-tip="Harga bulanan yang akan ditagihkan ke pelanggan setiap bulannya.">Harga/Bulan</th>
+            <th class="th text-center" data-tip="Tanggal dalam bulan ketika tagihan dibuat otomatis. Contoh: 1 = dibuat tgl 1 setiap bulan.">Jatuh Tempo</th>
+            <th class="th text-center" data-tip="Status pelanggan: Aktif (akun berjalan) atau Nonaktif (akun disabled di MT).">Status</th>
             <th class="th">Aksi</th>
           </tr>
         </thead>
@@ -191,7 +197,12 @@
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-3">
         <div class="col-span-2">
-          <label class="form-label">Server MikroTik</label>
+          <label class="form-label flex items-center gap-1">
+            Server MikroTik
+            <span data-tip="Router MikroTik tempat akun hotspot bulanan ini akan dibuat." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <select id="t-server" class="form-select">
             {% for s in servers %}
             <option value="{{ s.id }}">{{ s.nama }}</option>
@@ -199,23 +210,48 @@
           </select>
         </div>
         <div class="col-span-2">
-          <label class="form-label">Nama Pelanggan</label>
+          <label class="form-label flex items-center gap-1">
+            Nama Pelanggan
+            <span data-tip="Nama lengkap pelanggan untuk identifikasi di dashboard dan notifikasi." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-nama" type="text" class="form-input" placeholder="Nama lengkap">
         </div>
         <div class="col-span-2">
-          <label class="form-label">Nomor WhatsApp</label>
+          <label class="form-label flex items-center gap-1">
+            Nomor WhatsApp
+            <span data-tip="Nomor WA pelanggan untuk notifikasi tagihan dan reminder. Format: 628xx..." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-wa" type="text" class="form-input" placeholder="628xxxxxxxxxx">
         </div>
         <div>
-          <label class="form-label">Username</label>
+          <label class="form-label flex items-center gap-1">
+            Username
+            <span data-tip="Username untuk login hotspot. Harus unik dan tidak boleh ada duplikat di server yang sama." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-username" type="text" class="form-input" placeholder="user01">
         </div>
         <div>
-          <label class="form-label">Password</label>
+          <label class="form-label flex items-center gap-1">
+            Password
+            <span data-tip="Password login hotspot. Disimpan terenkripsi di MikroTik." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-password" type="text" class="form-input" placeholder="password">
         </div>
         <div class="col-span-2">
-          <label class="form-label">Profile Hotspot</label>
+          <label class="form-label flex items-center gap-1">
+            Profile Hotspot
+            <span data-tip="Profile di MikroTik yang mengatur kecepatan download/upload dan durasi koneksi." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <select id="t-profile" class="form-select">
             {% for pr in profiles %}
             <option value="{{ pr }}">{{ pr }}</option>
@@ -226,15 +262,30 @@
           </select>
         </div>
         <div>
-          <label class="form-label">Harga/Bulan (Rp)</label>
+          <label class="form-label flex items-center gap-1">
+            Harga/Bulan (Rp)
+            <span data-tip="Harga bulanan yang akan ditagihkan otomatis ke pelanggan setiap bulannya." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-harga" type="number" class="form-input" placeholder="100000">
         </div>
         <div>
-          <label class="form-label">Jatuh Tempo (Tgl)</label>
+          <label class="form-label flex items-center gap-1">
+            Jatuh Tempo (Tgl)
+            <span data-tip="Tanggal dalam bulan ketika tagihan dibuat otomatis. Contoh: 1 = dibuat tgl 1, 15 = dibuat tgl 15." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-jatuh" type="number" class="form-input" placeholder="1" min="1" max="28">
         </div>
         <div class="col-span-2">
-          <label class="form-label">Catatan</label>
+          <label class="form-label flex items-center gap-1">
+            Catatan
+            <span data-tip="Catatan tambahan tentang pelanggan ini (opsional). Contoh: alamat, area, keterangan khusus, dll." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input id="t-catatan" type="text" class="form-input" placeholder="Opsional">
         </div>
       </div>

@@ -82,6 +82,8 @@ class Storage:
         ph_cols = {r[1] for r in con.execute("PRAGMA table_info(paket_hotspot)")}
         if "server_id" not in ph_cols:
             con.execute("ALTER TABLE paket_hotspot ADD COLUMN server_id TEXT DEFAULT ''")
+        if "agen_akses" not in ph_cols:
+            con.execute("ALTER TABLE paket_hotspot ADD COLUMN agen_akses INTEGER DEFAULT 1")
 
         vh_cols = {r[1] for r in con.execute("PRAGMA table_info(voucher_hotspot)")}
         if "comment" not in vh_cols:
@@ -115,6 +117,17 @@ class Storage:
             con.execute("ALTER TABLE topup_orders ADD COLUMN isp_id TEXT DEFAULT ''")
         if "catatan_agen" not in to_cols:
             con.execute("ALTER TABLE topup_orders ADD COLUMN catatan_agen TEXT DEFAULT ''")
+
+        mc_cols = {r[1] for r in con.execute("PRAGMA table_info(monitor_config)")}
+        if "tg_update_offset" not in mc_cols:
+            con.execute("ALTER TABLE monitor_config ADD COLUMN tg_update_offset INTEGER DEFAULT 0")
+
+        wg_cols = {r[1] for r in con.execute("PRAGMA table_info(wa_gateway)")}
+        if "wa_provider" not in wg_cols:
+            con.execute("ALTER TABLE wa_gateway ADD COLUMN wa_provider TEXT DEFAULT 'wuzapi'")
+        if "wa_token_ext" not in wg_cols:
+            con.execute("ALTER TABLE wa_gateway ADD COLUMN wa_token_ext TEXT DEFAULT ''")
+        con.commit()
 
         con.execute("""
             CREATE TABLE IF NOT EXISTS agen_income (
@@ -227,6 +240,68 @@ class Storage:
                 updated_at INTEGER NOT NULL DEFAULT 0
             )
         """)
+
+        # ── Add-on system ─────────────────────────────────────────────────────
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS saas_addons (
+                id          TEXT PRIMARY KEY,
+                nama        TEXT NOT NULL,
+                deskripsi   TEXT DEFAULT '',
+                harga       INTEGER NOT NULL DEFAULT 0,
+                aktif       INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS saas_tenant_addons (
+                user_id     TEXT NOT NULL,
+                addon_id    TEXT NOT NULL,
+                aktif       INTEGER NOT NULL DEFAULT 1,
+                aktif_sejak INTEGER,
+                expired_at  INTEGER,
+                PRIMARY KEY (user_id, addon_id)
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS monitor_config (
+                user_id         TEXT PRIMARY KEY,
+                bot_token       TEXT DEFAULT '',
+                group_chat_id   TEXT DEFAULT '',
+                grace_seconds   INTEGER DEFAULT 60,
+                notify_on_down  INTEGER DEFAULT 1,
+                notify_on_up    INTEGER DEFAULT 1,
+                updated_at      INTEGER DEFAULT 0,
+                tg_update_offset INTEGER DEFAULT 0
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS monitor_events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                server_id   TEXT NOT NULL,
+                username    TEXT NOT NULL,
+                event       TEXT NOT NULL,
+                ts          INTEGER NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS monitor_pppoe_state (
+                user_id         TEXT NOT NULL,
+                server_id       TEXT NOT NULL,
+                username        TEXT NOT NULL,
+                is_online       INTEGER NOT NULL DEFAULT 0,
+                last_change_ts  INTEGER NOT NULL DEFAULT 0,
+                notified_state  INTEGER DEFAULT NULL,
+                PRIMARY KEY (user_id, server_id, username)
+            )
+        """)
+        # Seed addon monitoring telegram jika belum ada
+        exists = con.execute("SELECT id FROM saas_addons WHERE id='monitor_telegram'").fetchone()
+        if not exists:
+            con.execute(
+                "INSERT INTO saas_addons (id, nama, deskripsi, harga, aktif) VALUES (?,?,?,?,?)",
+                ("monitor_telegram", "Bot Monitoring Telegram",
+                 "Notifikasi otomatis up/down pelanggan PPPoE ke grup Telegram Anda", 50000, 1)
+            )
         con.commit()
 
     # ── Platform Config ───────────────────────────────────────────────────────
@@ -841,13 +916,13 @@ class Storage:
 
     # ── PPPoE Users ──────────────────────────────────────────────────────────
 
-    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0, tgl_mulai=None, terpasang=0) -> int:
+    def create_pppoe_user(self, user_id, server_id, nama_pelanggan, username, password, paket_id, telepon="", alamat="", tgl_bayar=1, mt_pushed=0, tgl_mulai=None, terpasang=0, grace_period=None, no_isolir=0) -> int:
         now = int(time.time())
         tgl_mulai = tgl_mulai or now
         con = self._conn()
         cur = con.execute(
-            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at,tgl_mulai,terpasang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, now, tgl_mulai, terpasang)
+            "INSERT INTO pppoe_users (user_id,server_id,nama_pelanggan,username,password,paket_id,telepon,alamat,tgl_bayar,mt_pushed,created_at,tgl_mulai,terpasang,grace_period,no_isolir) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (user_id, server_id, nama_pelanggan, username, password, paket_id, telepon, alamat, tgl_bayar, mt_pushed, now, tgl_mulai, terpasang, grace_period, no_isolir)
         )
         con.commit()
         pid = cur.lastrowid
@@ -865,7 +940,7 @@ class Storage:
                           terpasang: int = None, pppoe_ids: list = None,
                           limit: int = None, offset: int = 0) -> list[dict]:
         con = self._conn()
-        base = ("SELECT p.*, pk.nama as paket_nama, pk.kecepatan, "
+        base = ("SELECT p.*, pk.nama as paket_nama, pk.kecepatan, pk.harga as paket_harga, "
                 "s.nama as server_nama, o.nama as odp_nama "
                 "FROM pppoe_users p "
                 "LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
@@ -945,7 +1020,7 @@ class Storage:
     def update_pppoe_user(self, pid: int, nama_pelanggan: str, telepon: str, alamat: str, tgl_bayar: int,
                           username: str = None, password: str = None, tgl_mulai: int = None):
         con = self._conn()
-        if username and password:
+        if username is not None and password is not None:
             con.execute(
                 "UPDATE pppoe_users SET nama_pelanggan=?, telepon=?, alamat=?, tgl_bayar=?, username=?, password=?, tgl_mulai=COALESCE(?,tgl_mulai) WHERE id=?",
                 (nama_pelanggan, telepon, alamat, tgl_bayar, username, password, tgl_mulai, pid)
@@ -1167,6 +1242,29 @@ class Storage:
         con.close()
         return dict(row) if row else None
 
+    def list_paket_hotspot_agen(self, user_id: str) -> list[dict]:
+        """Hanya paket yang admin izinkan untuk agen (agen_akses=1)."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT * FROM paket_hotspot WHERE user_id=? AND status='aktif' AND agen_akses=1 ORDER BY harga",
+            (user_id,)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def set_agen_paket_akses(self, user_id: str, enabled_ids: list[int]):
+        """Set paket mana saja yang bisa diakses agen. enabled_ids = list paket_id yang dicentang."""
+        con = self._conn()
+        con.execute("UPDATE paket_hotspot SET agen_akses=0 WHERE user_id=?", (user_id,))
+        if enabled_ids:
+            placeholders = ",".join("?" for _ in enabled_ids)
+            con.execute(
+                f"UPDATE paket_hotspot SET agen_akses=1 WHERE user_id=? AND id IN ({placeholders})",
+                [user_id] + list(enabled_ids)
+            )
+        con.commit()
+        con.close()
+
     # ── Voucher Hotspot ───────────────────────────────────────────────────────
 
     def create_vouchers(self, user_id: str, server_id: str, paket_id: int, jumlah: int, comment: str = "") -> list[str]:
@@ -1295,6 +1393,64 @@ class Storage:
         con.close()
         return [dict(r) for r in rows]
 
+    def list_voucher_transaksi(self, user_id: str, limit: int = 200) -> list[dict]:
+        """Riwayat transaksi voucher dari semua sumber: online, agen, admin."""
+        con = self._conn()
+        rows = con.execute("""
+            SELECT
+                'online' AS sumber,
+                o.id AS ref_id,
+                v.kode,
+                p.nama AS paket_nama,
+                p.harga AS paket_harga,
+                o.amount AS bayar,
+                o.nomor_hp AS kontak,
+                NULL AS agen_nama,
+                v.status,
+                o.created_at,
+                o.paid_at AS selesai_at,
+                s.nama AS server_nama,
+                NULL AS comment
+            FROM hotspot_orders o
+            JOIN voucher_hotspot v ON v.id = o.voucher_id
+            LEFT JOIN paket_hotspot p ON p.id = o.paket_id
+            LEFT JOIN mikrotik_servers s ON s.id = o.server_id
+            WHERE o.user_id = ? AND o.status = 'paid'
+
+            UNION ALL
+
+            SELECT
+                CASE WHEN v.agen_id != '' AND v.agen_id IS NOT NULL THEN 'agen' ELSE 'admin' END AS sumber,
+                v.id AS ref_id,
+                v.kode,
+                p.nama AS paket_nama,
+                p.harga AS paket_harga,
+                CASE WHEN v.agen_id != '' AND v.agen_id IS NOT NULL
+                     THEN CAST(ROUND(p.harga * (100 - COALESCE(u.komisi_persen,0)) / 100.0) AS INTEGER)
+                     ELSE 0 END AS bayar,
+                CASE WHEN v.agen_id != '' AND v.agen_id IS NOT NULL THEN u.nomor_wa ELSE NULL END AS kontak,
+                u.nama AS agen_nama,
+                v.status,
+                v.created_at,
+                v.dipakai_at AS selesai_at,
+                s.nama AS server_nama,
+                v.comment AS comment
+            FROM voucher_hotspot v
+            LEFT JOIN paket_hotspot p ON p.id = v.paket_id
+            LEFT JOIN mikrotik_servers s ON s.id = v.server_id
+            LEFT JOIN users u ON u.id = v.agen_id
+            WHERE v.user_id = ? AND v.status != 'tersedia'
+              AND NOT EXISTS (
+                  SELECT 1 FROM hotspot_orders o2
+                  WHERE o2.voucher_id = v.id AND o2.status = 'paid'
+              )
+
+            ORDER BY 10 DESC
+            LIMIT ?
+        """, (user_id, user_id, limit)).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
     def list_voucher_comments_with_agen(self, user_id: str) -> list[dict]:
         """List comment unik beserta nama agen, nama paket dominan, dan jumlah tersedia (untuk panel ISP)."""
         con = self._conn()
@@ -1342,7 +1498,7 @@ class Storage:
                 " WHERE v2.user_id=v.user_id AND v2.comment=v.comment AND v2.agen_id=v.agen_id "
                 " GROUP BY v2.paket_id ORDER BY COUNT(*) DESC LIMIT 1) LIMIT 1) as paket_nama "
                 "FROM voucher_hotspot v "
-                "WHERE v.user_id=? AND v.agen_id=? AND v.comment!='' "
+                "WHERE v.user_id=? AND v.agen_id=? "
                 "GROUP BY v.comment ORDER BY v.comment",
                 (user_id, agen_id)
             ).fetchall()
@@ -1355,7 +1511,7 @@ class Storage:
                 " WHERE v2.user_id=v.user_id AND v2.comment=v.comment "
                 " GROUP BY v2.paket_id ORDER BY COUNT(*) DESC LIMIT 1) LIMIT 1) as paket_nama "
                 "FROM voucher_hotspot v "
-                "WHERE v.user_id=? AND v.comment!='' "
+                "WHERE v.user_id=? "
                 "GROUP BY v.comment ORDER BY v.comment",
                 (user_id,)
             ).fetchall()
@@ -1707,13 +1863,13 @@ class Storage:
         con.close()
         return [dict(r) for r in rows]
 
-    def create_topup_manual(self, user_id: str, isp_id: str, amount: int, catatan: str = "") -> str:
-        """Buat topup manual (QRIS ISP), menunggu approval ISP."""
+    def create_topup_manual(self, user_id: str, isp_id: str, amount: int, catatan: str = "", tipe: str = "manual", ref: str = "") -> str:
+        """Buat topup manual atau Midtrans, menunggu konfirmasi."""
         oid = "MAN-" + uuid.uuid4().hex[:10].upper()
         con = self._conn()
         con.execute(
-            "INSERT INTO topup_orders (id,user_id,isp_id,amount,tipe,catatan_agen,created_at) VALUES (?,?,?,?,?,?,?)",
-            (oid, user_id, isp_id, amount, "manual", catatan, int(time.time()))
+            "INSERT INTO topup_orders (id,user_id,isp_id,amount,tipe,catatan_agen,ref,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (oid, user_id, isp_id, amount, tipe, catatan, ref, int(time.time()))
         )
         con.commit()
         con.close()
@@ -1775,8 +1931,13 @@ class Storage:
         con.close()
         return dict(order)
 
+    TOPUP_FEE_THRESHOLD = 800_000
+    TOPUP_FEE_AMOUNT    = 10_000
+    TOPUP_FEE_SMALL     = 5_000
+
     def approve_topup_manual_sa(self, oid: str) -> dict | None:
-        """SA approve topup manual: agen saldo + dan ISP saldo + (platform titip ke ISP)."""
+        """SA approve topup manual: agen saldo + dan ISP saldo + (platform titip ke ISP).
+        Jika amount > 800rb, dikenakan biaya admin Rp 10.000. Di bawah itu Rp 5.000."""
         con = self._conn()
         order = con.execute(
             "SELECT * FROM topup_orders WHERE id=? AND tipe='manual' AND status='pending'",
@@ -1787,22 +1948,33 @@ class Storage:
             return None
         order = dict(order)
         now = int(time.time())
+        amount = order["amount"]
+        fee = self.TOPUP_FEE_AMOUNT if amount > self.TOPUP_FEE_THRESHOLD else self.TOPUP_FEE_SMALL
+        credited = amount - fee
         con.execute("UPDATE topup_orders SET status='paid', paid_at=? WHERE id=?", (now, oid))
-        # Agen saldo bertambah
-        con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (order["amount"], order["user_id"]))
+        # Agen saldo bertambah (dikurangi fee jika ada)
+        con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (credited, order["user_id"]))
+        ket_agen = f"Topup QRIS disetujui platform #{oid}"
+        if fee:
+            ket_agen += f" (dipotong biaya admin Rp {fee:,})"
         con.execute(
             "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
-            (order["user_id"], order["amount"], "kredit", f"Topup QRIS disetujui platform #{oid}", now)
+            (order["user_id"], credited, "kredit", ket_agen, now)
         )
         # ISP saldo bertambah saat SA approve topup
         if order.get("isp_id"):
-            con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (order["amount"], order["isp_id"]))
+            con.execute("UPDATE users SET saldo=saldo+? WHERE id=?", (credited, order["isp_id"]))
+            ket_isp = f"Topup agen disetujui platform #{oid}"
+            if fee:
+                ket_isp += f" (biaya admin Rp {fee:,} dipotong)"
             con.execute(
                 "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
-                (order["isp_id"], order["amount"], "kredit", f"Topup agen disetujui platform #{oid}", now)
+                (order["isp_id"], credited, "kredit", ket_isp, now)
             )
         con.commit()
         con.close()
+        order["fee"] = fee
+        order["credited"] = credited
         return order
 
     def reject_topup_manual_sa(self, oid: str) -> dict | None:
@@ -1998,6 +2170,19 @@ class Storage:
         con.commit()
         con.close()
 
+    def update_wa_provider(self, user_id: str, provider: str, token_ext: str = ""):
+        con = self._conn()
+        con.execute("""
+            INSERT INTO wa_gateway (user_id, wa_provider, wa_token_ext, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                wa_provider=excluded.wa_provider,
+                wa_token_ext=excluded.wa_token_ext,
+                updated_at=excluded.updated_at
+        """, (user_id, provider, token_ext, int(time.time())))
+        con.commit()
+        con.close()
+
     def update_wa_gateway_status(self, user_id: str, status: str, nomor: str = ""):
         con = self._conn()
         con.execute(
@@ -2021,9 +2206,10 @@ class Storage:
     # ── Tagihan PPPoE ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def _hitung_prorate(harga: int, tgl_mulai_ts: int, bulan: str, tgl_bayar_hari: int) -> int:
+    def _hitung_prorate(harga: int, tgl_mulai_ts: int, bulan: str, tgl_bayar_hari: int):
         """Hitung nominal prorate tagihan pertama.
-        Dari tgl_mulai sampai tgl_bayar di bulan tagihan."""
+        Dari tgl_mulai sampai tgl_bayar di bulan tagihan.
+        Return None jika days <= 0 (pasang di hari yang sama dengan tgl_bayar) → skip bulan ini."""
         import datetime as _dt
         try:
             year, month = int(bulan[:4]), int(bulan[5:7])
@@ -2031,8 +2217,10 @@ class Storage:
             end_date   = _dt.date(year, month, tgl_bayar_hari)
             start_date = _dt.date.fromtimestamp(tgl_mulai_ts)
             days = (end_date - start_date).days
-            if days <= 0 or days >= 30:
-                return harga  # edge case → full
+            if days <= 0:
+                return None  # pasang hari ini = tgl_bayar, tagihan mulai bulan depan
+            if days >= 30:
+                return harga  # full price
             # Bulatkan ke kelipatan 500 terdekat
             raw = harga * days / 30
             return max(500, round(raw / 500) * 500)
@@ -2067,6 +2255,8 @@ class Storage:
             ).fetchone()[0]
             if prev == 0 and p["tgl_mulai"]:
                 amount = self._hitung_prorate(harga, p["tgl_mulai"], bulan, p["tgl_bayar"] or 1)
+                if amount is None:
+                    continue  # pasang = tgl_bayar, tagihan pertama baru bulan depan
             else:
                 amount = harga
             try:
@@ -2081,6 +2271,51 @@ class Storage:
         con.commit()
         con.close()
         return dibuat
+
+    def regenerate_tagihan_user(self, pppoe_id: int, bulan: str) -> bool:
+        """Hapus tagihan pending bulan ini untuk satu pelanggan lalu generate ulang.
+        Dipanggil setelah edit tgl_bayar agar tagihan menyesuaikan perubahan."""
+        con = self._conn()
+        # Hapus tagihan bulan ini yg masih unpaid/pending untuk pelanggan ini
+        con.execute(
+            "DELETE FROM tagihan_pppoe WHERE pppoe_id=? AND bulan=? AND status IN ('unpaid','pending')",
+            (pppoe_id, bulan)
+        )
+        con.commit()
+        # Ambil data pelanggan
+        p = con.execute(
+            "SELECT p.id, p.user_id, p.paket_id, p.tgl_mulai, p.tgl_bayar, pk.harga "
+            "FROM pppoe_users p LEFT JOIN paket_pppoe pk ON pk.id=p.paket_id "
+            "WHERE p.id=? AND p.status='aktif'",
+            (pppoe_id,)
+        ).fetchone()
+        con.close()
+        if not p:
+            return False
+        harga = p["harga"] or 0
+        con = self._conn()
+        prev = con.execute(
+            "SELECT COUNT(*) FROM tagihan_pppoe WHERE pppoe_id=? AND bulan<?",
+            (pppoe_id, bulan)
+        ).fetchone()[0]
+        if prev == 0 and p["tgl_mulai"]:
+            amount = self._hitung_prorate(harga, p["tgl_mulai"], bulan, p["tgl_bayar"] or 1)
+            if amount is None:
+                con.close()
+                return False  # pasang = tgl_bayar bulan ini, tagihan mulai bulan depan
+        else:
+            amount = harga
+        now = int(time.time())
+        try:
+            con.execute(
+                "INSERT OR IGNORE INTO tagihan_pppoe (user_id,pppoe_id,bulan,amount,created_at) VALUES (?,?,?,?,?)",
+                (p["user_id"], pppoe_id, bulan, amount, now)
+            )
+            con.commit()
+        except Exception:
+            pass
+        con.close()
+        return True
 
     def list_tagihan(self, user_id: str, bulan: str = None, status: str = None) -> list[dict]:
         con = self._conn()
@@ -2175,16 +2410,23 @@ class Storage:
         today = date.today()
         year, month = int(bulan[:4]), int(bulan[5:])
         con = self._conn()
-        # Ambil grace_period tenant (default 10)
+        # Ambil grace_period ISP (default 10)
         gp_row = con.execute("SELECT grace_period FROM users WHERE id=?", (user_id,)).fetchone()
-        grace_period = (gp_row["grace_period"] if gp_row and gp_row["grace_period"] is not None else 10)
+        isp_grace = (gp_row["grace_period"] if gp_row and gp_row["grace_period"] is not None else 10)
         rows = con.execute("""
-            SELECT t.id, t.pppoe_id, p.tgl_bayar FROM tagihan_pppoe t
+            SELECT t.id, t.pppoe_id, p.tgl_bayar,
+                   p.grace_period as p_grace, p.no_isolir
+            FROM tagihan_pppoe t
             LEFT JOIN pppoe_users p ON p.id=t.pppoe_id
             WHERE t.user_id=? AND t.bulan=? AND t.status='unpaid'
         """, (user_id, bulan)).fetchall()
         n = 0
         for r in rows:
+            # Skip pelanggan yang ditandai jangan pernah isolir
+            if r["no_isolir"]:
+                continue
+            # Grace period: per-pelanggan jika di-set, fallback ke ISP
+            grace_period = r["p_grace"] if r["p_grace"] is not None else isp_grace
             tgl_bayar = r["tgl_bayar"] or 1
             max_day = _cal.monthrange(year, month)[1]
             tgl_bayar_actual = min(tgl_bayar, max_day)
@@ -2194,7 +2436,6 @@ class Storage:
                 continue
             if today >= jatuh_tempo:
                 con.execute("UPDATE tagihan_pppoe SET status='overdue' WHERE id=?", (r["id"],))
-                con.execute("UPDATE pppoe_users SET status='suspended' WHERE id=? AND status='aktif'", (r["pppoe_id"],))
                 n += 1
         con.commit()
         con.close()
@@ -2237,7 +2478,7 @@ class Storage:
         con.commit()
         con.close()
 
-    def beli_voucher_saldo(self, buyer_uid: str, isp_uid: str, paket_id: int) -> dict:
+    def beli_voucher_saldo(self, buyer_uid: str, isp_uid: str, paket_id: int, comment: str = "") -> dict:
         """Beli voucher menggunakan saldo. Return {'ok': bool, 'kode': str, 'msg': str}."""
         con = self._conn()
         try:
@@ -2264,13 +2505,17 @@ class Storage:
 
             # Atomik: debit saldo agen + tandai voucher + catat log
             con.execute("UPDATE users SET saldo=saldo-? WHERE id=?", (paket["harga"], buyer_uid))
-            con.execute("UPDATE voucher_hotspot SET status='dipakai', dipakai_at=? WHERE id=?", (int(time.time()), voucher["id"]))
+            con.execute(
+                "UPDATE voucher_hotspot SET status='dipakai', dipakai_at=?, agen_id=?, comment=? WHERE id=?",
+                (int(time.time()), buyer_uid, comment, voucher["id"])
+            )
             con.execute(
                 "INSERT INTO saldo_log (user_id,jumlah,tipe,keterangan,created_at) VALUES (?,?,?,?,?)",
                 (buyer_uid, paket["harga"], "debit", f"Beli voucher {paket['nama']} - {voucher['kode']}", int(time.time()))
             )
             con.commit()
-            return {"ok": True, "kode": voucher["kode"], "paket": paket["nama"], "msg": "Berhasil"}
+            return {"ok": True, "kode": voucher["kode"], "paket": paket["nama"],
+                    "server_id": voucher["server_id"], "msg": "Berhasil"}
         except Exception as e:
             con.rollback()
             return {"ok": False, "msg": str(e)}
@@ -2895,3 +3140,265 @@ class Storage:
         cur = con.execute("DELETE FROM wa_log WHERE id=? AND user_id=?", (lid, user_id))
         con.commit(); con.close()
         return cur.rowcount > 0
+
+    # ── WA Nomor Invalid ──────────────────────────────────────────────────────
+
+    def _ensure_wa_nomor_invalid(self, con):
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS wa_nomor_invalid (
+                nomor       TEXT NOT NULL,
+                user_id     TEXT NOT NULL,
+                fail_count  INTEGER DEFAULT 0,
+                marked_at   INTEGER,
+                PRIMARY KEY (nomor, user_id)
+            )
+        """)
+        con.commit()
+
+    def wa_is_nomor_invalid(self, nomor: str, user_id: str) -> bool:
+        """Return True jika nomor sudah ditandai tidak valid (≥3 gagal 463)."""
+        con = self._conn()
+        self._ensure_wa_nomor_invalid(con)
+        row = con.execute(
+            "SELECT fail_count FROM wa_nomor_invalid WHERE nomor=? AND user_id=?",
+            (nomor, user_id)
+        ).fetchone()
+        con.close()
+        return bool(row and row[0] >= 3)
+
+    def wa_catat_gagal_463(self, nomor: str, user_id: str) -> int:
+        """Tambah hitungan gagal 463 untuk nomor ini. Return jumlah gagal terbaru."""
+        con = self._conn()
+        self._ensure_wa_nomor_invalid(con)
+        con.execute("""
+            INSERT INTO wa_nomor_invalid (nomor, user_id, fail_count, marked_at)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(nomor, user_id) DO UPDATE SET
+                fail_count = fail_count + 1,
+                marked_at  = excluded.marked_at
+        """, (nomor, user_id, int(time.time())))
+        con.commit()
+        row = con.execute(
+            "SELECT fail_count FROM wa_nomor_invalid WHERE nomor=? AND user_id=?",
+            (nomor, user_id)
+        ).fetchone()
+        con.close()
+        return row[0] if row else 1
+
+    def wa_reset_nomor_invalid(self, nomor: str, user_id: str) -> None:
+        """Reset status invalid untuk nomor (misal setelah nomor diupdate)."""
+        con = self._conn()
+        self._ensure_wa_nomor_invalid(con)
+        con.execute("DELETE FROM wa_nomor_invalid WHERE nomor=? AND user_id=?", (nomor, user_id))
+        con.commit(); con.close()
+
+    # ── Add-on ───────────────────────────────────────────────────────────────
+
+    def list_addons(self) -> list[dict]:
+        con = self._conn()
+        rows = con.execute("SELECT * FROM saas_addons WHERE aktif=1 ORDER BY nama").fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_tenant_addon(self, user_id: str, addon_id: str) -> dict | None:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM saas_tenant_addons WHERE user_id=? AND addon_id=?", (user_id, addon_id)
+        ).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def is_addon_active(self, user_id: str, addon_id: str) -> bool:
+        row = self.get_tenant_addon(user_id, addon_id)
+        if not row or not row["aktif"]:
+            return False
+        if row.get("expired_at") and row["expired_at"] < int(time.time()):
+            return False
+        return True
+
+    def activate_addon(self, user_id: str, addon_id: str, bulan: int = 1) -> None:
+        now = int(time.time())
+        expired = now + bulan * 30 * 86400
+        con = self._conn()
+        existing = con.execute(
+            "SELECT expired_at FROM saas_tenant_addons WHERE user_id=? AND addon_id=?",
+            (user_id, addon_id)
+        ).fetchone()
+        if existing and existing[0] and existing[0] > now:
+            # Perpanjang dari expired_at sekarang
+            expired = existing[0] + bulan * 30 * 86400
+        con.execute("""
+            INSERT INTO saas_tenant_addons (user_id, addon_id, aktif, aktif_sejak, expired_at)
+            VALUES (?, ?, 1, ?, ?)
+            ON CONFLICT(user_id, addon_id) DO UPDATE SET
+                aktif=1, expired_at=excluded.expired_at
+        """, (user_id, addon_id, now, expired))
+        con.commit()
+        con.close()
+
+    def deactivate_addon(self, user_id: str, addon_id: str) -> None:
+        con = self._conn()
+        con.execute(
+            "UPDATE saas_tenant_addons SET aktif=0 WHERE user_id=? AND addon_id=?",
+            (user_id, addon_id)
+        )
+        con.commit()
+        con.close()
+
+    def list_active_monitor_tenants(self) -> list[dict]:
+        """Return semua tenant yang punya addon monitor_telegram aktif.
+        Config boleh kosong — worker akan skip notifikasi jika bot_token/group_chat_id belum diisi."""
+        now = int(time.time())
+        con = self._conn()
+        rows = con.execute("""
+            SELECT ta.user_id,
+                   COALESCE(mc.bot_token, '')     as bot_token,
+                   COALESCE(mc.group_chat_id, '') as group_chat_id,
+                   COALESCE(mc.grace_seconds, 60) as grace_seconds,
+                   COALESCE(mc.notify_on_down, 1) as notify_on_down,
+                   COALESCE(mc.notify_on_up, 1)   as notify_on_up
+            FROM saas_tenant_addons ta
+            LEFT JOIN monitor_config mc ON mc.user_id = ta.user_id
+            WHERE ta.addon_id='monitor_telegram' AND ta.aktif=1
+              AND (ta.expired_at IS NULL OR ta.expired_at > ?)
+        """, (now,)).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    # ── Monitor Config ────────────────────────────────────────────────────────
+
+    def get_monitor_config(self, user_id: str) -> dict | None:
+        con = self._conn()
+        row = con.execute("SELECT * FROM monitor_config WHERE user_id=?", (user_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def save_monitor_config(self, user_id: str, bot_token: str, group_chat_id: str,
+                            grace_seconds: int = 60, notify_on_down: int = 1,
+                            notify_on_up: int = 1) -> None:
+        con = self._conn()
+        con.execute("""
+            INSERT INTO monitor_config (user_id, bot_token, group_chat_id, grace_seconds,
+                notify_on_down, notify_on_up, updated_at)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                bot_token=excluded.bot_token,
+                group_chat_id=excluded.group_chat_id,
+                grace_seconds=excluded.grace_seconds,
+                notify_on_down=excluded.notify_on_down,
+                notify_on_up=excluded.notify_on_up,
+                updated_at=excluded.updated_at
+        """, (user_id, bot_token, group_chat_id, grace_seconds, notify_on_down, notify_on_up,
+              int(time.time())))
+        con.commit()
+        con.close()
+
+    # ── Monitor State & Events ────────────────────────────────────────────────
+
+    def get_monitor_state(self, user_id: str, server_id: str, username: str) -> dict | None:
+        con = self._conn()
+        row = con.execute(
+            "SELECT * FROM monitor_pppoe_state WHERE user_id=? AND server_id=? AND username=?",
+            (user_id, server_id, username)
+        ).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def upsert_monitor_state(self, user_id: str, server_id: str, username: str,
+                             is_online: int, ts: int, notified_state=None) -> None:
+        con = self._conn()
+        con.execute("""
+            INSERT INTO monitor_pppoe_state (user_id, server_id, username, is_online,
+                last_change_ts, notified_state)
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT(user_id, server_id, username) DO UPDATE SET
+                is_online=excluded.is_online,
+                last_change_ts=excluded.last_change_ts,
+                notified_state=CASE WHEN excluded.notified_state IS NULL
+                    THEN notified_state ELSE excluded.notified_state END
+        """, (user_id, server_id, username, is_online, ts, notified_state))
+        con.commit()
+        con.close()
+
+    def mark_monitor_notified(self, user_id: str, server_id: str, username: str, state: int):
+        con = self._conn()
+        con.execute(
+            "UPDATE monitor_pppoe_state SET notified_state=? "
+            "WHERE user_id=? AND server_id=? AND username=?",
+            (state, user_id, server_id, username)
+        )
+        con.commit()
+        con.close()
+
+    def log_monitor_event(self, user_id: str, server_id: str, username: str, event: str, ts: int):
+        con = self._conn()
+        con.execute(
+            "INSERT INTO monitor_events (user_id, server_id, username, event, ts) VALUES (?,?,?,?,?)",
+            (user_id, server_id, username, event, ts)
+        )
+        con.commit()
+        con.close()
+
+    def list_monitor_events(self, user_id: str, limit: int = 50) -> list[dict]:
+        con = self._conn()
+        rows = con.execute(
+            "SELECT * FROM monitor_events WHERE user_id=? ORDER BY ts DESC LIMIT ?",
+            (user_id, limit)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def get_pppoe_nama(self, user_id: str, username: str) -> str:
+        """Return nama_pelanggan untuk username PPPoE, atau username jika tidak ditemukan."""
+        con = self._conn()
+        row = con.execute(
+            "SELECT nama_pelanggan FROM pppoe_users WHERE user_id=? AND username=?",
+            (user_id, username)
+        ).fetchone()
+        con.close()
+        return row[0] if row else username
+
+    def get_monitor_state_by_username(self, user_id: str, username: str) -> dict | None:
+        """Cari state pelanggan berdasarkan username (semua server)."""
+        con = self._conn()
+        row = con.execute(
+            "SELECT s.*, srv.nama as server_nama FROM monitor_pppoe_state s "
+            "LEFT JOIN mikrotik_servers srv ON srv.id=s.server_id "
+            "WHERE s.user_id=? AND s.username=? ORDER BY s.last_change_ts DESC LIMIT 1",
+            (user_id, username)
+        ).fetchone()
+        con.close()
+        return dict(row) if row else None
+
+    def list_monitor_state_all(self, user_id: str) -> list[dict]:
+        """Semua state pelanggan untuk satu tenant."""
+        con = self._conn()
+        rows = con.execute(
+            "SELECT s.*, p.nama_pelanggan, srv.nama as server_nama "
+            "FROM monitor_pppoe_state s "
+            "LEFT JOIN pppoe_users p ON p.user_id=s.user_id AND p.username=s.username "
+            "LEFT JOIN mikrotik_servers srv ON srv.id=s.server_id "
+            "WHERE s.user_id=? ORDER BY s.username",
+            (user_id,)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]
+
+    def set_tg_update_offset(self, user_id: str, offset: int) -> None:
+        con = self._conn()
+        con.execute(
+            "UPDATE monitor_config SET tg_update_offset=? WHERE user_id=?",
+            (offset, user_id)
+        )
+        con.commit()
+        con.close()
+
+    def list_wa_nomor_invalid(self, user_id: str) -> list[dict]:
+        con = self._conn()
+        self._ensure_wa_nomor_invalid(con)
+        rows = con.execute(
+            "SELECT nomor, fail_count, marked_at FROM wa_nomor_invalid WHERE user_id=? ORDER BY marked_at DESC",
+            (user_id,)
+        ).fetchall()
+        con.close()
+        return [dict(r) for r in rows]

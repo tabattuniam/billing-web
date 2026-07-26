@@ -21,13 +21,6 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       Refresh Online
     </button>
-    {% if user.role != 'teknisi' %}
-    <button onclick="document.getElementById('modal-import').classList.remove('hidden')"
-      class="btn-secondary px-4 py-2.5 text-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-      Import Router
-    </button>
-    {% endif %}
     <button onclick="document.getElementById('modal-tambah').classList.remove('hidden')"
       class="btn-primary px-4 py-2.5 text-sm">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -206,11 +199,11 @@
 </div>
 
 <!-- Table (desktop) -->
-<div class="card overflow-hidden hidden sm:block">
+<div class="card overflow-hidden hidden sm:block" style="box-shadow:0 4px 20px rgba(0,0,0,0.07)">
   <div class="overflow-x-auto">
     <table class="w-full" id="tbl-pelanggan">
       <thead>
-        <tr class="border-b border-gray-100" style="background:linear-gradient(90deg,#f8fafc,#f1f5f9)">
+        <tr>
           <th class="th">Pelanggan</th>
           <th class="th">PPPoE</th>
           <th class="th">Paket</th>
@@ -226,8 +219,9 @@
       {% for u in users %}
       {% set is_online  = u.username in online_set %}
       {% set is_overdue = u.id in overdue_ids %}
-      <tr class="hover:bg-blue-50/30 transition-colors border-b border-gray-50
-        {% if is_overdue and u.status=='aktif' %}bg-amber-50/40{% endif %}">
+      <tr class="group transition-all duration-150 border-b border-gray-50
+        {% if is_overdue and u.status=='aktif' %}bg-amber-50/50 hover:bg-amber-50{% else %}hover:bg-blue-50/40{% endif %}"
+        style="{% if loop.even %}background-color:rgba(248,250,252,0.5){% endif %}">
 
         <td class="td">
           <div class="flex items-center gap-3">
@@ -261,6 +255,11 @@
           {% if u.kecepatan %}
           <span class="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">{{ u.kecepatan }}</span>
           {% endif %}
+          {% if u.paket_harga %}
+          <p class="text-xs text-emerald-600 font-semibold mt-1">
+            Rp {{ "{:,}".format(u.paket_harga).replace(",",".") }}
+          </p>
+          {% endif %}
           {% else %}
           <span class="text-gray-300 text-sm">—</span>
           {% endif %}
@@ -292,7 +291,12 @@
           </div>
           <p class="text-xs text-gray-400 mt-0.5 ml-5">tiap bulan</p>
           {% if u.tgl_mulai %}
-          <p class="text-xs text-blue-500 mt-1 ml-5">Mulai: {{ u.tgl_mulai | datetimeformat('%d %b %Y') }}</p>
+          <p class="text-xs text-blue-500 mt-1 ml-5">Pasang: {{ u.tgl_mulai | datetimeformat('%d %b %Y') }}</p>
+          {% endif %}
+          {% if u.first_tagihan_date %}
+          <p class="text-xs text-violet-500 font-semibold mt-0.5 ml-5">
+            ⚡ Tagihan: {{ u.first_tagihan_date.strftime('%d %b %Y') }}
+          </p>
           {% endif %}
         </td>
 
@@ -614,58 +618,169 @@
     <div class="flex items-center justify-between mb-5">
       <div>
         <h3 class="font-bold text-gray-900 text-lg">Tambah Pelanggan PPPoE</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Data pelanggan akan langsung dipush ke MikroTik</p>
       </div>
       <button onclick="document.getElementById('modal-tambah').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
+    <!-- Panel Bantuan -->
+    <details class="mb-4 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+      <summary class="px-4 py-3 cursor-pointer text-xs font-bold text-amber-700 flex items-center gap-2 select-none list-none">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Panduan Input Data Pelanggan PPPoE
+        <svg class="w-3.5 h-3.5 ml-auto transition-transform details-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </summary>
+      <div class="px-4 pb-4 pt-2 space-y-3 text-xs text-amber-900">
+
+        <div class="grid grid-cols-1 gap-2">
+          <div class="bg-white rounded-lg p-3 border border-amber-100">
+            <p class="font-bold text-gray-700 mb-1">📡 Server MikroTik</p>
+            <p class="text-gray-500">Pilih server MikroTik tempat akun PPPoE pelanggan akan dibuat. Pastikan server sudah terhubung (ping hijau di halaman Server).</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-amber-100">
+            <p class="font-bold text-gray-700 mb-1">🔐 Username & Password</p>
+            <p class="text-gray-500">Username dan password untuk login PPPoE di router pelanggan. Username harus unik dan tidak boleh ada spasi.</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-amber-100">
+            <p class="font-bold text-gray-700 mb-1">📅 Tanggal Bayar</p>
+            <p class="text-gray-500 space-y-1">
+              Tanggal jatuh tempo tagihan setiap bulan (1–28).<br>
+              <strong>Alur otomatis:</strong><br>
+              1. Setiap tgl <em>X</em> jam 07:00 → tagihan dibuat<br>
+              2. Tgl <em>X + grace period</em> jam 10:00 → jika belum bayar, akun otomatis di-<strong>isolir di MikroTik</strong><br>
+              Grace period saat ini: <strong>{{ grace_period }} hari</strong> (ubah di Pengaturan → Billing)
+            </p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-amber-100">
+            <p class="font-bold text-gray-700 mb-1">🗓 Tanggal Mulai Berlangganan</p>
+            <p class="text-gray-500">Tanggal pemasangan. Tagihan pertama dihitung secara <em>prorate</em> (proporsional) dari tanggal ini hingga tgl bayar berikutnya.</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-amber-100">
+            <p class="font-bold text-gray-700 mb-1">🔧 Status Pemasangan</p>
+            <p class="text-gray-500"><strong>Belum Terpasang:</strong> akun dibuat di MikroTik tapi status masih menunggu teknisi.<br>
+            <strong>Sudah Terpasang:</strong> akun langsung aktif.</p>
+          </div>
+        </div>
+
+      </div>
+    </details>
+
     <form method="post" action="/pppoe/users/tambah">
+      <input type="hidden" name="sudah_di_mt" id="inp-sudah-di-mt" value="0">
       <div class="space-y-4">
         <div>
-          <label class="form-label">Server MikroTik <span class="text-red-400">*</span></label>
+          <label class="form-label flex items-center gap-1">
+            Server MikroTik <span class="text-red-400">*</span>
+            <span data-tip="Pilih router MikroTik tempat secret PPPoE ini akan disimpan. Harus terhubung dengan status aktif." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <select name="server_id" required class="form-select">
             <option value="">Pilih Server</option>
             {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
           </select>
         </div>
         <div>
-          <label class="form-label">Nama Pelanggan <span class="text-red-400">*</span></label>
+          <label class="form-label flex items-center gap-1">
+            Nama Pelanggan <span class="text-red-400">*</span>
+            <span data-tip="Nama lengkap pelanggan untuk identifikasi di dashboard dan notifikasi WA." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input name="nama_pelanggan" required placeholder="Nama lengkap" class="form-input">
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <!-- PPP Screets Picker -->
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
           <div>
-            <label class="form-label">Username PPPoE <span class="text-red-400">*</span></label>
-            <input name="username" required placeholder="username" class="form-input font-mono">
+            <label class="form-label mb-1">PPP Screets</label>
+            <select id="ppp-mode" onchange="updatePppMode(this.value,'tambah')" class="form-select">
+              <option value="none">TANPA SCREETS</option>
+              <option value="router">AMBIL DARI ROUTER</option>
+              <option value="baru">BUAT SCREETS BARU</option>
+            </select>
           </div>
-          <div>
-            <label class="form-label">Password <span class="text-red-400">*</span></label>
-            <input name="password" required placeholder="password" class="form-input font-mono">
+
+          <!-- TANPA SCREETS: field disabled -->
+          <div id="ppp-none-info" class="text-xs text-slate-400 px-1">
+            Pelanggan disimpan tanpa akun PPPoE di MikroTik. Bisa ditambahkan nanti.
+          </div>
+
+          <!-- AMBIL DARI ROUTER -->
+          <div id="ppp-router-section" class="hidden space-y-2">
+            <div class="flex gap-2">
+              <select id="ppp-router-server" class="form-select flex-1 text-sm">
+                <option value="">Pilih Server MikroTik</option>
+                {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+              </select>
+              <button type="button" onclick="cariSecretsRouter('tambah')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Cari
+              </button>
+            </div>
+            <div id="ppp-router-list" class="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 hidden">
+            </div>
+            <p id="ppp-router-hint" class="text-xs text-slate-400">Pilih server lalu klik Cari</p>
+          </div>
+
+          <!-- BUAT SCREETS BARU + field username/password (selalu ada di DOM) -->
+          <div id="ppp-credentials" class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[11px] font-medium text-slate-500 mb-0.5 block">Username <span class="text-blue-400 font-semibold">Screts</span></label>
+                <input id="ppp-username" name="username" placeholder="username" class="form-input font-mono text-sm" autocomplete="off">
+              </div>
+              <div>
+                <label class="text-[11px] font-medium text-slate-500 mb-0.5 block">Password <span class="text-blue-400 font-semibold">Screts</span></label>
+                <input id="ppp-password" name="password" placeholder="password" class="form-input font-mono text-sm" autocomplete="off">
+              </div>
+            </div>
           </div>
         </div>
         <div>
-          <label class="form-label">Paket <span class="text-red-400">*</span></label>
+          <label class="form-label flex items-center gap-1">
+            Paket <span class="text-red-400">*</span>
+            <span data-tip="Paket layanan menentukan kecepatan dan harga bulanan. Harga ini otomatis dibuat jadi tagihan setiap bulan." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <select name="paket_id" required class="form-select">
             <option value="">Pilih Paket</option>
-            {% for p in pakets %}<option value="{{ p.id }}">{{ p.nama }} — {{ p.harga | rp }}</option>{% endfor %}
+            {% for p in pakets %}<option value="{{ p.id }}" data-harga="{{ p.harga }}">{{ p.nama }} — {{ p.harga | rp }}</option>{% endfor %}
           </select>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="form-label">No. Telepon / WA</label>
+            <label class="form-label flex items-center gap-1">
+              No. Telepon / WA
+              <span data-tip="Nomor WA pelanggan untuk notifikasi tagihan, reminder, dan suspend otomatis. Format: 628xx..." class="cursor-help text-gray-400 hover:text-blue-500">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </span>
+            </label>
             <input name="telepon" placeholder="08xx" class="form-input">
           </div>
           <div>
-            <label class="form-label">Tanggal Bayar</label>
-            <input name="tgl_bayar" type="number" value="1" min="1" max="28" class="form-input">
-            <p class="text-xs text-gray-400 mt-1">Tanggal jatuh tempo tiap bulan</p>
+            <label class="form-label flex items-center gap-1">
+              Tanggal Bayar
+              <span data-tip="Tanggal tagihan dibuat otomatis setiap bulan. Contoh: isi 1 → tagihan muncul tgl 1, isolir tgl 11 (jika grace 10 hari). Maksimal 28." class="cursor-help text-gray-400 hover:text-blue-500">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </span>
+            </label>
+            <input name="tgl_bayar" id="inp-tgl-bayar" type="number" value="1" min="1" max="28" class="form-input">
+            <p class="text-xs text-gray-400 mt-1">Tagihan dibuat otomatis jam 07:00 pada tanggal ini</p>
           </div>
         </div>
+
         <div>
-          <label class="form-label">Tanggal Mulai Berlangganan</label>
-          <input name="tgl_mulai" type="date" class="form-input"
+          <label class="form-label flex items-center gap-1">
+            Tanggal Mulai Berlangganan
+            <span data-tip="Tanggal aktivasi pelanggan. Jika berbeda dengan Tgl Bayar, bulan pertama dihitung PRORATE (proporsional). Contoh: mulai tgl 14, bayar tgl 30 → tagihan pertama hanya 16/30 dari harga paket." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
+          <input name="tgl_mulai" id="inp-tgl-mulai" type="date" class="form-input"
             value="{{ now_date }}" max="{{ now_date }}">
         </div>
+
         <div>
           <label class="form-label">Alamat</label>
           <input name="alamat" placeholder="Alamat pemasangan" class="form-input">
@@ -690,6 +805,88 @@
             </label>
           </div>
         </div>
+
+        <!-- Panduan Singkat -->
+        <details class="rounded-xl border border-amber-200 bg-amber-50 text-xs overflow-hidden">
+          <summary class="px-3.5 py-2.5 font-bold text-amber-700 cursor-pointer flex items-center gap-2 list-none">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Panduan Pengisian Data
+          </summary>
+          <div class="px-3.5 pb-3.5 space-y-2 text-amber-800 border-t border-amber-200 pt-2.5">
+            <div class="flex gap-2"><span class="font-bold min-w-[90px]">Tgl Bayar</span><span>Tanggal tagihan dibuat otomatis setiap bulan (jam 07:00). Contoh: isi <strong>1</strong> → tagihan muncul tgl 1.</span></div>
+            <div class="flex gap-2"><span class="font-bold min-w-[90px]">Tgl Mulai</span><span>Tanggal aktivasi. Jika beda dengan Tgl Bayar, bulan pertama dihitung <strong>prorate</strong> (proporsional).</span></div>
+            <div class="flex gap-2"><span class="font-bold min-w-[90px]">Grace Period</span><span>Batas hari pembayaran setelah tagihan dibuat. Contoh: Tgl Bayar=1, Grace=10 → isolir otomatis tgl 11 jam 10:00.</span></div>
+            <div class="flex gap-2"><span class="font-bold min-w-[90px]">Jangan Isolir</span><span>Centang jika pelanggan ini tidak boleh diisolir otomatis meski telat bayar (VIP, kantor, dll).</span></div>
+            <div class="flex gap-2"><span class="font-bold min-w-[90px]">Skema</span><span>Klik "Lihat Skema Pembayaran" di bawah untuk melihat proyeksi tagihan & isolir 3 bulan ke depan.</span></div>
+          </div>
+        </details>
+
+        <!-- Batas Waktu Isolir -->
+        <div class="rounded-xl border border-red-100 bg-red-50 p-3.5 space-y-3">
+          <p class="text-xs font-bold text-red-700 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            Pengaturan Isolir
+          </p>
+          <div>
+            <label class="form-label flex items-center gap-1">
+              Grace Period Khusus
+              <span data-tip="Hari toleransi pembayaran setelah tanggal tagihan. Kosongkan untuk pakai default ISP ({{ grace_period }} hari). Contoh: isi 15 → isolir 15 hari setelah Tgl Bayar." class="cursor-help text-gray-400 hover:text-red-400">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </span>
+            </label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 whitespace-nowrap">+</span>
+              <input name="grace_period_custom" id="inp-grace-custom" type="number" min="1" max="60"
+                placeholder="{{ grace_period }}"
+                class="form-input w-24 text-center font-mono">
+              <span class="text-xs text-gray-500 whitespace-nowrap">hari setelah Tgl Bayar</span>
+            </div>
+            <p class="text-[11px] text-red-400 mt-1">Kosongkan = pakai default ISP ({{ grace_period }} hari). Isi untuk override khusus pelanggan ini.</p>
+          </div>
+          <label class="flex items-center gap-3 cursor-pointer p-2.5 rounded-xl border border-red-200 bg-white hover:bg-red-50 transition"
+            data-tip="Jika dicentang, sistem tidak akan pernah meng-isolir akun ini di MikroTik meski tagihan overdue. Cocok untuk pelanggan VIP atau kantor.">
+            <input type="checkbox" name="no_isolir" value="1" id="chk-no-isolir" class="w-4 h-4 accent-red-500">
+            <div>
+              <p class="text-xs font-bold text-red-700">Jangan Pernah Isolir Pelanggan Ini</p>
+              <p class="text-[10px] text-red-400">Akun tidak akan pernah di-disable di MikroTik meski tagihan overdue</p>
+            </div>
+          </label>
+        </div>
+        <!-- Tombol Skema Pembayaran -->
+        <button type="button" onclick="toggleSkema()"
+          data-tip="Klik untuk melihat proyeksi tagihan, tanggal isolir, dan nominal 3 bulan ke depan berdasarkan data yang sudah diisi di atas."
+          class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 19h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            Lihat Skema Pembayaran
+          </span>
+          <svg id="skema-arrow" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+
+        <!-- Panel Skema -->
+        <div id="panel-skema" class="hidden rounded-xl border border-violet-200 bg-white overflow-hidden">
+          <div class="px-4 py-2.5 bg-violet-100 flex items-center gap-2">
+            <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <p class="text-xs font-bold text-violet-700">Skema Tagihan</p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[11px]">
+              <thead>
+                <tr class="bg-violet-50 text-violet-600 font-bold uppercase tracking-wide">
+                  <th class="px-3 py-2 text-center">NO</th>
+                  <th class="px-3 py-2 text-left">MASA AKTIF</th>
+                  <th class="px-3 py-2 text-center">TAGIHAN</th>
+                  <th class="px-3 py-2 text-center">TGL ISOLIR</th>
+                  <th class="px-3 py-2 text-left">UNTUK PEMAKAIAN</th>
+                  <th class="px-3 py-2 text-right">NOMINAL</th>
+                </tr>
+              </thead>
+              <tbody id="skema-content"></tbody>
+            </table>
+          </div>
+          <p class="text-[10px] text-violet-400 text-center py-2 border-t border-violet-100">Dst...</p>
+        </div>
+
         {% if odp_list %}
         <div>
           <label class="form-label">ODP <span class="text-gray-400 font-normal">(opsional)</span></label>
@@ -708,9 +905,9 @@
       <div class="flex gap-3 mt-6">
         <button type="button" onclick="document.getElementById('modal-tambah').classList.add('hidden')"
           class="btn-ghost flex-1 px-4 py-2.5 justify-center">Batal</button>
-        <button type="submit" class="btn-primary flex-1 px-4 py-2.5 justify-center">
+        <button type="submit" id="btn-submit-tambah" class="btn-primary flex-1 px-4 py-2.5 justify-center">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Simpan & Push ke Router
+          Simpan Pelanggan
         </button>
       </div>
     </form>
@@ -727,24 +924,58 @@
       </button>
     </div>
     <form id="form-edit" method="post">
+      <input type="hidden" id="edit-ppp-mode-val" name="ppp_mode" value="none">
       <div class="space-y-4">
         <div>
           <label class="form-label">Nama Pelanggan</label>
           <input id="edit-nama" name="nama_pelanggan" required class="form-input">
         </div>
-        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
-          <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Kredensial PPPoE</p>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="form-label">Username</label>
-              <input id="edit-username" name="username" class="form-input font-mono text-sm">
-            </div>
-            <div>
-              <label class="form-label">Password</label>
-              <input id="edit-password" name="password" type="text" class="form-input font-mono text-sm">
-            </div>
+        <!-- PPP Screets Edit -->
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+          <div>
+            <label class="form-label mb-1">PPP Screets</label>
+            <select id="edit-ppp-mode" onchange="updatePppMode(this.value,'edit')" class="form-select">
+              <option value="none">TANPA SCREETS</option>
+              <option value="router">AMBIL DARI ROUTER</option>
+              <option value="baru">UBAH SCREETS</option>
+            </select>
           </div>
-          <p class="text-xs text-gray-400 mt-1.5">Perubahan akan langsung diupdate ke MikroTik.</p>
+
+          <div id="edit-ppp-none-info" class="text-xs text-slate-400 px-1">
+            Pelanggan tanpa akun PPPoE di MikroTik.
+          </div>
+
+          <!-- AMBIL DARI ROUTER (edit) -->
+          <div id="edit-ppp-router-section" class="hidden space-y-2">
+            <div class="flex gap-2">
+              <select id="edit-ppp-router-server" class="form-select flex-1 text-sm">
+                <option value="">Pilih Server MikroTik</option>
+                {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
+              </select>
+              <button type="button" onclick="cariSecretsRouter('edit')" class="btn-secondary px-3 py-2 text-xs whitespace-nowrap">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Cari
+              </button>
+            </div>
+            <div id="edit-ppp-router-list" class="max-h-40 overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 hidden">
+            </div>
+            <p id="edit-ppp-router-hint" class="text-xs text-slate-400">Pilih server lalu klik Cari</p>
+          </div>
+
+          <!-- Credentials field -->
+          <div id="edit-ppp-credentials" class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[11px] font-medium text-slate-500 mb-0.5 block">Username <span class="text-blue-400 font-semibold">Screts</span></label>
+                <input id="edit-username" name="username" class="form-input font-mono text-sm" autocomplete="off">
+              </div>
+              <div>
+                <label class="text-[11px] font-medium text-slate-500 mb-0.5 block">Password <span class="text-blue-400 font-semibold">Screts</span></label>
+                <input id="edit-password" name="password" type="text" class="form-input font-mono text-sm" autocomplete="off">
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">Perubahan akan langsung diupdate ke MikroTik.</p>
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -774,74 +1005,6 @@
         </button>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Modal Import dari MikroTik -->
-<div id="modal-import" class="hidden modal-overlay" style="background:rgba(0,0,0,0.5)">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-    <div class="flex items-center justify-between p-6 border-b border-gray-100">
-      <div>
-        <h3 class="font-bold text-gray-900 text-lg">Import Pelanggan dari MikroTik</h3>
-        <p class="text-xs text-gray-400 mt-0.5">Secret yang sudah terdaftar di billing tidak akan ditampilkan</p>
-      </div>
-      <button onclick="closeImport()" class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div id="import-step1" class="p-6 space-y-4">
-      <div class="flex gap-3 items-end">
-        <div class="flex-1">
-          <label class="form-label">Server MikroTik</label>
-          <select id="import-server" class="form-select">
-            <option value="">Pilih Server</option>
-            {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}</option>{% endfor %}
-          </select>
-        </div>
-        <button onclick="ambilData()" id="btn-ambil" class="btn-primary px-5 py-2.5 whitespace-nowrap">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Ambil Data
-        </button>
-      </div>
-      <div id="import-msg" class="hidden text-sm text-center py-4 text-gray-500"></div>
-    </div>
-    <div id="import-step2" class="hidden flex-1 overflow-hidden flex flex-col">
-      <div class="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
-        <p class="text-sm text-blue-700"><span id="import-count">0</span> secret baru ditemukan</p>
-        <div class="flex gap-3 items-center">
-          <label class="text-xs text-blue-600 flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" id="chk-all" onchange="toggleAll(this)" class="rounded"> Pilih semua
-          </label>
-          <select id="paket-default" onchange="applyDefaultPaket()" class="form-select !w-auto text-xs py-1.5">
-            <option value="">Paket default...</option>
-            {% for p in pakets %}<option value="{{ p.id }}">{{ p.nama }}</option>{% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="overflow-auto flex-1">
-        <table class="w-full text-sm">
-          <thead class="sticky top-0 bg-gray-50 z-10">
-            <tr>
-              <th class="th w-8"></th>
-              <th class="th">Username</th>
-              <th class="th">Profile Router</th>
-              <th class="th">Nama Pelanggan</th>
-              <th class="th">Telepon</th>
-              <th class="th">Paket Billing</th>
-              <th class="th w-16">Tgl</th>
-            </tr>
-          </thead>
-          <tbody id="import-tbody"></tbody>
-        </table>
-      </div>
-      <div class="p-4 border-t border-gray-100 flex justify-end gap-3">
-        <button onclick="closeImport()" class="btn-ghost px-4 py-2">Batal</button>
-        <button onclick="doImport()" id="btn-import" class="btn-primary px-6 py-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          Import Terpilih
-        </button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -891,6 +1054,152 @@
 
 {% block scripts %}
 <script>
+// ── PPP Screets Mode ─────────────────────────────────────────────────────────
+function updatePppMode(mode, ctx) {
+  var pre = ctx === 'edit' ? 'edit-' : '';
+  var noneInfo     = document.getElementById(pre + 'ppp-none-info');
+  var routerSec    = document.getElementById(pre + 'ppp-router-section');
+  var credentials  = document.getElementById(pre + 'ppp-credentials');
+  var unInput      = document.getElementById(pre + (ctx==='edit'?'username':'ppp-username'));
+  var pwInput      = document.getElementById(pre + (ctx==='edit'?'password':'ppp-password'));
+  var sudahDiMt    = document.getElementById('inp-sudah-di-mt');
+
+  // Sync hidden ppp_mode input (edit form only)
+  if (ctx === 'edit') {
+    var hiddenMode = document.getElementById('edit-ppp-mode-val');
+    if (hiddenMode) hiddenMode.value = mode;
+  }
+
+  // Reset semua
+  noneInfo    && noneInfo.classList.add('hidden');
+  routerSec   && routerSec.classList.add('hidden');
+  credentials && credentials.classList.remove('hidden');
+  if (unInput) { unInput.disabled = false; unInput.readOnly = false; unInput.classList.remove('bg-gray-100','text-gray-400'); }
+  if (pwInput) { pwInput.disabled = false; pwInput.readOnly = false; pwInput.classList.remove('bg-gray-100','text-gray-400'); }
+  if (sudahDiMt) sudahDiMt.value = '0';
+
+  if (mode === 'none') {
+    noneInfo && noneInfo.classList.remove('hidden');
+    credentials && credentials.classList.add('hidden');
+    if (unInput) { unInput.value = ''; unInput.disabled = true; }
+    if (pwInput) { pwInput.value = ''; pwInput.disabled = true; }
+  } else if (mode === 'router') {
+    routerSec && routerSec.classList.remove('hidden');
+    credentials && credentials.classList.add('hidden');
+    if (sudahDiMt) sudahDiMt.value = '1';
+    if (unInput) { unInput.disabled = true; }
+    if (pwInput) { pwInput.disabled = true; }
+  }
+  // mode 'baru': credentials sudah visible, fields enabled
+}
+
+async function cariSecretsRouter(ctx) {
+  var pre        = ctx === 'edit' ? 'edit-' : '';
+  var serverSel  = document.getElementById(pre + 'ppp-router-server');
+  var listEl     = document.getElementById(pre + 'ppp-router-list');
+  var hintEl     = document.getElementById(pre + 'ppp-router-hint');
+  var sid = serverSel ? serverSel.value : '';
+  if (!sid) { showToast('Pilih server terlebih dahulu', 'warning'); return; }
+  hintEl && (hintEl.textContent = 'Menghubungi router...');
+  listEl && (listEl.innerHTML = '<p class="text-center text-gray-400 text-xs py-3">Memuat...</p>', listEl.classList.remove('hidden'));
+  try {
+    const res  = await fetch('/pppoe/users/import-preview?server_id=' + sid);
+    const data = await res.json();
+    if (data.error) {
+      hintEl && (hintEl.textContent = 'Gagal: ' + data.error);
+      listEl && (listEl.innerHTML = '<p class="text-red-400 text-xs py-2 text-center">' + data.error + '</p>');
+      return;
+    }
+    const secrets = data.secrets || [];
+    hintEl && (hintEl.textContent = secrets.length + ' akun belum terhubung');
+    if (!secrets.length) {
+      listEl && (listEl.innerHTML = '<p class="text-gray-400 text-xs py-2 text-center">Semua akun sudah terhubung ke pelanggan.</p>');
+      return;
+    }
+    listEl && (listEl.innerHTML = secrets.map(s => `
+      <div class="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-blue-50 cursor-pointer group border border-transparent hover:border-blue-200 transition"
+           onclick="pilihSecret('${ctx}','${sid}','${s.username.replace(/'/g,"\\'")}','${(s.password||'').replace(/'/g,"\\'")}')">
+        <div class="min-w-0">
+          <p class="text-xs font-mono font-bold text-gray-800 truncate">${s.username}</p>
+          <p class="text-[10px] text-gray-400">Profile: ${s.profile||'-'}${s.disabled==='true'?' · disabled':''}</p>
+        </div>
+        <span class="text-[10px] text-blue-500 font-semibold opacity-0 group-hover:opacity-100 whitespace-nowrap ml-2">Pilih →</span>
+      </div>`).join(''));
+  } catch(e) {
+    hintEl && (hintEl.textContent = 'Gagal terhubung ke router');
+  }
+}
+
+function pilihSecret(ctx, serverId, username, password) {
+  var pre     = ctx === 'edit' ? 'edit-' : '';
+  var unInput = document.getElementById(pre + (ctx==='edit'?'username':'ppp-username'));
+  var pwInput = document.getElementById(pre + (ctx==='edit'?'password':'ppp-password'));
+  var cred    = document.getElementById(pre + 'ppp-credentials');
+  var listEl  = document.getElementById(pre + 'ppp-router-list');
+  var hintEl  = document.getElementById(pre + 'ppp-router-hint');
+  var sudahDiMt = document.getElementById('inp-sudah-di-mt');
+
+  if (unInput) { unInput.value = username; unInput.disabled = false; }
+  if (pwInput) { pwInput.value = password; pwInput.disabled = false; }
+  if (cred) cred.classList.remove('hidden');
+  if (listEl) listEl.classList.add('hidden');
+  if (hintEl) hintEl.textContent = '✓ Dipilih: ' + username;
+  if (sudahDiMt) sudahDiMt.value = '1';
+
+  // Set server di form tambah
+  if (ctx !== 'edit') {
+    var serverSel = document.querySelector('#modal-tambah select[name="server_id"]');
+    if (serverSel) serverSel.value = serverId;
+    // Auto terpasang = 1
+    var radio1 = document.querySelector('#modal-tambah input[name="terpasang"][value="1"]');
+    if (radio1) radio1.checked = true;
+  }
+}
+
+// ── Skema Pembayaran ─────────────────────────────────────────────────────────
+var _GRACE_DEF = {{ grace_period | default(10) }};
+window.toggleSkema = function(){
+  var p=document.getElementById('panel-skema');
+  var a=document.getElementById('skema-arrow');
+  if(!p)return;
+  var h=p.classList.toggle('hidden');
+  if(a)a.style.transform=h?'':'rotate(180deg)';
+  if(!h)window.buildSkema();
+};
+window.buildSkema = function(){
+  var g=_GRACE_DEF;
+  var gc=parseInt((document.getElementById('inp-grace-custom')||{}).value);
+  if(!isNaN(gc)&&gc>0)g=gc;
+  var ts=(document.getElementById('inp-tgl-mulai')||{}).value||'';
+  var tb=parseInt((document.getElementById('inp-tgl-bayar')||{}).value)||1;
+  var ps=document.querySelector('#modal-tambah select[name="paket_id"]');
+  var hr=ps?parseInt(ps.selectedOptions[0].dataset.harga||0):0;
+  var el=document.getElementById('skema-content');
+  if(!el)return;
+  function nd(m){el.innerHTML='<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:16px">'+m+'</td></tr>';}
+  if(!ts){nd('Pilih tanggal mulai dahulu');return;}
+  if(!hr){nd('Pilih paket dahulu');return;}
+  function fmt(d){var B=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];return d.getDate()+' '+B[d.getMonth()]+' '+d.getFullYear();}
+  function add(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+  function rp(n){return'Rp '+n.toLocaleString('id-ID');}
+  var pp=ts.split('-');var tm=new Date(+pp[0],+pp[1]-1,+pp[2]);
+  var rows=[],ps2=tm,y=tm.getFullYear(),m=tm.getMonth();
+  for(var i=0;i<5&&rows.length<3;i++){
+    var bln=m+i,thn=y;if(bln>11){bln-=12;thn++;}
+    var mh=new Date(thn,bln+1,0).getDate(),ta=Math.min(tb,mh);
+    var tt=new Date(thn,bln,ta);if(tt<tm)continue;
+    var pe=add(tt,-1),ti=add(tt,g),nom,mas;
+    if(rows.length===0){var dy=Math.round((tt-tm)/86400000);
+      if(dy>=30||tt.getTime()===tm.getTime()){nom=hr;mas='1 Bulan';}
+      else{nom=Math.round(hr*dy/30);mas='1 Bulan (Prorate '+dy+' Hari)';}}
+    else{nom=hr;mas='1 Bulan';}
+    var rn=rows.length+1,isP=rows.length===0&&nom<hr;
+    rows.push('<tr style="background:'+(isP?'#fffbeb':rn%2?'#fff':'#f9fafb')+'"><td style="padding:8px 12px;text-align:center;font-weight:700;color:#6b7280">'+rn+'</td><td style="padding:8px 12px;color:'+(isP?'#d97706':'#374151')+'">'+mas+'</td><td style="padding:8px 12px;text-align:center;white-space:nowrap">'+fmt(tt)+'</td><td style="padding:8px 12px;text-align:center;color:#ef4444;font-weight:600;white-space:nowrap">'+fmt(ti)+'</td><td style="padding:8px 12px;white-space:nowrap;color:#4b5563">'+fmt(ps2)+' s/d '+fmt(pe)+'</td><td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(isP?'#d97706':'#111827')+';white-space:nowrap">'+rp(nom)+'</td></tr>');
+    ps2=tt;
+  }
+  el.innerHTML=rows.length?rows.join(''):nd('Tidak ada skema')||'';
+};
+
 const PAKETS = [{% for p in pakets %}{"id":{{ p.id }},"nama":"{{ p.nama | e }}"},{% endfor %}];
 
 async function toggleTerpasang(pid, val, btn) {
@@ -987,109 +1296,12 @@ function openEdit(id, nama, telepon, alamat, tgl, username, password, tglMulaiTs
   } else {
     document.getElementById('edit-tgl-mulai').value = '';
   }
+  // Set mode dropdown sesuai kondisi PPPoE existing
+  const initMode = username ? 'baru' : 'none';
+  document.getElementById('edit-ppp-mode').value = initMode;
+  updatePppMode(initMode, 'edit');
+
   document.getElementById('modal-edit').classList.remove('hidden');
-}
-
-let _importSecrets = [];
-
-function closeImport() {
-  document.getElementById('modal-import').classList.add('hidden');
-  document.getElementById('import-step2').classList.add('hidden');
-  document.getElementById('import-step1').classList.remove('hidden');
-  document.getElementById('import-msg').classList.add('hidden');
-  _importSecrets = [];
-}
-
-async function ambilData() {
-  const sid = document.getElementById('import-server').value;
-  if (!sid) { alert('Pilih server terlebih dahulu'); return; }
-  const btn = document.getElementById('btn-ambil');
-  const msg = document.getElementById('import-msg');
-  btn.disabled = true;
-  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Mengambil...';
-  msg.classList.remove('hidden');
-  msg.textContent = 'Menghubungi router...';
-  try {
-    const res = await fetch('/pppoe/users/import-preview?server_id=' + sid);
-    const data = await res.json();
-    btn.disabled = false;
-    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Ambil Data';
-    if (data.error) { msg.textContent = 'Error: ' + data.error; return; }
-    _importSecrets = data.secrets || [];
-    if (_importSecrets.length === 0) { msg.textContent = 'Semua PPPoE secret sudah terdaftar di billing.'; return; }
-    renderImportTable(sid);
-  } catch(e) {
-    btn.disabled = false;
-    btn.innerHTML = 'Ambil Data';
-    msg.textContent = 'Gagal menghubungi server.';
-  }
-}
-
-function renderImportTable(sid) {
-  document.getElementById('import-count').textContent = _importSecrets.length;
-  const tbody = document.getElementById('import-tbody');
-  tbody.innerHTML = _importSecrets.map((s, i) => {
-    const paketOpts = PAKETS.map(p => `<option value="${p.id}">${p.nama}</option>`).join('');
-    return `<tr class="border-b border-gray-50 hover:bg-gray-50/50" id="irow-${i}">
-      <td class="td"><input type="checkbox" class="imp-chk rounded" data-idx="${i}" checked></td>
-      <td class="td font-mono text-xs font-semibold">${s.username}</td>
-      <td class="td text-xs text-gray-500">${s.profile||'default'}</td>
-      <td class="td"><input class="form-input text-xs py-1.5" id="inama-${i}" value="${s.comment || s.username}"></td>
-      <td class="td"><input class="form-input text-xs py-1.5" id="itelp-${i}" placeholder="08xx"></td>
-      <td class="td"><select class="form-select text-xs py-1.5" id="ipaket-${i}"><option value="">— tidak dipilih —</option>${paketOpts}</select></td>
-      <td class="td"><input class="form-input text-xs py-1.5 w-14" id="itgl-${i}" type="number" value="1" min="1" max="28"></td>
-    </tr>`;
-  }).join('');
-  _importSecrets.forEach((s, i) => {
-    const gp = PAKETS.find(p => p.nama.toLowerCase() === (s.profile||'').toLowerCase());
-    if (gp) document.getElementById('ipaket-' + i).value = gp.id;
-  });
-  document.getElementById('import-step1').classList.add('hidden');
-  document.getElementById('import-step2').classList.remove('hidden');
-  document.getElementById('import-msg').classList.add('hidden');
-  document.getElementById('import-step2').dataset.server = sid;
-}
-
-function toggleAll(chk) {
-  document.querySelectorAll('.imp-chk').forEach(c => c.checked = chk.checked);
-}
-
-function applyDefaultPaket() {
-  const val = document.getElementById('paket-default').value;
-  if (!val) return;
-  document.querySelectorAll('[id^="ipaket-"]').forEach(sel => sel.value = val);
-}
-
-async function doImport() {
-  const sid = document.getElementById('import-step2').dataset.server;
-  const items = [];
-  document.querySelectorAll('.imp-chk:checked').forEach(chk => {
-    const i = chk.dataset.idx;
-    items.push({
-      username: _importSecrets[i].username,
-      password: _importSecrets[i].password,
-      nama:     document.getElementById('inama-'+i)?.value || _importSecrets[i].username,
-      telepon:  document.getElementById('itelp-'+i)?.value || '',
-      paket_id: document.getElementById('ipaket-'+i)?.value || null,
-      tgl_bayar: parseInt(document.getElementById('itgl-'+i)?.value) || 1,
-    });
-  });
-  if (items.length === 0) { alert('Pilih minimal 1 pelanggan'); return; }
-  const btn = document.getElementById('btn-import');
-  btn.disabled = true; btn.textContent = 'Menyimpan...';
-  const res = await fetch('/pppoe/users/import', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({server_id: sid, items})
-  });
-  const data = await res.json();
-  if (data.imported) {
-    showToast(data.imported + ' pelanggan berhasil diimport');
-    setTimeout(() => window.location.reload(), 1000);
-  } else {
-    btn.disabled = false; btn.textContent = 'Import Terpilih';
-    showToast('Gagal import', 'error');
-  }
 }
 
 const ODP_ALL = [{% for o in odp_list %}{"id":{{ o.id }},"nama":"{{ o.nama|e }}","kapasitas":{{ o.kapasitas }},"server_id":"{{ o.server_id }}","server_nama":"{{ (o.server_nama or o.server_id)|e }}"},{% endfor %}];
@@ -1155,5 +1367,6 @@ async function refreshOnline() {
   btn.disabled = false;
   btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh Online';
 }
+
 </script>
 {% endblock %}

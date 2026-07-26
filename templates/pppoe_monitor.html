@@ -16,7 +16,8 @@
       <span id="countdown">Refresh 30s</span>
     </div>
     <button onclick="loadData(true)" id="btn-refresh"
-      class="btn-secondary px-4 py-2.5 text-sm">
+      data-tip="Ambil data terbaru dari semua server MikroTik. Auto-refresh setiap 30 detik, atau klik untuk refresh manual."
+      class="btn-secondary px-4 py-2.5 text-sm cursor-help">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -28,7 +29,7 @@
 
 <!-- Stats bar -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-  <div class="card p-4 flex items-center gap-3">
+  <div class="card p-4 flex items-center gap-3" data-tip="Total jumlah sesi PPPoE yang sedang online saat ini di semua server.">
     <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
       <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
@@ -39,7 +40,7 @@
       <p class="text-xs text-gray-400">Sesi Online</p>
     </div>
   </div>
-  <div class="card p-4 flex items-center gap-3">
+  <div class="card p-4 flex items-center gap-3" data-tip="Jumlah server MikroTik yang terdaftar dan siap untuk monitoring.">
     <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
       <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -51,7 +52,7 @@
       <p class="text-xs text-gray-400">Server Aktif</p>
     </div>
   </div>
-  <div class="card p-4 flex items-center gap-3">
+  <div class="card p-4 flex items-center gap-3" data-tip="Waktu terakhir data refresh dari semua server. Auto-refresh setiap 30 detik.">
     <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
       <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -63,7 +64,7 @@
       <p class="text-xs text-gray-400">Diperbarui</p>
     </div>
   </div>
-  <div class="card p-4 flex items-center gap-3">
+  <div class="card p-4 flex items-center gap-3" data-tip="Cari dan filter sesi berdasarkan username, IP, nama pelanggan, atau nomor identifikasi.">
     <div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
       <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

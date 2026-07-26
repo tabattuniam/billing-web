@@ -273,12 +273,13 @@
         <!-- Batch masih ada stok -->
         {% for cd in all_cd %}
         {% if cd.stok > 0 %}
-        <a href="/panel/voucher/print?comment={{ cd.comment | urlencode }}" target="_blank"
+        {% set print_url = "/panel/voucher/print?comment=__none__" if cd.comment == "" else "/panel/voucher/print?comment=" ~ (cd.comment | urlencode) %}
+        <a href="{{ print_url }}" target="_blank"
           class="flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl transition-colors group">
           <div class="flex flex-col min-w-0 gap-0.5">
             <div class="flex items-center gap-2">
               <svg class="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 012-2z"/></svg>
-              <span class="text-sm font-semibold text-indigo-700 truncate">{{ cd.comment }}</span>
+              <span class="text-sm font-semibold text-indigo-700 truncate">{{ cd.comment if cd.comment else '— Tanpa Keterangan —' }}</span>
               <span class="flex-shrink-0 text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">{{ cd.stok }} tersedia</span>
             </div>
             {% if cd.paket_nama %}
@@ -363,13 +364,19 @@
             </div>
           </div>
           <div class="text-right flex-shrink-0">
-            <p class="text-sm font-semibold text-gray-700">Rp {{ "{:,}".format(t.amount).replace(",", ".") }}</p>
             {% if t.status == 'paid' %}
-            <span class="text-xs text-emerald-600 font-medium">Disetujui</span>
+              {% set fee = 10000 if t.amount > 800000 else 5000 %}
+              <p class="text-sm font-semibold text-emerald-700">Rp {{ "{:,}".format(t.amount - fee).replace(",", ".") }}</p>
+              <p class="text-xs text-gray-400 line-through">Rp {{ "{:,}".format(t.amount).replace(",", ".") }}</p>
+              <span class="text-xs text-emerald-600 font-medium">Disetujui · biaya Rp {{ "{:,}".format(fee).replace(",", ".") }}</span>
             {% elif t.status == 'rejected' %}
-            <span class="text-xs text-red-500 font-medium">Ditolak</span>
+              <p class="text-sm font-semibold text-gray-700">Rp {{ "{:,}".format(t.amount).replace(",", ".") }}</p>
+              <span class="text-xs text-red-500 font-medium">Ditolak</span>
             {% else %}
-            <span class="text-xs text-yellow-600 font-medium">Menunggu</span>
+              {% set fee = 10000 if t.amount > 800000 else 5000 %}
+              <p class="text-sm font-semibold text-gray-700">Rp {{ "{:,}".format(t.amount - fee).replace(",", ".") }}</p>
+              <p class="text-xs text-gray-400 line-through">Rp {{ "{:,}".format(t.amount).replace(",", ".") }}</p>
+              <span class="text-xs text-yellow-600 font-medium">Menunggu · biaya Rp {{ "{:,}".format(fee).replace(",", ".") }}</span>
             {% endif %}
           </div>
         </div>
@@ -430,8 +437,12 @@
     <div id="topup-step1">
       <div class="mb-4">
         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Jumlah Topup</label>
-        <input type="number" id="inp-topup" class="form-input" placeholder="Contoh: 100000" min="5000" step="5000">
+        <input type="number" id="inp-topup" class="form-input" placeholder="Contoh: 100000" min="5000" step="5000" oninput="cekFeeTopup(this.value)">
         <p class="text-xs text-gray-400 mt-1">Minimal Rp 5.000</p>
+        <div id="fee-topup-info" class="hidden mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+          ⚠ <span id="fee-topup-label">Dikenakan biaya admin</span><br>
+          Saldo yang masuk: <span id="fee-topup-credited" class="font-bold"></span>
+        </div>
       </div>
       <div class="flex flex-wrap gap-2 mb-4">
         {% for n in [50000, 100000, 200000, 500000] %}
@@ -441,20 +452,22 @@
         </button>
         {% endfor %}
       </div>
+      <!-- QRIS Midtrans: konfirmasi otomatis (sementara nonaktif) -->
+      <div class="w-full mb-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-400 flex items-center gap-2 cursor-not-allowed">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span>Bayar QRIS otomatis — <b>sedang perbaikan</b></span>
+      </div>
       {% if platform_qris %}
-      <div class="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 font-medium flex items-center gap-2">
+      <div class="mb-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 font-medium flex items-center gap-2">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.24M10.07 4.26A10 10 0 1020 14H10"/></svg>
-        Bayar via QRIS — konfirmasi manual oleh ISP
+        Atau bayar via QRIS statis — konfirmasi manual oleh platform
       </div>
       <div class="flex gap-2">
         <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
-        <button onclick="lanjutQrisManual()" class="btn-primary flex-1">Lanjut → Lihat QRIS</button>
+        <button onclick="lanjutQrisManual()" class="btn-ghost flex-1">QRIS Statis</button>
       </div>
       {% else %}
-      <div class="flex gap-2">
-        <button onclick="tutupTopup()" class="btn-ghost flex-1">Batal</button>
-        <button onclick="prosesTopup()" id="btn-topup-ok" class="btn-primary flex-1">Bayar via QRIS</button>
-      </div>
+      <button onclick="tutupTopup()" class="btn-ghost w-full">Batal</button>
       {% endif %}
     </div>
 
@@ -463,6 +476,11 @@
       <div class="text-center mb-3">
         <p class="text-sm text-gray-600 mb-1">Transfer sejumlah:</p>
         <p id="topup-nominal-display" class="text-2xl font-bold text-emerald-700"></p>
+        <div id="topup-fee-breakdown" class="hidden mt-2 p-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 text-left">
+          Nominal transfer: <span id="topup-fee-gross" class="font-bold"></span><br>
+          Biaya admin: <b>- Rp 10.000</b><br>
+          Saldo masuk: <span id="topup-fee-net" class="font-bold text-emerald-700"></span>
+        </div>
       </div>
       {% if platform_qris %}
       <div class="flex justify-center mb-3">
@@ -477,6 +495,20 @@
         <button onclick="kembaliStep1()" class="btn-ghost flex-1">← Kembali</button>
         <button onclick="konfirmasiManual()" class="btn-primary flex-1">✓ Sudah Transfer</button>
       </div>
+    </div>
+
+    <!-- Step 3: QRIS Midtrans dinamis -->
+    <div id="topup-step3" class="hidden">
+      <div class="text-center mb-3">
+        <p class="text-sm text-gray-600 mb-1">Scan QRIS untuk membayar:</p>
+        <p id="midtrans-nominal" class="text-2xl font-bold text-emerald-700"></p>
+        <p class="text-xs text-gray-400 mt-1">Saldo masuk: <span id="midtrans-credited" class="font-semibold text-emerald-600"></span></p>
+      </div>
+      <div class="flex justify-center mb-3">
+        <img id="midtrans-qr-img" src="" alt="QRIS" class="w-52 h-52 object-contain border rounded-xl p-1">
+      </div>
+      <p class="text-xs text-center text-gray-400 mb-4">Saldo akan masuk otomatis setelah pembayaran berhasil. Tidak perlu konfirmasi manual.</p>
+      <button onclick="tutupTopup()" class="btn-ghost w-full">Tutup</button>
     </div>
 
     <div id="topup-loading" class="hidden text-center py-4">
@@ -619,12 +651,56 @@ function tutupTopup() {
   document.getElementById('topup-step1').classList.remove('hidden');
   document.getElementById('topup-step2').classList.add('hidden');
   document.getElementById('topup-loading').classList.add('hidden');
+  const s3 = document.getElementById('topup-step3');
+  if (s3) s3.classList.add('hidden');
+}
+
+async function bayarMidtrans() {
+  const amount = parseInt(document.getElementById('inp-topup').value);
+  if (!amount || amount < 5000) { alert('Masukkan nominal minimal Rp 5.000'); return; }
+  const btn = document.getElementById('btn-midtrans');
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+  const fd = new FormData();
+  fd.append('amount', amount);
+  const res = await fetch('/panel/topup/midtrans', { method: 'POST', body: fd });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Bayar QRIS — konfirmasi otomatis';
+  if (!data.ok) { alert(data.msg); return; }
+  document.getElementById('topup-step1').classList.add('hidden');
+  const s3 = document.getElementById('topup-step3');
+  document.getElementById('midtrans-qr-img').src = data.qr_url;
+  document.getElementById('midtrans-nominal').textContent = 'Rp ' + amount.toLocaleString('id-ID');
+  const fee = amount > 800000 ? 10000 : 5000;
+  document.getElementById('midtrans-credited').textContent = 'Rp ' + (amount - fee).toLocaleString('id-ID');
+  s3.classList.remove('hidden');
+}
+
+function cekFeeTopup(val) {
+  const amount = parseInt(val) || 0;
+  const info = document.getElementById('fee-topup-info');
+  const credited = document.getElementById('fee-topup-credited');
+  const label = document.getElementById('fee-topup-label');
+  if (amount >= 5000) {
+    const fee = amount > 800000 ? 10000 : 5000;
+    label.textContent = `Dikenakan biaya admin Rp ${fee.toLocaleString('id-ID')}`;
+    credited.textContent = 'Rp ' + (amount - fee).toLocaleString('id-ID');
+    info.classList.remove('hidden');
+  } else {
+    info.classList.add('hidden');
+  }
 }
 
 function lanjutQrisManual() {
   const amount = parseInt(document.getElementById('inp-topup').value);
   if (!amount || amount < 5000) { alert('Masukkan nominal minimal Rp 5.000'); return; }
   document.getElementById('topup-nominal-display').textContent = 'Rp ' + amount.toLocaleString('id-ID');
+  const breakdown = document.getElementById('topup-fee-breakdown');
+  const fee = amount > 800000 ? 10000 : 5000;
+  document.getElementById('topup-fee-gross').textContent = 'Rp ' + amount.toLocaleString('id-ID');
+  document.getElementById('topup-fee-net').textContent = 'Rp ' + (amount - fee).toLocaleString('id-ID');
+  breakdown.classList.remove('hidden');
   document.getElementById('topup-step1').classList.add('hidden');
   document.getElementById('topup-step2').classList.remove('hidden');
 }

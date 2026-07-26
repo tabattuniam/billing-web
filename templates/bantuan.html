@@ -18,8 +18,10 @@
     <div class="flex flex-wrap gap-2">
       {% set nav_items = [
         ('#mulai','Memulai'),('#server','Router MikroTik'),('#pppoe','PPPoE'),
+        ('#tagihan-prorate','Prorate & Generate Tagihan'),
         ('#reminder','Reminder Tagihan'),('#hotspot','Hotspot Voucher'),('#agen','Sistem Agen'),
-        ('#wa','WhatsApp Gateway'),('#store','Halaman Beli'),('#teknisi','Teknisi'),
+        ('#wa','WhatsApp Gateway'),('#bot-monitor','Bot Monitoring Telegram'),
+        ('#store','Halaman Beli'),('#teknisi','Teknisi'),
         ('#saldo','Saldo & Topup'),('#profil','Profil'),('#faq','FAQ'),('#troubleshoot','Troubleshooting')
       ] %}
       {% for href, label in nav_items %}
@@ -181,22 +183,58 @@
         </div>
       </div>
 
-      <div>
+      <div id="tagihan-prorate">
         <p class="font-semibold text-gray-700 mb-2">7️⃣ Tagihan Prorate (Tagihan Pertama)</p>
-        <p>Tagihan <strong>pertama</strong> pelanggan dihitung proporsional dari tanggal pasang sampai tanggal bayar rutin.</p>
-        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 space-y-2 text-xs">
+        <p>Tagihan <strong>pertama</strong> pelanggan dihitung proporsional dari tanggal pasang sampai tanggal bayar rutin. Tagihan bulan berikutnya dan seterusnya selalu <strong>full price</strong>.</p>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mt-2 space-y-3 text-xs">
           <p class="font-semibold text-emerald-900">📐 Rumus Prorate</p>
           <div class="bg-white rounded-lg px-3 py-2 text-center border border-emerald-100">
             <span class="font-mono font-bold text-gray-800">Harga ÷ 30 × Jumlah Hari</span>
             <p class="text-gray-400 mt-0.5">Dibulatkan ke kelipatan Rp 500 terdekat</p>
           </div>
-          <div class="bg-white rounded-lg px-3 py-2 border border-emerald-100 space-y-1">
-            <p class="font-semibold text-gray-700">Contoh:</p>
-            <p class="text-gray-600">Pasang tgl <strong>20 Juni</strong>, bayar rutin tgl <strong>1</strong>, harga <strong>Rp 200.000</strong></p>
-            <p class="text-gray-600">20 Juni → 1 Juli = <strong>11 hari</strong></p>
-            <p class="text-emerald-700 font-semibold">200.000 ÷ 30 × 11 = Rp 73.333 → <strong>Rp 73.500</strong></p>
+
+          <p class="font-semibold text-emerald-900 mt-2">📋 Tiga Skenario Tagihan Pertama</p>
+
+          <!-- Skenario 1 -->
+          <div class="bg-white rounded-lg px-3 py-2.5 border border-emerald-100 space-y-1">
+            <p class="font-semibold text-blue-700">① Pasang di tengah bulan (prorate)</p>
+            <p class="text-gray-600">Pasang tgl <strong>1 Juli</strong>, bayar rutin tgl <strong>6</strong>, harga <strong>Rp 150.000</strong></p>
+            <p class="text-gray-500 text-xs">1 Juli → 6 Juli = <strong>5 hari</strong></p>
+            <p class="text-emerald-700 font-semibold">150.000 ÷ 30 × 5 = Rp 25.000</p>
+            <div class="flex items-center gap-2 mt-1 text-xs">
+              <span class="bg-violet-100 text-violet-700 px-2 py-0.5 rounded font-semibold">⚡ Tagihan: 6 Juli</span>
+              <span class="text-gray-400">→ lalu tgl 6 Agustus full price Rp 150.000</span>
+            </div>
           </div>
-          <p class="text-emerald-600">Tagihan bulan berikutnya normal satu bulan penuh. Prorate tidak berlaku jika selisih ≥ 30 hari.</p>
+
+          <!-- Skenario 2 -->
+          <div class="bg-white rounded-lg px-3 py-2.5 border border-orange-100 space-y-1">
+            <p class="font-semibold text-orange-700">② Pasang tepat di hari tgl bayar (skip bulan ini)</p>
+            <p class="text-gray-600">Pasang tgl <strong>1 Juli</strong>, bayar rutin tgl <strong>1</strong></p>
+            <p class="text-gray-500">1 Juli → 1 Juli = <strong>0 hari</strong> → tidak ada yang perlu dibayar bulan ini</p>
+            <p class="text-orange-700 font-semibold">Tagihan pertama baru muncul bulan depan (full price)</p>
+            <div class="flex items-center gap-2 mt-1 text-xs">
+              <span class="bg-violet-100 text-violet-700 px-2 py-0.5 rounded font-semibold">⚡ Tagihan: 1 Agustus</span>
+              <span class="text-gray-400">Rp 150.000 (langsung full price)</span>
+            </div>
+          </div>
+
+          <!-- Skenario 3 -->
+          <div class="bg-white rounded-lg px-3 py-2.5 border border-emerald-100 space-y-1">
+            <p class="font-semibold text-gray-700">③ Prorate lebih besar (pasang jauh sebelum tgl bayar)</p>
+            <p class="text-gray-600">Pasang tgl <strong>20 Juni</strong>, bayar rutin tgl <strong>1</strong>, harga <strong>Rp 200.000</strong></p>
+            <p class="text-gray-500">20 Juni → 1 Juli = <strong>11 hari</strong></p>
+            <p class="text-emerald-700 font-semibold">200.000 ÷ 30 × 11 = Rp 73.333 → <strong>Rp 73.500</strong></p>
+            <div class="flex items-center gap-2 mt-1 text-xs">
+              <span class="bg-violet-100 text-violet-700 px-2 py-0.5 rounded font-semibold">⚡ Tagihan: 1 Juli</span>
+              <span class="text-gray-400">→ lalu tgl 1 Agustus full price Rp 200.000</span>
+            </div>
+          </div>
+
+          <div class="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 text-xs text-violet-800">
+            <strong>💡 Kolom "⚡ Tagihan" di tabel pelanggan</strong> menunjukkan kapan pertama kali tagihan akan di-generate otomatis untuk pelanggan tersebut. Berguna untuk verifikasi saat input data pelanggan baru.
+          </div>
+          <p class="text-emerald-600">Prorate tidak berlaku jika selisih ≥ 30 hari (dianggap full price).</p>
         </div>
       </div>
 
@@ -785,6 +823,105 @@ Ani,ani456,pass456,2,6289876543210,Jl. Sudirman No.5,5</pre>
     </div>
   </div>
 
+  <!-- ── BOT MONITORING TELEGRAM ──────────────────────── -->
+  <div id="bot-monitor" class="card p-6 mb-5">
+    <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center text-sm">🤖</span>
+      Bot Monitoring Telegram
+      <span class="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700">Add-on</span>
+    </h2>
+    <div class="space-y-5 text-sm text-gray-600 leading-relaxed">
+
+      <div class="bg-sky-50 border border-sky-100 rounded-xl p-4">
+        <p class="font-semibold text-sky-900 mb-1">📡 Apa itu Bot Monitoring Telegram?</p>
+        <p class="text-sky-700">Add-on yang mengirim notifikasi otomatis ke grup Telegram Anda setiap kali pelanggan PPPoE online atau offline. Bot juga dapat menjawab perintah langsung dari grup untuk cek status pelanggan secara real-time.</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-3">📬 Notifikasi Otomatis</p>
+        <div class="space-y-2">
+          <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-xs">
+            <p class="font-semibold text-red-800 mb-1">🔴 Pelanggan OFFLINE</p>
+            <pre class="bg-white border border-red-100 rounded-lg p-2 text-gray-700 text-xs font-mono whitespace-pre-wrap">🔴 OFFLINE — budi123 (Budi Santoso)
+📡 Server: Server Utama
+⏱ Offline sejak: 5 menit</pre>
+            <p class="text-red-600 mt-1.5">Dikirim setelah grace period berlalu (default 1 menit setelah disconnect).</p>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs">
+            <p class="font-semibold text-emerald-800 mb-1">🟢 Pelanggan ONLINE</p>
+            <pre class="bg-white border border-emerald-100 rounded-lg p-2 text-gray-700 text-xs font-mono whitespace-pre-wrap">🟢 ONLINE — budi123 (Budi Santoso)
+📡 Server: Server Utama</pre>
+            <p class="text-emerald-600 mt-1.5">Dikirim sesaat setelah pelanggan berhasil konek.</p>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">Notifikasi menampilkan <strong>username PPPoE</strong> + <strong>nama pelanggan</strong> (jika terdaftar di sistem).</p>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-3">⌨️ Perintah Bot (Kirim di Grup Telegram)</p>
+        <div class="space-y-2">
+
+          <div class="border border-gray-100 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-gray-50 flex items-center gap-2">
+              <code class="text-blue-600 font-mono text-sm font-bold">/online</code>
+              <span class="text-xs text-gray-500">— daftar semua yang sedang online</span>
+            </div>
+            <pre class="px-3 py-2 text-xs font-mono text-gray-700 bg-white whitespace-pre-wrap">🟢 Online sekarang (2 pelanggan)
+  budi123 — Budi Santoso · Server Utama
+  ani456 — Ani Wijaya · Server Utama</pre>
+          </div>
+
+          <div class="border border-gray-100 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-gray-50 flex items-center gap-2">
+              <code class="text-blue-600 font-mono text-sm font-bold">/offline</code>
+              <span class="text-xs text-gray-500">— daftar semua yang sedang offline</span>
+            </div>
+            <pre class="px-3 py-2 text-xs font-mono text-gray-700 bg-white whitespace-pre-wrap">🔴 Offline sekarang (1 pelanggan)
+  joko789 — Joko Susilo · Server Utama (15 mnt)</pre>
+          </div>
+
+          <div class="border border-gray-100 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-gray-50 flex items-center gap-2">
+              <code class="text-blue-600 font-mono text-sm font-bold">/cek &lt;username&gt;</code>
+              <span class="text-xs text-gray-500">— cek status satu pelanggan</span>
+            </div>
+            <div class="px-3 py-1.5 bg-blue-50 text-xs text-blue-700">Contoh: <code class="font-mono">/cek budi123</code></div>
+            <pre class="px-3 py-2 text-xs font-mono text-gray-700 bg-white whitespace-pre-wrap">🟢 ONLINE — budi123
+👤 Budi Santoso
+📡 Server: Server Utama
+🕐 Terakhir berubah: 12 menit lalu</pre>
+          </div>
+
+          <div class="border border-gray-100 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-gray-50 flex items-center gap-2">
+              <code class="text-blue-600 font-mono text-sm font-bold">/bantuan</code>
+              <span class="text-xs text-gray-500">— tampilkan daftar perintah</span>
+            </div>
+          </div>
+
+        </div>
+        <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mt-3 text-xs text-amber-700">
+          <strong>💡 Cara pakai:</strong> Ketik perintah langsung di grup Telegram yang sudah ditambahkan bot. Bot akan membalas dalam beberapa detik.
+        </div>
+      </div>
+
+      <div>
+        <p class="font-semibold text-gray-700 mb-2">⚙️ Konfigurasi</p>
+        <div class="bg-gray-50 rounded-xl p-4 space-y-1 text-xs">
+          <p><strong>Grace Period</strong> — tunda notifikasi offline (hindari spam saat reconnect singkat). Default 1 menit.</p>
+          <p><strong>Notif Offline 🔴</strong> — aktifkan/nonaktifkan notifikasi saat pelanggan disconnect.</p>
+          <p><strong>Notif Online 🟢</strong> — aktifkan/nonaktifkan notifikasi saat pelanggan konek.</p>
+          <p class="text-gray-400 mt-2">Perintah bot (/online, /offline, /cek) selalu aktif selama Group Chat ID sudah diisi, tidak dipengaruhi toggle notifikasi.</p>
+        </div>
+      </div>
+
+      <div class="bg-violet-50 border border-violet-100 rounded-xl p-3 text-xs text-violet-800">
+        <strong>📌 Catatan:</strong> Monitoring berjalan setiap 30 detik. Perintah bot diproses setiap 15 detik. Ada kemungkinan delay maksimal 30-45 detik dari perubahan status sampai notifikasi masuk.
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── HALAMAN BELI (STORE) ───────────────────────────── -->
   <div id="store" class="card p-6 mb-5">
     <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -914,7 +1051,17 @@ Ani,ani456,pass456,2,6289876543210,Jl. Sudirman No.5,5</pre>
 
       <div class="border-l-4 border-blue-400 pl-4 py-1">
         <p class="font-semibold text-gray-800 mb-1">Q: Bagaimana cara ubah tanggal bayar pelanggan?</p>
-        <p class="text-gray-600">A: Masuk ke menu <strong>Pelanggan PPPoE</strong> → klik tombol <strong>Edit</strong> pada pelanggan yang ingin diubah → ubah field <strong>Tgl Bayar</strong> → <strong>Simpan</strong>. Jatuh tempo otomatis dihitung ulang.</p>
+        <p class="text-gray-600">A: Masuk ke menu <strong>Pelanggan PPPoE</strong> → klik tombol <strong>Edit</strong> pada pelanggan yang ingin diubah → ubah field <strong>Tgl Bayar</strong> → <strong>Simpan</strong>. Tagihan bulan ini yang masih unpaid akan dihapus dan di-generate ulang dengan tgl bayar baru. Jatuh tempo otomatis menyesuaikan.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Kenapa pelanggan baru pasang tgl 1 tapi tagihan pertama muncul bulan depan?</p>
+        <p class="text-gray-600">A: Karena pelanggan pasang di hari yang sama dengan <strong>Tgl Bayar</strong>-nya. Contoh: pasang 1 Juli, tgl bayar = 1 → selisih hari = 0 → tidak ada yang ditagih bulan ini, tagihan pertama muncul 1 Agustus (full price). Ini adalah perilaku normal — pelanggan baru mulai siklus penuh dari bulan depan. Kolom <strong>⚡ Tagihan</strong> di tabel pelanggan menunjukkan kapan tagihan pertama akan muncul.</p>
+      </div>
+
+      <div class="border-l-4 border-blue-400 pl-4 py-1">
+        <p class="font-semibold text-gray-800 mb-1">Q: Apa itu kolom "⚡ Tagihan" di tabel pelanggan?</p>
+        <p class="text-gray-600">A: Kolom tersebut menampilkan <strong>tanggal pertama kali tagihan akan di-generate</strong> untuk pelanggan bersangkutan, dihitung dari tanggal pasang dan tanggal bayar rutinnya. Berguna untuk mengecek apakah input data pelanggan baru sudah benar sebelum tagihan pertama muncul.</p>
       </div>
 
       <div class="border-l-4 border-blue-400 pl-4 py-1">

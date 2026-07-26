@@ -2,7 +2,10 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>{% block title %}{{ app_name }}{% endblock %}</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css"/>
@@ -15,43 +18,51 @@
 <style type="text/tailwindcss">
   @layer base {
     * { font-family: 'Inter', sans-serif; }
-    body { @apply bg-gray-50; }
+    body { background: #f0f4f8; }
   }
   @layer components {
     .nav-link {
       @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white text-sm font-medium transition-all duration-150 cursor-pointer;
     }
-    .nav-link:hover { background: rgba(255,255,255,0.07); }
-    .nav-link.active { @apply bg-blue-600 text-white shadow-lg; }
-    .card { @apply bg-white rounded-2xl border border-gray-100 shadow-sm; }
+    .nav-link:hover { background: rgba(255,255,255,0.08); }
+    .nav-link.active { @apply bg-blue-600 text-white; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
+    .card { @apply bg-white rounded-2xl border border-gray-100; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+    .card-hover { @apply card transition-all duration-200 hover:-translate-y-0.5; }
+    .card-hover:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.05); }
     .btn { @apply inline-flex items-center gap-2 font-semibold rounded-xl text-sm transition-all duration-150 cursor-pointer; }
-    .btn-primary   { @apply btn bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm shadow-blue-200; }
-    .btn-secondary { @apply btn bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200; }
-    .btn-ghost     { @apply btn bg-gray-100 hover:bg-gray-200 text-gray-700; }
-    .btn-danger    { @apply btn bg-red-50 hover:bg-red-100 text-red-600; }
-    .btn-success   { @apply btn bg-emerald-50 hover:bg-emerald-100 text-emerald-700; }
-    .btn-warning   { @apply btn bg-amber-50 hover:bg-amber-100 text-amber-700; }
+    .btn-primary   { @apply btn bg-blue-600 hover:bg-blue-700 active:scale-95 text-white; box-shadow: 0 2px 8px rgba(37,99,235,0.3); }
+    .btn-secondary { @apply btn bg-white hover:bg-gray-50 text-slate-700 border border-gray-200 active:scale-95; }
+    .btn-ghost     { @apply btn bg-gray-100 hover:bg-gray-200 text-gray-700 active:scale-95; }
+    .btn-danger    { @apply btn bg-red-50 hover:bg-red-100 text-red-600 active:scale-95; }
+    .btn-success   { @apply btn bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 active:scale-95; }
+    .btn-warning   { @apply btn bg-amber-50 hover:bg-amber-100 text-amber-700 active:scale-95; }
     .form-input {
-      @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400
-             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all;
+      @apply w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400
+             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04) inset;
     }
     .form-select {
-      @apply w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800
-             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all;
+      @apply w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800
+             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04) inset;
     }
-    .form-label { @apply block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5; }
+    .form-label { @apply block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5; }
     .badge { @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold; }
-    .badge-green { @apply badge bg-emerald-50 text-emerald-700 border border-emerald-100; }
-    .badge-red { @apply badge bg-red-50 text-red-600 border border-red-100; }
-    .badge-blue { @apply badge bg-blue-50 text-blue-700 border border-blue-100; }
-    .badge-orange { @apply badge bg-orange-50 text-orange-700 border border-orange-100; }
-    .badge-gray { @apply badge bg-gray-100 text-gray-500 border border-gray-200; }
+    .badge-green  { @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200; }
+    .badge-red    { @apply badge bg-red-50 text-red-600 border border-red-200; }
+    .badge-blue   { @apply badge bg-blue-50 text-blue-700 border border-blue-200; }
+    .badge-orange { @apply badge bg-orange-50 text-orange-700 border border-orange-200; }
+    .badge-gray   { @apply badge bg-gray-100 text-gray-500 border border-gray-200; }
     .modal-overlay { @apply fixed inset-0 z-50 flex items-center justify-center p-4; }
-    .page-header { @apply flex items-start justify-between mb-6; }
-    .page-title { @apply text-xl font-bold text-gray-900; }
-    .page-sub { @apply text-sm text-gray-400 mt-0.5; }
-    .th { @apply text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50; }
-    .td { @apply px-5 py-3.5 border-b border-gray-50 text-sm; }
+    .page-header { @apply flex items-start justify-between mb-6 flex-wrap gap-3; }
+    .page-title { @apply text-xl font-extrabold text-gray-900 tracking-tight; }
+    .page-sub { @apply text-xs text-gray-400 mt-0.5 font-medium; }
+    .th {
+      @apply text-left px-5 py-3.5 text-xs font-bold text-gray-500 uppercase tracking-widest;
+      background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .td { @apply px-5 py-4 border-b border-gray-50/80 text-sm; }
   }
 </style>
 </head>
@@ -69,11 +80,11 @@
     style="background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);border-right:1px solid rgba(255,255,255,0.06);transform:translateX(-100%);transition:transform 0.2s ease">
 
     <!-- Brand -->
-    <div class="flex items-center gap-3 px-4 py-4 border-b" style="border-color:rgba(255,255,255,0.06)">
-      <img src="/static/logo.jpg" alt="{{ app_name }}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-lg">
+    <div class="flex items-center gap-3 px-4 py-4 border-b" style="border-color:rgba(255,255,255,0.08)">
+      <img src="/static/logo.jpg" alt="{{ app_name }}" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" style="box-shadow:0 4px 12px rgba(0,0,0,0.3)">
       <div class="flex-1 min-w-0">
-        <p class="text-white font-bold text-sm leading-none">{{ app_name }}</p>
-        <p class="text-gray-500 text-xs mt-0.5">Jasa Billing ISP</p>
+        <p class="text-white font-extrabold text-sm leading-none tracking-tight">{{ app_name }}</p>
+        <p class="text-blue-400 text-xs mt-0.5 font-medium">Billing ISP</p>
       </div>
       <!-- Tombol tutup (mobile) -->
       <button id="btn-close-sidebar" onclick="closeSidebar()"
@@ -108,7 +119,7 @@
 
       {% if user.role == 'teknisi' %}
       <!-- Menu terbatas Teknisi -->
-      <p class="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">PPPoE</p>
+      <p class="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:0.15em">PPPoE</p>
       <a href="/pppoe/users" class="nav-link {% if active=='pppoe_users' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Pelanggan PPPoE
@@ -135,36 +146,45 @@
       </a>
       {% endif %}
 
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Pelanggan</p>
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:0.15em">Pelanggan</p>
 
       {% if user.role != 'sub_agen' %}
-      <a href="/pppoe/paket" class="nav-link {% if active=='pppoe_paket' %}active{% endif %}">
+      <a href="/pppoe/paket" title="Kelola paket PPPoE: nama, harga, dan kecepatan. Paket ini digunakan saat mendaftarkan pelanggan baru." class="nav-link {% if active=='pppoe_paket' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
         Paket PPPoE
       </a>
 
-      <a href="/odp" class="nav-link {% if active=='odp' %}active{% endif %}">
+      <a href="/odp" title="Kelola ODP (Optical Distribution Point): titik distribusi fiber optik dan port yang digunakan pelanggan." class="nav-link {% if active=='odp' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
         ODP
       </a>
       {% endif %}
 
-      <a href="/pppoe/users" class="nav-link {% if active=='pppoe_users' %}active{% endif %}">
+      <a href="/pppoe/users" title="Daftar pelanggan PPPoE: tambah, edit, suspend, atau hapus pelanggan. Tgl Bayar menentukan kapan tagihan dibuat dan kapan otomatis di-isolir jika belum bayar." class="nav-link {% if active=='pppoe_users' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Pelanggan PPPoE
       </a>
 
-      <a href="/pppoe/monitor" class="nav-link {% if active=='pppoe_monitor' %}active{% endif %}">
+      {% if monitor_online_aktif_sidebar %}
+      <a href="/pppoe/monitor" title="Monitor sesi PPPoE aktif secara real-time dari MikroTik: lihat siapa yang sedang online, IP, uptime, dan traffic." class="nav-link {% if active=='pppoe_monitor' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         Monitor Online
       </a>
+      {% endif %}
 
-      <a href="/pppoe/tagihan" class="nav-link {% if active=='pppoe_tagihan' %}active{% endif %}">
+      {% if monitor_aktif_sidebar %}
+      <a href="/addon/monitor" title="Bot Monitoring: notifikasi otomatis via Telegram/WA jika pelanggan PPPoE terputus atau reconnect." class="nav-link {% if active=='addon_monitor' %}active{% endif %}">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        Bot Monitoring
+      </a>
+      {% endif %}
+
+      <a href="/pppoe/tagihan" title="Tagihan & transaksi PPPoE: lihat status bayar, tandai lunas manual, generate tagihan, dan riwayat pembayaran per pelanggan." class="nav-link {% if active=='pppoe_tagihan' %}active{% endif %}">
         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
         Transaksi PPPoE
       </a>
 
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Hotspot</p>
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:0.15em">Hotspot</p>
 
       {% if user.role != 'sub_agen' %}
       <a href="/hotspot/paket" class="nav-link {% if active=='hotspot_paket' %}active{% endif %}">
@@ -194,7 +214,7 @@
       </a>
       {% endif %}
 
-      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.2)">Akun</p>
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-widest" style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:0.15em">Akun</p>
 
       {% if user.role in ('admin','agen') %}
       <a href="/tim" class="nav-link {% if active=='tim' %}active{% endif %}">
@@ -237,7 +257,7 @@
   <div id="main-content" class="flex-1 flex flex-col min-h-screen" style="margin-left:0">
 
     <!-- Topbar -->
-    <header class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between shadow-sm">
+    <header class="sticky top-0 z-20 px-4 sm:px-6 h-14 flex items-center justify-between" style="background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,0,0,0.07);box-shadow:0 1px 8px rgba(0,0,0,0.06)">
       <div class="flex items-center gap-3">
         <!-- Hamburger (mobile only, ditampilkan via JS) -->
         <button id="btn-hamburger" onclick="openSidebar()"
@@ -259,7 +279,7 @@
     </header>
 
     <!-- Page content -->
-    <main class="flex-1 p-7">
+    <main class="flex-1 p-3 sm:p-5 md:p-7">
       {% block content %}{% endblock %}
     </main>
   </div>

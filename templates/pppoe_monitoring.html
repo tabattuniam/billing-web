@@ -13,27 +13,27 @@
 
 <!-- Stats cards -->
 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Total jumlah pelanggan PPPoE terdaftar (aktif + nonaktif).">
     <p class="text-2xl font-black text-gray-900">{{ summary.total }}</p>
     <p class="text-xs text-gray-400">Total Pelanggan</p>
   </div>
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Pelanggan yang status aktif di MikroTik dan tagihan lunas atau belum jatuh tempo.">
     <p class="text-2xl font-black text-emerald-600">{{ summary.aktif }}</p>
     <p class="text-xs text-gray-400">Aktif</p>
   </div>
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Pelanggan yang suspended/disabled di MikroTik (tagihan overdue atau dihapus).">
     <p class="text-2xl font-black text-red-500">{{ summary.nonaktif }}</p>
     <p class="text-xs text-gray-400">Nonaktif / Churn</p>
   </div>
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Pelanggan dengan tagihan bulan ini yang sudah melewati jatuh tempo (telah di-suspend otomatis).">
     <p class="text-2xl font-black text-amber-500">{{ summary.overdue }}</p>
     <p class="text-xs text-gray-400">Overdue Bulan Ini</p>
   </div>
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Pelanggan yang tagihan mereka jatuh tempo hari ini. Reminder otomatis sudah dikirim jam 8 pagi.">
     <p class="text-2xl font-black text-blue-600">{{ summary.jatuh_hari_ini }}</p>
     <p class="text-xs text-gray-400">Jatuh Tempo Hari Ini</p>
   </div>
-  <div class="card p-4 flex flex-col gap-1">
+  <div class="card p-4 flex flex-col gap-1" data-tip="Total pendapatan dari tagihan PPPoE yang sudah dibayarkan (lunas) bulan ini.">
     <p class="text-lg font-black text-violet-600">Rp {{ "{:,.0f}".format(summary.omzet) }}</p>
     <p class="text-xs text-gray-400">Pendapatan Bulan Ini</p>
   </div>
@@ -64,10 +64,10 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left">
-            <th class="th">Pelanggan</th>
-            <th class="th">Paket</th>
-            <th class="th text-right">Tgl Bayar</th>
-            <th class="th text-right">Sisa</th>
+            <th class="th" data-tip="Nama pelanggan dan username untuk identifikasi.">Pelanggan</th>
+            <th class="th" data-tip="Paket yang digunakan pelanggan.">Paket</th>
+            <th class="th text-right" data-tip="Tanggal tagihan dibuat setiap bulan. Isolir otomatis 10 hari setelah tanggal ini.">Tgl Bayar</th>
+            <th class="th text-right" data-tip="Jumlah hari tersisa sebelum jatuh tempo. 0 hari = hari ini, 1 hari = besok.">Sisa</th>
           </tr>
         </thead>
         <tbody>
@@ -112,9 +112,9 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left">
-            <th class="th">Pelanggan</th>
-            <th class="th">Paket</th>
-            <th class="th text-right">Tagihan</th>
+            <th class="th" data-tip="Nama pelanggan dan username yang sedang overdue. Sudah di-suspend otomatis di MikroTik.">Pelanggan</th>
+            <th class="th" data-tip="Paket yang digunakan pelanggan ini.">Paket</th>
+            <th class="th text-right" data-tip="Nominal tagihan yang belum dibayar dan sudah melewati jatuh tempo.">Tagihan</th>
           </tr>
         </thead>
         <tbody>
@@ -154,11 +154,11 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="text-left">
-          <th class="th">Pelanggan</th>
-          <th class="th">Username</th>
-          <th class="th">Paket</th>
-          <th class="th">Telepon</th>
-          <th class="th text-right">Daftar</th>
+          <th class="th" data-tip="Nama pelanggan yang nonaktif atau churn (sudah dihapus dari sistem atau suspended).">Pelanggan</th>
+          <th class="th" data-tip="Username pelanggan di MikroTik.">Username</th>
+          <th class="th" data-tip="Paket yang terakhir digunakan pelanggan ini.">Paket</th>
+          <th class="th" data-tip="Nomor kontak untuk re-aktivasi atau follow-up.">Telepon</th>
+          <th class="th text-right" data-tip="Tanggal pelanggan pertama kali terdaftar di sistem.">Daftar</th>
         </tr>
       </thead>
       <tbody>

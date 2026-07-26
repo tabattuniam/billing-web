@@ -10,7 +10,7 @@
 {% endif %}
 {% if err %}
 <div style="background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:500;">
-  ❌ {{ err }}
+  ❌ {% if err == 'monitor_online_belum_aktif' %}Aktifkan Add-on Monitor Online PPPoE terlebih dahulu untuk mengakses fitur ini.{% else %}{{ err }}{% endif %}
 </div>
 {% endif %}
 
@@ -78,6 +78,99 @@
   </div>
 </div>
 
+<!-- ── Card: Bot Monitoring Telegram ── -->
+{% set mt_aktif = monitor_aktif %}
+{% set mt_harga = monitor_addon.get('harga', 50000) %}
+<div style="border-radius:16px;border:2px solid {% if mt_aktif %}#3b82f6{% else %}#e2e8f0{% endif %};background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:{% if mt_aktif %}0 4px 20px rgba(59,130,246,.15){% else %}0 1px 4px rgba(0,0,0,.04){% endif %};">
+  <div style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);padding:20px 20px 16px;color:#fff;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-15px;right:-15px;width:80px;height:80px;background:rgba(255,255,255,.1);border-radius:50%;"></div>
+    <div style="font-size:32px;margin-bottom:8px;">🤖</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:3px;">Bot Monitoring Telegram</div>
+    <div style="font-size:11px;opacity:.85;line-height:1.5;">Notifikasi otomatis online/offline pelanggan PPPoE ke grup Telegram Anda secara real-time.</div>
+    {% if mt_aktif %}
+    <div style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.25);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.5px;">● AKTIF</div>
+    {% endif %}
+  </div>
+  <div style="padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;">
+    {% if mt_aktif %}
+    <div style="display:flex;flex-direction:column;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;font-size:12px;">
+      {% for f in ['Notifikasi offline pelanggan ke Telegram','Notifikasi ketika pelanggan online kembali','Grace period sebelum kirim notif','Log event up/down terakhir'] %}
+      <div style="display:flex;align-items:center;gap:6px;color:#1e40af;"><span style="color:#2563eb;font-weight:700;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#64748b;">
+      {% for f in ['Notifikasi offline pelanggan ke Telegram','Notifikasi ketika pelanggan online kembali','Grace period sebelum kirim notif','Log event up/down terakhir'] %}
+      <div style="display:flex;align-items:center;gap:6px;"><span style="color:#cbd5e1;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+      <div>
+        <span style="font-size:20px;font-weight:800;color:#1e293b;">Rp {{ "{:,}".format(mt_harga).replace(',','.') }}</span>
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">/bulan</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        {% if mt_aktif %}
+        <a href="/addon/monitor" style="font-size:12px;font-weight:600;color:#3b82f6;text-decoration:none;padding:6px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;">⚙️ Config</a>
+        {% endif %}
+        <span style="font-size:12px;font-weight:600;color:{% if mt_aktif %}#3b82f6{% else %}#94a3b8{% endif %};">{{ '● Aktif' if mt_aktif else 'OFF' }}</span>
+        <button onclick="toggleMonitorBot(this)" id="btn-mt-toggle"
+          style="position:relative;width:52px;height:28px;border-radius:14px;border:none;background:{% if mt_aktif %}#3b82f6{% else %}#d1d5db{% endif %};cursor:pointer;transition:background .2s;"
+          title="{{ 'Nonaktifkan' if mt_aktif else 'Aktifkan' }}">
+          <span style="position:absolute;top:4px;{% if mt_aktif %}right:4px{% else %}left:4px{% endif %};width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s,right .2s;"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Card: Monitor Online PPPoE ── -->
+{% set mo_aktif = monitor_online_aktif %}
+<div style="border-radius:16px;border:2px solid {% if mo_aktif %}#10b981{% else %}#e2e8f0{% endif %};background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:{% if mo_aktif %}0 4px 20px rgba(16,185,129,.15){% else %}0 1px 4px rgba(0,0,0,.04){% endif %};">
+  <div style="background:linear-gradient(135deg,#047857,#10b981);padding:20px 20px 16px;color:#fff;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-15px;right:-15px;width:80px;height:80px;background:rgba(255,255,255,.1);border-radius:50%;"></div>
+    <div style="font-size:32px;margin-bottom:8px;">📡</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:3px;">Monitor Online PPPoE</div>
+    <div style="font-size:11px;opacity:.85;line-height:1.5;">Pantau sesi PPPoE aktif secara realtime. Lihat username, IP, uptime, dan disconnect langsung dari dashboard.</div>
+    {% if mo_aktif %}
+    <div style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.25);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.5px;">● AKTIF</div>
+    {% endif %}
+  </div>
+  <div style="padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;">
+    {% if mo_aktif %}
+    <div style="display:flex;flex-direction:column;gap:6px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:12px;font-size:12px;">
+      {% for f in ['Lihat semua sesi PPPoE aktif realtime','Username, IP address, uptime per sesi','Disconnect / kick sesi langsung dari dashboard','Auto-refresh setiap 30 detik'] %}
+      <div style="display:flex;align-items:center;gap:6px;color:#065f46;"><span style="color:#059669;font-weight:700;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#64748b;">
+      {% for f in ['Lihat semua sesi PPPoE aktif realtime','Username, IP address, uptime per sesi','Disconnect / kick sesi langsung dari dashboard','Auto-refresh setiap 30 detik'] %}
+      <div style="display:flex;align-items:center;gap:6px;"><span style="color:#cbd5e1;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+      <div>
+        <span style="font-size:20px;font-weight:800;color:#1e293b;">Rp 50.000</span>
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">/bulan</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        {% if mo_aktif %}
+        <a href="/pppoe/monitor" style="font-size:12px;font-weight:600;color:#10b981;text-decoration:none;padding:6px 12px;border:1px solid #a7f3d0;border-radius:8px;background:#ecfdf5;">📡 Buka</a>
+        {% endif %}
+        <span style="font-size:12px;font-weight:600;color:{% if mo_aktif %}#10b981{% else %}#94a3b8{% endif %};">{{ '● Aktif' if mo_aktif else 'OFF' }}</span>
+        <button onclick="toggleMonitorOnline(this)" id="btn-mo-toggle"
+          style="position:relative;width:52px;height:28px;border-radius:14px;border:none;background:{% if mo_aktif %}#10b981{% else %}#d1d5db{% endif %};cursor:pointer;transition:background .2s;"
+          title="{{ 'Nonaktifkan' if mo_aktif else 'Aktifkan' }}">
+          <span style="position:absolute;top:4px;{% if mo_aktif %}right:4px{% else %}left:4px{% endif %};width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s,right .2s;"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Addon lain: Sedang Pengembangan ── -->
 {% for addon in addons %}
 <div style="border-radius:16px;border:2px solid #e2e8f0;background:#f8fafc;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.04);opacity:.75;">
@@ -122,6 +215,63 @@
 </div>
 
 <script>
+async function toggleMonitorBot(btn) {
+  btn.disabled = true;
+  const isAktif = btn.style.background.includes('3b82f6');
+  if (!isAktif) {
+    // Aktifkan
+    const r = await fetch('/addon/monitor/aktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  } else {
+    if (!confirm('Nonaktifkan Bot Monitoring Telegram? Add-on akan berhenti berjalan.')) {
+      btn.disabled = false;
+      return;
+    }
+    const r = await fetch('/addon/monitor/nonaktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  }
+}
+
+async function toggleMonitorOnline(btn) {
+  btn.disabled = true;
+  const isAktif = btn.style.background.includes('10b981');
+  if (!isAktif) {
+    const r = await fetch('/addons/6/aktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  } else {
+    if (!confirm('Nonaktifkan Monitor Online PPPoE?')) {
+      btn.disabled = false;
+      return;
+    }
+    const r = await fetch('/addons/6/nonaktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  }
+}
+
 async function toggleHotspotBulanan(btn) {
   btn.disabled = true;
   const r = await fetch('/profil/fitur-hotspot-bulanan', { method: 'POST' });

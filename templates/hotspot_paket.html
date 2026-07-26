@@ -100,18 +100,33 @@
     <form method="post" action="/hotspot/paket/tambah">
       <div class="space-y-4">
         <div>
-          <label class="form-label">Nama Paket</label>
+          <label class="form-label flex items-center gap-1">
+            Nama Paket
+            <span data-tip="Nama paket untuk identifikasi. Contoh: 1 Jam 5Mbps, 24 Jam Premium, dll." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input name="nama" id="nama-tambah" required placeholder="Contoh: 1 Jam 5Mbps" class="form-input">
         </div>
         <div>
-          <label class="form-label">Server</label>
+          <label class="form-label flex items-center gap-1">
+            Server
+            <span data-tip="Router MikroTik tempat voucher hotspot akan di-generate. Pilih server yang aktif dan terhubung." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <select name="server_id" id="srv-paket-tambah" class="form-select" required>
             <option value="">— Pilih Server —</option>
             {% for s in servers %}<option value="{{ s.id }}">{{ s.nama }}{% if s.lokasi %} ({{ s.lokasi }}){% endif %}</option>{% endfor %}
           </select>
         </div>
         <div>
-          <label class="form-label">Profile MikroTik</label>
+          <label class="form-label flex items-center gap-1">
+            Profile MikroTik
+            <span data-tip="Profile hotspot di MikroTik yang mengatur kecepatan. Ambil dari daftar profil di router atau ketik manual." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <div class="flex gap-2 mb-2">
             <select id="srv-tambah" class="form-select flex-1 text-xs">
               <option value="">Pilih server untuk muat profile</option>
@@ -129,16 +144,31 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="form-label">Durasi</label>
+            <label class="form-label flex items-center gap-1">
+              Durasi
+              <span data-tip="Berapa lama voucher berlaku: 1d (1 hari), 8h (8 jam), 1h (1 jam), dst. Format: [angka][h/d]." class="cursor-help text-gray-400 hover:text-blue-500">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </span>
+            </label>
             <input name="durasi" id="durasi-tambah" required placeholder="1d / 8h / 1h" class="form-input">
           </div>
           <div>
-            <label class="form-label">Rate Limit</label>
+            <label class="form-label flex items-center gap-1">
+              Rate Limit
+              <span data-tip="Batas kecepatan per pengguna. Contoh: 5M/5M (5Mbps down/up), 512k/256k. Kosongkan = unlimited (tergantung profil MT)." class="cursor-help text-gray-400 hover:text-blue-500">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </span>
+            </label>
             <input name="rate_limit" id="rate-tambah" placeholder="5M/5M" class="form-input">
           </div>
         </div>
         <div>
-          <label class="form-label">Harga (Rp)</label>
+          <label class="form-label flex items-center gap-1">
+            Harga (Rp)
+            <span data-tip="Harga per voucher yang dijual. Digunakan untuk perhitungan revenue dan laporan penjualan." class="cursor-help text-gray-400 hover:text-blue-500">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </label>
           <input name="harga" type="number" required placeholder="5000" class="form-input">
         </div>
       </div>

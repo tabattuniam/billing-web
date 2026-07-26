@@ -145,6 +145,7 @@
         <form method="post" action="/beli/{{ slug }}/agen/beli"
           onsubmit="return konfirmBeli(this, '{{ p.nama }}', {{ p.harga }})">
           <input type="hidden" name="paket_id" value="{{ p.id }}">
+          <input type="hidden" name="comment" class="form-comment-input" value="">
           <button type="submit"
             class="btn-primary whitespace-nowrap text-xs px-4 py-2">
             Beli
@@ -229,13 +230,21 @@
       <h3 class="font-bold text-gray-900 text-lg">Konfirmasi Pembelian</h3>
       <p id="konfirm-paket" class="text-sm text-gray-500 mt-1"></p>
     </div>
-    <div class="bg-gray-50 rounded-xl p-3 mb-4 flex justify-between text-sm">
+    <div class="bg-gray-50 rounded-xl p-3 mb-3 flex justify-between text-sm">
       <span class="text-gray-600">Harga</span>
       <span id="konfirm-harga" class="font-semibold text-gray-800"></span>
     </div>
-    <div class="bg-blue-50 rounded-xl p-3 mb-5 flex justify-between text-sm">
+    <div class="bg-blue-50 rounded-xl p-3 mb-4 flex justify-between text-sm">
       <span class="text-blue-600">Saldo Anda</span>
       <span class="font-semibold text-blue-700">Rp {{ "{:,}".format(user.saldo).replace(",", ".") }}</span>
+    </div>
+    <div class="mb-5">
+      <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+        Comment / Nama Pelanggan <span class="text-red-500">*</span>
+      </label>
+      <input id="konfirm-comment" type="text" placeholder="Contoh: Pak Budi RT 02"
+        class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <p class="text-xs text-gray-400 mt-1">Wajib diisi — digunakan untuk identifikasi di MikroTik</p>
     </div>
     <div class="flex gap-2">
       <button onclick="tutupKonfirm()" class="btn-ghost flex-1">Batal</button>
@@ -257,15 +266,25 @@ function konfirmBeli(form, nama, harga) {
 
 function tutupKonfirm() {
   document.getElementById('modal-konfirm').classList.add('hidden');
+  document.getElementById('konfirm-comment').value = '';
+  document.getElementById('konfirm-comment').classList.remove('border-red-400', 'ring-1', 'ring-red-400');
+  document.getElementById('btn-konfirm-ok').textContent = 'Ya, Beli';
+  document.getElementById('btn-konfirm-ok').disabled = false;
   _formBeli = null;
 }
 
 function submitBeli() {
-  if (_formBeli) {
-    document.getElementById('btn-konfirm-ok').textContent = 'Memproses...';
-    document.getElementById('btn-konfirm-ok').disabled = true;
-    _formBeli.submit();
+  if (!_formBeli) return;
+  const comment = document.getElementById('konfirm-comment').value.trim();
+  if (!comment) {
+    document.getElementById('konfirm-comment').focus();
+    document.getElementById('konfirm-comment').classList.add('border-red-400', 'ring-1', 'ring-red-400');
+    return;
   }
+  _formBeli.querySelector('.form-comment-input').value = comment;
+  document.getElementById('btn-konfirm-ok').textContent = 'Memproses...';
+  document.getElementById('btn-konfirm-ok').disabled = true;
+  _formBeli.submit();
 }
 
 function copyKode(id) {

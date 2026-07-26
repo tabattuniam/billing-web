@@ -234,15 +234,29 @@
 
   {% if mayar_enabled %}
   <!-- Bayar Online -->
-  <a href="/bayar/tagihan/{{ t.id }}/bayar-online" class="btn-pay w-full flex items-center justify-center gap-2.5 text-white font-bold rounded-2xl py-4 text-base mb-3 no-underline">
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <a id="btn-bayar-online" href="/bayar/tagihan/{{ t.id }}/bayar-online" onclick="handleBayarClick(this)" class="btn-pay w-full flex items-center justify-center gap-2.5 text-white font-bold rounded-2xl py-4 text-base mb-3 no-underline">
+    <svg id="ico-card" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
     </svg>
-    Bayar Online Sekarang
-    <svg class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg id="ico-spin" class="w-5 h-5 hidden animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+    </svg>
+    <span id="lbl-bayar">Bayar Online Sekarang</span>
+    <svg id="ico-arrow" class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
     </svg>
   </a>
+  <script>
+  function handleBayarClick(el) {
+    document.getElementById('ico-card').classList.add('hidden');
+    document.getElementById('ico-spin').classList.remove('hidden');
+    document.getElementById('ico-arrow').classList.add('hidden');
+    document.getElementById('lbl-bayar').textContent = 'Memproses pembayaran...';
+    el.style.pointerEvents = 'none';
+    el.style.opacity = '0.85';
+  }
+  </script>
   <!-- Payment methods -->
   <div class="flex items-center justify-center gap-3 mb-4 text-xs text-gray-400">
     <span class="flex items-center gap-1">

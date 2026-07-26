@@ -36,22 +36,34 @@
 </div>
 
 <!-- Filter -->
-<form method="get" class="card p-4 mb-5 flex items-center gap-3 flex-wrap">
-  <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-select !w-auto">
-  <select name="tipe" class="form-select !w-auto min-w-[180px]">
-    <option value="">Semua Tipe</option>
-    <option value="hotspot_order" {% if sel_tipe=='hotspot_order' %}selected{% endif %}>Voucher Online</option>
-    <option value="tagihan_pppoe" {% if sel_tipe=='tagihan_pppoe' %}selected{% endif %}>Tagihan PPPoE</option>
-    <option value="pppoe"         {% if sel_tipe=='pppoe' %}selected{% endif %}>Tambah PPPoE</option>
-  </select>
-  <button type="submit" class="btn-primary px-4 py-2.5">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
-    Filter
-  </button>
-  {% if sel_tipe %}
-  <a href="/transaksi?bulan={{ sel_bulan }}" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
-  {% endif %}
-</form>
+<div class="card p-4 mb-5">
+  <form method="get">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      <div>
+        <label class="form-label">Periode</label>
+        <input type="month" name="bulan" value="{{ sel_bulan }}" class="form-select w-full">
+      </div>
+      <div>
+        <label class="form-label">Tipe Transaksi</label>
+        <select name="tipe" class="form-select w-full">
+          <option value="">Semua Tipe</option>
+          <option value="hotspot_order" {% if sel_tipe=='hotspot_order' %}selected{% endif %}>Voucher Online</option>
+          <option value="tagihan_pppoe" {% if sel_tipe=='tagihan_pppoe' %}selected{% endif %}>Tagihan PPPoE</option>
+          <option value="pppoe"         {% if sel_tipe=='pppoe' %}selected{% endif %}>Tambah PPPoE</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary px-4 py-2.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+        Filter
+      </button>
+      {% if sel_tipe %}
+      <a href="/transaksi?bulan={{ sel_bulan }}" class="btn-ghost px-4 py-2.5 text-sm">Reset</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
 
 <!-- Table -->
 {% if not txs %}
@@ -63,7 +75,56 @@
   <p class="text-slate-400 text-sm mt-1">untuk periode {{ sel_bulan }}</p>
 </div>
 {% else %}
-<div class="card overflow-hidden">
+
+<!-- Mobile Card View -->
+<div class="md:hidden space-y-3 mb-4">
+  {% for t in txs %}
+  <div class="card p-4 {% if t.status in ('paid','lunas') %}border-l-4 border-l-emerald-400{% elif t.status == 'pending' %}border-l-4 border-l-yellow-400{% else %}border-l-4 border-l-gray-300{% endif %}">
+    <div class="flex items-start justify-between gap-3 mb-2">
+      <div class="flex-1 min-w-0">
+        {% if t.tipe == 'hotspot_order' %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">🎟 Voucher Online</span>
+        {% elif t.tipe == 'tagihan_pppoe' %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">📡 Tagihan PPPoE</span>
+        {% elif t.tipe == 'pppoe' %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-100">➕ Tambah PPPoE</span>
+        {% else %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">{{ t.tipe }}</span>
+        {% endif %}
+        <p class="text-xs text-gray-400 mt-0.5">{{ t.created_at | ts_date if t.created_at else '—' }}</p>
+      </div>
+      <div class="flex-shrink-0 text-right">
+        <p class="font-bold text-gray-800">{{ t.amount | rp }}</p>
+        {% if t.status in ('paid', 'lunas') %}
+        <span class="badge-green text-xs">✓ Lunas</span>
+        {% elif t.status == 'pending' %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-600 border border-yellow-200">⏳ Pending</span>
+        {% elif t.status in ('overdue', 'expired') %}
+        <span class="badge-red text-xs">Terlambat</span>
+        {% elif t.status == 'failed' %}
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-500 border border-red-100">✗ Gagal</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if t.keterangan %}
+    <p class="text-xs text-gray-500 truncate">{{ t.keterangan }}</p>
+    {% endif %}
+    <p class="text-[10px] text-gray-300 font-mono mt-1">{{ t.id[:16] if t.id|length > 16 else t.id }}</p>
+    {% if t.tipe == 'hotspot_order' and t.status == 'paid' and t.nomor_hp %}
+    <button onclick="kirimWaOrder('{{ t.id }}')"
+      class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition">
+      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Kirim Ulang WA
+    </button>
+    <span id="wa-result-{{ t.id }}" class="text-xs ml-1"></span>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <p class="text-xs text-gray-400 text-center py-2">{{ txs|length }} transaksi — periode {{ sel_bulan }}</p>
+</div>
+
+<!-- Desktop Table View -->
+<div class="card overflow-hidden hidden md:block">
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
@@ -74,6 +135,7 @@
           <th class="th">Jumlah</th>
           <th class="th">Status</th>
           <th class="th">Tanggal</th>
+          <th class="th">Aksi</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-50">
@@ -86,29 +148,17 @@
         </td>
         <td class="td">
           {% if t.tipe == 'hotspot_order' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
-            🎟 Voucher Online
-          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">🎟 Voucher Online</span>
           {% elif t.tipe == 'tagihan_pppoe' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
-            📡 Tagihan PPPoE
-          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">📡 Tagihan PPPoE</span>
           {% elif t.tipe == 'pppoe' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-100">
-            ➕ Tambah PPPoE
-          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-100">➕ Tambah PPPoE</span>
           {% else %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-500 border border-gray-100">
-            {{ t.tipe }}
-          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-500 border border-gray-100">{{ t.tipe }}</span>
           {% endif %}
         </td>
-        <td class="td">
-          <span class="text-gray-700">{{ t.keterangan or '—' }}</span>
-        </td>
-        <td class="td">
-          <span class="font-bold text-gray-800">{{ t.amount | rp }}</span>
-        </td>
+        <td class="td"><span class="text-gray-700">{{ t.keterangan or '—' }}</span></td>
+        <td class="td"><span class="font-bold text-gray-800">{{ t.amount | rp }}</span></td>
         <td class="td">
           {% if t.status in ('paid', 'lunas') %}
           <span class="badge-green">✓ Lunas</span>
@@ -122,8 +172,18 @@
           <span class="text-xs text-gray-400">{{ t.status }}</span>
           {% endif %}
         </td>
-        <td class="td text-xs text-gray-400">
-          {{ t.created_at | ts_date if t.created_at else '—' }}
+        <td class="td text-xs text-gray-400">{{ t.created_at | ts_date if t.created_at else '—' }}</td>
+        <td class="td">
+          {% if t.tipe == 'hotspot_order' and t.status == 'paid' and t.nomor_hp %}
+          <button onclick="kirimWaOrder('{{ t.id }}')"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap">
+            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Kirim WA
+          </button>
+          <span id="wa-result-{{ t.id }}" class="text-xs ml-1"></span>
+          {% else %}
+          <span class="text-xs text-gray-300">—</span>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -135,4 +195,32 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+async function kirimWaOrder(orderId) {
+  const btn = event.currentTarget;
+  const res = document.getElementById('wa-result-' + orderId);
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+  try {
+    const r = await fetch(`/hotspot/order/${orderId}/kirim-wa`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      res.className = 'text-xs text-emerald-600 font-semibold';
+      res.textContent = '✓ ' + d.msg;
+      btn.textContent = 'Terkirim';
+      btn.className = btn.className.replace('bg-emerald-500 hover:bg-emerald-600', 'bg-gray-300');
+    } else {
+      res.className = 'text-xs text-red-500';
+      res.textContent = d.msg || 'Gagal';
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> Kirim WA';
+    }
+  } catch(e) {
+    res.className = 'text-xs text-red-500';
+    res.textContent = 'Error jaringan';
+    btn.disabled = false;
+  }
+}
+</script>
 {% endblock %}

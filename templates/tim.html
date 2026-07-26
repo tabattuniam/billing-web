@@ -19,7 +19,7 @@
 {% endif %}
 
 <!-- Tabs -->
-<div class="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl w-fit">
+<div class="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
   <button id="tab-agen-btn" onclick="showTab('agen')"
     class="tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all bg-white text-slate-800 shadow-sm">
     👤 Agen <span class="ml-1 text-xs text-slate-400">({{ agenlist|length }})</span>
@@ -27,6 +27,10 @@
   <button id="tab-teknisi-btn" onclick="showTab('teknisi')"
     class="tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all text-slate-500">
     🔧 Teknisi <span class="ml-1 text-xs text-slate-400">({{ teknisi_list|length }})</span>
+  </button>
+  <button id="tab-paket-btn" onclick="showTab('paket')"
+    class="tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all text-slate-500">
+    🎟 Paket Agen <span class="ml-1 text-xs text-slate-400">({{ hotspot_pakets|length }})</span>
   </button>
 </div>
 
@@ -223,6 +227,80 @@
   {% endif %}
 </div>
 
+<!-- ═══════════════════════════════════ TAB PAKET AGEN ═══════════════════ -->
+<div id="pane-paket" class="hidden">
+
+  <div class="page-header mb-5">
+    <div>
+      <h2 class="text-base font-bold text-slate-800">Paket Voucher untuk Agen</h2>
+      <p class="text-xs text-slate-400">Centang paket yang boleh di-generate oleh agen</p>
+    </div>
+    <button onclick="simpanPaketAgen(this)" class="btn-primary px-4 py-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      Simpan
+    </button>
+  </div>
+
+  {% if hotspot_pakets %}
+  <div class="card p-4 mb-4 border-blue-100 bg-blue-50">
+    <p class="text-xs text-blue-700">
+      <svg class="w-4 h-4 inline mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Paket yang <strong>dicentang</strong> akan muncul di panel agen untuk generate voucher. Paket yang <strong>tidak dicentang</strong> tidak akan tampil.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="paket-agen-grid">
+    {% for p in hotspot_pakets %}
+    <label id="paket-card-{{ p.id }}"
+      class="card p-4 cursor-pointer transition-all select-none border-2 {% if p.agen_akses %}border-blue-400 bg-blue-50/30{% else %}border-gray-100{% endif %}"
+      onclick="togglePaketCard({{ p.id }}, this)">
+      <div class="flex items-start justify-between mb-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style="background:linear-gradient(135deg,#fed7aa,#fdba74)">
+          <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+          </svg>
+        </div>
+        <div id="badge-{{ p.id }}" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+          {% if p.agen_akses %}bg-blue-100 text-blue-700{% else %}bg-gray-100 text-gray-400{% endif %}">
+          {% if p.agen_akses %}
+          <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Aktif
+          {% else %}
+          <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Nonaktif
+          {% endif %}
+        </div>
+      </div>
+      <p class="font-bold text-slate-800 text-sm mb-1">{{ p.nama }}</p>
+      <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+        <span>{{ p.durasi }}</span>
+        {% if p.kecepatan %}<span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{{ p.kecepatan }}</span>{% endif %}
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+        <span class="text-xs text-slate-400">Harga</span>
+        <span class="font-bold text-orange-600">{{ p.harga | rp }}</span>
+      </div>
+      <input type="checkbox" id="chk-{{ p.id }}" value="{{ p.id }}"
+        class="paket-chk hidden" {% if p.agen_akses %}checked{% endif %}>
+    </label>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="card p-16 text-center">
+    <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+      <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0"/>
+      </svg>
+    </div>
+    <p class="text-slate-500 font-medium">Belum ada paket hotspot</p>
+    <p class="text-slate-400 text-sm mt-1">Tambahkan paket di menu <a href="/hotspot/paket" class="text-blue-600 hover:underline">Voucher / Hotspot → Paket</a> terlebih dahulu</p>
+  </div>
+  {% endif %}
+
+</div>
+
 <!-- ═══════════════════ MODALS AGEN ══════════════════════════════════════════ -->
 <div id="modal-tambah-agen" class="hidden modal-overlay">
   <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
@@ -319,6 +397,33 @@
   </div>
 </div>
 
+<!-- Modal Topup Saldo Agen -->
+<div id="modal-topup" class="hidden modal-overlay">
+  <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-bold text-slate-900 text-lg">Topup Saldo Agen</h3>
+      <button onclick="document.getElementById('modal-topup').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p id="topup-nama" class="text-sm text-slate-400 mb-5"></p>
+    <form id="form-topup" method="post">
+      <div class="mb-4">
+        <label class="form-label">Jumlah Topup (Rp)</label>
+        <input name="jumlah" required type="number" min="1000" step="1000" placeholder="50000" class="form-input">
+      </div>
+      <div class="mb-5">
+        <label class="form-label">Keterangan</label>
+        <input name="keterangan" type="text" placeholder="Opsional" class="form-input">
+      </div>
+      <div class="flex gap-3">
+        <button type="button" onclick="document.getElementById('modal-topup').classList.add('hidden')" class="btn-secondary flex-1 py-2.5 justify-center">Batal</button>
+        <button type="submit" class="btn-primary flex-1 py-2.5 justify-center">Topup</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Modal Reset Password (shared) -->
 <div id="modal-reset" class="hidden modal-overlay">
   <div class="bg-white rounded-2xl shadow-2xl w-full p-6 max-w-sm">
@@ -346,16 +451,54 @@
 const RESET_URLS = { agen: '/agen/reset-password/', teknisi: '/teknisi-admin/reset-password/' };
 
 function showTab(tab) {
-  document.getElementById('pane-agen').classList.toggle('hidden', tab !== 'agen');
-  document.getElementById('pane-teknisi').classList.toggle('hidden', tab !== 'teknisi');
-  const activeClass = 'bg-white text-slate-800 shadow-sm';
-  const inactiveClass = 'text-slate-500';
-  ['agen','teknisi'].forEach(t => {
+  ['agen','teknisi','paket'].forEach(t => {
+    document.getElementById('pane-' + t).classList.toggle('hidden', t !== tab);
     const btn = document.getElementById('tab-' + t + '-btn');
     btn.className = 'tab-btn px-5 py-2 rounded-lg text-sm font-semibold transition-all ' +
-      (t === tab ? activeClass : inactiveClass);
+      (t === tab ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500');
   });
   localStorage.setItem('tim_tab', tab);
+}
+
+function togglePaketCard(pid, label) {
+  const chk = document.getElementById('chk-' + pid);
+  const badge = document.getElementById('badge-' + pid);
+  chk.checked = !chk.checked;
+  if (chk.checked) {
+    label.classList.add('border-blue-400', 'bg-blue-50/30');
+    label.classList.remove('border-gray-100');
+    badge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700';
+    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Aktif';
+  } else {
+    label.classList.remove('border-blue-400', 'bg-blue-50/30');
+    label.classList.add('border-gray-100');
+    badge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-400';
+    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Nonaktif';
+  }
+}
+
+async function simpanPaketAgen(btn) {
+  const checked = [...document.querySelectorAll('.paket-chk:checked')].map(c => parseInt(c.value));
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> Menyimpan...';
+  try {
+    const res = await fetch('/tim/agen-paket', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ enabled_ids: checked })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(data.msg, 'success');
+    } else {
+      showToast(data.msg || 'Gagal menyimpan', 'error');
+    }
+  } catch(e) {
+    showToast('Error koneksi', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = origHTML;
 }
 
 function copyLink(elId, prefix = '') {
@@ -385,14 +528,15 @@ function openResetPw(uid, nama, tipe) {
 }
 
 function openTopupAgen(uid, nama) {
-  // reuse topup modal dari agen.html jika ada, atau redirect
-  if (typeof openTopup === 'function') { openTopup(uid, nama); }
+  document.getElementById('topup-nama').textContent = 'Topup saldo untuk: ' + nama;
+  document.getElementById('form-topup').action = '/saldo/topup/' + uid;
+  document.getElementById('modal-topup').classList.remove('hidden');
 }
 
 // Restore tab dari localStorage
 window.addEventListener('DOMContentLoaded', () => {
   const saved = localStorage.getItem('tim_tab') || 'agen';
-  showTab(saved);
+  showTab(['agen','teknisi','paket'].includes(saved) ? saved : 'agen');
 });
 </script>
 {% endblock %}

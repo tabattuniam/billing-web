@@ -86,7 +86,7 @@
 <!-- ═══════════════ VIEW: PER BULAN ═══════════════ -->
 
 <!-- Filter tahun -->
-<form method="get" action="/laporan" class="flex items-center gap-2 mb-4">
+<form method="get" action="/laporan" class="flex items-center gap-2 mb-4 flex-wrap">
   <input type="hidden" name="mode" value="bulanan">
   <label class="text-sm text-gray-500">Tahun:</label>
   <select name="tahun" onchange="this.form.submit()" class="form-select w-32">
@@ -114,7 +114,32 @@
     <h3 class="text-sm font-semibold text-gray-700">Rekap Pendapatan Per Bulan ({{ tahun }})</h3>
     <p class="text-xs text-gray-400 mt-0.5">Gateway = via payment gateway · QRIS Manual = transfer langsung ke rekening ISP</p>
   </div>
-  <div class="overflow-x-auto">
+
+  <!-- Mobile: simplified list -->
+  <div class="md:hidden divide-y divide-gray-50">
+    {% set ns = namespace(idx=0) %}
+    {% for b in bulanan %}
+    {% set tm = topup_manual[ns.idx] if topup_manual is defined and ns.idx < topup_manual|length else {'total':0} %}
+    {% set ns.idx = ns.idx + 1 %}
+    {% set grand = b.total + tm.total %}
+    {% if grand > 0 %}
+    <a href="/laporan?mode=harian&bulan={{ b.bulan }}" class="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+      <div>
+        <p class="font-semibold text-gray-800 text-sm">{{ b.bulan | label_bulan }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">PPPoE + Voucher + QRIS</p>
+      </div>
+      <p class="font-black text-blue-700">Rp {{ "{:,}".format(grand).replace(",",".") }}</p>
+    </a>
+    {% endif %}
+    {% endfor %}
+    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t-2 border-gray-200">
+      <p class="font-bold text-gray-900 text-sm">Total {{ tahun }}</p>
+      <p class="font-black text-blue-700">Rp {{ "{:,}".format(total_semua).replace(",",".") }}</p>
+    </div>
+  </div>
+
+  <!-- Desktop: full table -->
+  <div class="overflow-x-auto hidden md:block">
     <table class="w-full">
       <thead>
         <tr class="border-b border-gray-100">
@@ -184,7 +209,7 @@
 <!-- ═══════════════ VIEW: PER HARI ═══════════════ -->
 
 <!-- Filter bulan -->
-<form method="get" action="/laporan" class="flex items-center gap-2 mb-4">
+<form method="get" action="/laporan" class="flex items-center gap-2 mb-4 flex-wrap">
   <input type="hidden" name="mode" value="harian">
   <label class="text-sm text-gray-500">Bulan:</label>
   <select name="bulan" onchange="this.form.submit()" class="form-select w-44">
@@ -209,7 +234,37 @@
     </div>
     <span class="text-xs text-gray-400">{{ harian | selectattr('total', '>', 0) | list | length }} hari aktif</span>
   </div>
-  <div class="overflow-x-auto">
+
+  <!-- Mobile: list hari -->
+  <div class="md:hidden divide-y divide-gray-50">
+    {% set has_any_m = namespace(v=false) %}
+    {% for h in harian %}
+    {% if h.total > 0 %}
+    {% set has_any_m.v = true %}
+    <div class="flex items-center justify-between px-4 py-3">
+      <div>
+        <p class="font-semibold text-gray-800 text-sm">{{ h.tgl }}</p>
+        <div class="flex gap-2 mt-0.5 flex-wrap">
+          {% if h.omzet_pppoe_manual or h.omzet_pppoe_online %}<span class="text-[10px] text-blue-500">PPPoE</span>{% endif %}
+          {% if h.omzet_voucher %}<span class="text-[10px] text-emerald-500">Voucher</span>{% endif %}
+          {% if h.omzet_topup %}<span class="text-[10px] text-indigo-500">QRIS</span>{% endif %}
+        </div>
+      </div>
+      <p class="font-black text-blue-700">Rp {{ "{:,}".format(h.total).replace(",",".") }}</p>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% if not has_any_m.v %}
+    <p class="text-center text-gray-400 py-8 text-sm">Belum ada transaksi di bulan ini</p>
+    {% endif %}
+    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t-2 border-gray-200">
+      <p class="font-bold text-gray-900 text-sm">Total {{ bulan | label_bulan }}</p>
+      <p class="font-black text-blue-700">Rp {{ "{:,}".format(total_harian).replace(",",".") }}</p>
+    </div>
+  </div>
+
+  <!-- Desktop: full table -->
+  <div class="overflow-x-auto hidden md:block">
     <table class="w-full">
       <thead>
         <tr class="border-b border-gray-100">
@@ -286,23 +341,25 @@
 
 {% if mode == 'riwayat' %}
 <!-- Filter Riwayat -->
-<form method="get" action="/laporan" class="flex flex-wrap gap-3 items-end mb-5">
+<form method="get" action="/laporan">
   <input type="hidden" name="mode" value="riwayat">
-  <div>
-    <label class="form-label">Bulan</label>
-    <select name="bulan" class="form-select" onchange="this.form.submit()">
-      {% for b in bulan_list %}
-      <option value="{{ b }}" {% if b == bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="form-label">Metode</label>
-    <select name="metode" class="form-select" onchange="this.form.submit()">
-      <option value="" {% if metode == '' %}selected{% endif %}>Semua</option>
-      <option value="manual" {% if metode == 'manual' %}selected{% endif %}>Manual</option>
-      <option value="online" {% if metode == 'online' %}selected{% endif %}>Online</option>
-    </select>
+  <div class="grid grid-cols-2 gap-3 mb-3">
+    <div>
+      <label class="form-label">Bulan</label>
+      <select name="bulan" class="form-select w-full" onchange="this.form.submit()">
+        {% for b in bulan_list %}
+        <option value="{{ b }}" {% if b == bulan %}selected{% endif %}>{{ b | label_bulan }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Metode</label>
+      <select name="metode" class="form-select w-full" onchange="this.form.submit()">
+        <option value="" {% if metode == '' %}selected{% endif %}>Semua</option>
+        <option value="manual" {% if metode == 'manual' %}selected{% endif %}>Manual</option>
+        <option value="online" {% if metode == 'online' %}selected{% endif %}>Online</option>
+      </select>
+    </div>
   </div>
 </form>
 
@@ -331,7 +388,40 @@
     <h3 class="text-sm font-semibold text-gray-700">Riwayat Pembayaran PPPoE — {{ bulan | label_bulan }}</h3>
     <p class="text-xs text-gray-400 mt-0.5">{{ riwayat | length }} transaksi</p>
   </div>
-  <div class="overflow-x-auto">
+
+  <!-- Mobile: cards -->
+  <div class="md:hidden divide-y divide-gray-50">
+    {% for r in riwayat %}
+    <div class="px-4 py-3">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-800 text-sm truncate">{{ r.nama_pelanggan or '—' }}</p>
+          <p class="text-xs text-gray-400 font-mono">{{ r.pppoe_username or '' }}{% if r.paket_nama %} · {{ r.paket_nama }}{% endif %}</p>
+          <p class="text-[10px] text-gray-400 mt-0.5">{{ r.paid_at | datetimeformat if r.paid_at else '—' }}</p>
+        </div>
+        <div class="flex-shrink-0 text-right">
+          <p class="font-bold text-gray-800">Rp {{ "{:,}".format(r.amount).replace(",",".") }}</p>
+          {% if r.metode_bayar and r.metode_bayar not in ('Manual', '') %}
+          <span class="badge text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">{{ r.metode_bayar }}</span>
+          {% else %}
+          <span class="badge text-xs bg-gray-100 text-gray-600 border border-gray-200">Manual</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-center text-gray-400 py-8 text-sm">Belum ada data pembayaran di bulan ini</p>
+    {% endfor %}
+    {% if riwayat %}
+    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-t-2 border-gray-200">
+      <p class="font-bold text-gray-900 text-sm">Total</p>
+      <p class="font-black text-blue-700">Rp {{ "{:,}".format(total_riwayat).replace(",",".") }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Desktop: full table -->
+  <div class="overflow-x-auto hidden md:block">
     <table class="w-full">
       <thead>
         <tr class="border-b border-gray-100">
