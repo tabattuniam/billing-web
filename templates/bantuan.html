@@ -944,9 +944,30 @@ Ani,ani456,pass456,2,6289876543210,Jl. Sudirman No.5,5</pre>
         <ol class="list-decimal ml-4 space-y-1">
           <li>Pelanggan buka link toko, masukkan nomor WA</li>
           <li>Pilih server dan paket voucher yang diinginkan</li>
-          <li>Bayar via QRIS (Tripay/Duitku) atau transfer</li>
-          <li>Sistem otomatis kirim kode voucher ke WA pelanggan setelah pembayaran terverifikasi</li>
+          <li>Bayar via QRIS (scan QR di halaman)</li>
+          <li>Kode voucher muncul otomatis di halaman setelah pembayaran & dikirim ke WA pelanggan</li>
         </ol>
+      </div>
+
+      <!-- Penjelasan Fee Gateway -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <p class="font-semibold text-amber-800 mb-2">💡 Mengapa ada biaya gateway di harga voucher?</p>
+        <p class="text-xs text-amber-700 mb-3">Setiap transaksi online dikenakan <strong>fee gateway pembayaran</strong> yang terdiri dari 2 komponen:</p>
+        <table class="w-full text-xs text-amber-800 mb-3">
+          <thead><tr class="border-b border-amber-200"><th class="text-left py-1">Komponen</th><th class="text-left py-1">QRIS</th><th class="text-left py-1">Dana / Shopee</th></tr></thead>
+          <tbody>
+            <tr><td class="py-1">Channel fee (metode bayar)</td><td>0,7%</td><td>1,5%</td></tr>
+            <tr><td class="py-1">Admin fee Mayar (platform)</td><td colspan="2">3% – 4% (tergantung paket)</td></tr>
+            <tr class="border-t border-amber-200 font-semibold"><td class="py-1">Total (QRIS)</td><td colspan="2">±3,7% – 4,7%</td></tr>
+          </tbody>
+        </table>
+        <p class="text-xs text-amber-700 mb-2">ISP dapat memilih <strong>siapa yang menanggung fee</strong> ini:</p>
+        <ul class="text-xs text-amber-700 space-y-1 ml-3">
+          <li>🙋 <strong>Mode Customer</strong> — pelanggan bayar harga + 100% fee gateway</li>
+          <li>🤝 <strong>Mode Split</strong> — fee dibagi 50/50 antara pelanggan dan ISP</li>
+          <li>🏢 <strong>Mode Tenant</strong> — ISP tanggung sendiri 100% fee gateway</li>
+        </ul>
+        <p class="text-xs text-amber-600 mt-2">Ubah mode di menu <strong>Profil → Mode Fee Gateway</strong>.</p>
       </div>
 
       <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">

@@ -37,9 +37,11 @@ MAYAR_KEY      = CFG.get("mayar", {}).get("api_key", "")
 MAYAR_WEBHOOK  = CFG.get("mayar", {}).get("webhook_token", "")
 MAYAR_BASE     = CFG.get("mayar", {}).get("base_url", "https://api.mayar.id")
 
-# Estimasi fee Mayar untuk channel QRIS (paling murah). Dipakai di Mode A
-# (pelanggan tanggung) untuk dihitung sebagai markup ke total bayar.
-MAYAR_FEE_PERCENT = 0.7  # 0.7%
+# Fee Mayar terdiri dari 2 komponen: admin fee (tergantung paket) + channel fee (QRIS 0.7%)
+# Total fee = MAYAR_ADMIN_FEE_PERCENT + MAYAR_CHANNEL_FEE_PERCENT
+MAYAR_ADMIN_FEE_PERCENT   = 0.0  # admin fee sesuai paket Mayar (dikonfigurasi di platform_config)
+MAYAR_CHANNEL_FEE_PERCENT = 0.7  # channel fee QRIS
+MAYAR_FEE_PERCENT = MAYAR_ADMIN_FEE_PERCENT + MAYAR_CHANNEL_FEE_PERCENT  # total default
 
 _mdt_cfg = CFG.get("midtrans", {})
 MIDTRANS_SERVER_KEY = _mdt_cfg.get("server_key", "")
@@ -1140,8 +1142,8 @@ async def update_fee_mode(request: Request, fee_mode: str = Form(...)):
     if user["role"] != "admin":
         return JSONResponse({"ok": False, "msg": "Hanya admin ISP yang bisa ubah"})
     fee_mode = (fee_mode or "").strip().lower()
-    if fee_mode not in ("customer", "tenant"):
-        return JSONResponse({"ok": False, "msg": "Mode tidak valid (customer atau tenant)"})
+    if fee_mode not in ("customer", "split", "tenant"):
+        return JSONResponse({"ok": False, "msg": "Mode tidak valid (customer, split, atau tenant)"})
     con = sqlite3.connect(DB_PATH)
     con.execute("UPDATE users SET fee_mode=? WHERE id=?", (fee_mode, user["id"]))
     con.commit(); con.close()
@@ -3716,6 +3718,37 @@ async def webhook_midtrans(request: Request):
     if transaction_status not in ("settlement", "capture") or fraud_status not in ("accept", ""):
         return JSONResponse({"ok": True, "msg": "Ignored"})
 
+    import logging as _mdt_log
+
+    # ── 1. Cek hotspot_orders (voucher Midtrans) ──────────────────────────────
+    voucher_order = db.get_order(order_id)
+    if voucher_order and voucher_order.get("status") == "pending":
+        voucher = db.confirm_order(order_id)
+        if voucher:
+            order_for_mt = db.get_order(order_id)
+            if order_for_mt:
+                paket_for_mt = db.get_paket_hotspot(order_for_mt["paket_id"])
+                try:
+                    _mt_push_voucher(order_for_mt["server_id"], voucher["kode"], paket_for_mt or {})
+                    db.set_voucher_mt_pushed(voucher["kode"], pushed=True)
+                except Exception as mt_err:
+                    _mdt_log.warning(f"[Midtrans webhook] MT push gagal ({mt_err}), retry otomatis: {voucher['kode']}")
+            _credit_voucher_saldo(order_id, sumber="midtrans")
+            if order_for_mt and order_for_mt.get("nomor_hp"):
+                paket  = db.get_paket_hotspot(order_for_mt["paket_id"])
+                isp    = db.get_user(order_for_mt["user_id"])
+                tok    = _isp_wa_token(order_for_mt["user_id"])
+                pesan  = _render_wa_template(
+                    order_for_mt["user_id"], "voucher_online",
+                    isp=isp["nama"] if isp else "",
+                    paket=paket["nama"] if paket else "",
+                    durasi=paket["durasi"] if paket else "",
+                    kode=voucher["kode"],
+                )
+                send_wa(order_for_mt["nomor_hp"], pesan, token=tok)
+        return JSONResponse({"ok": True})
+
+    # ── 2. Cek topup_orders (topup saldo agen) ────────────────────────────────
     con = db._conn()
     order = con.execute(
         "SELECT * FROM topup_orders WHERE ref=? AND tipe='midtrans' AND status='pending'", (order_id,)
@@ -4218,6 +4251,34 @@ async def tagihan_kirim_nota(request: Request, tid: int):
 
 # ── Mayar.id helpers ──────────────────────────────────────────────────────────
 
+def _midtrans_create_qris_voucher(order_id: str, amount: int, nama: str, nomor_hp: str) -> dict | None:
+    """Buat transaksi QRIS Midtrans untuk pembelian voucher. Return {qr_url} atau None."""
+    import base64 as _b64
+    if not MIDTRANS_SERVER_KEY:
+        return None
+    payload = {
+        "transaction_details": {"order_id": order_id, "gross_amount": amount},
+        "payment_type": "qris",
+        "qris": {"acquirer": "gopay"},
+        "customer_details": {"first_name": nama, "phone": nomor_hp, "email": "noreply@vpntunel.my.id"},
+    }
+    auth = _b64.b64encode(f"{MIDTRANS_SERVER_KEY}:".encode()).decode()
+    try:
+        resp = requests.post(
+            f"{MIDTRANS_BASE}/v2/charge",
+            json=payload,
+            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+            timeout=15,
+        )
+        data = resp.json()
+    except Exception:
+        return None
+    if data.get("status_code") not in ("201", "200"):
+        return None
+    qr_url = next((a["url"] for a in data.get("actions", []) if a.get("name") == "generate-qr-code"), None)
+    return {"qr_url": qr_url} if qr_url else None
+
+
 def _mayar_create_payment(order_id: str, amount: int, nama: str, nomor_hp: str,
                           description: str, redirect_url: str) -> dict | None:
     """Buat payment di Mayar.id. Return dict {link, id, transaction_id} atau None."""
@@ -4347,10 +4408,11 @@ def _platform_fee_amount(harga: int) -> int:
 
 
 def _mayar_fee_estimate(amount: int) -> int:
-    """Estimasi fee Mayar untuk amount — baca persentase dari platform_config."""
+    """Estimasi fee Mayar = admin_fee + channel_fee (QRIS 0.7%), dibaca dari platform_config."""
     try:
-        pct_str = db.get_platform_config("mayar_fee_percent")
-        pct = float(pct_str) if pct_str else MAYAR_FEE_PERCENT
+        admin_pct   = float(db.get_platform_config("mayar_admin_fee_percent")   or MAYAR_ADMIN_FEE_PERCENT)
+        channel_pct = float(db.get_platform_config("mayar_channel_fee_percent") or MAYAR_CHANNEL_FEE_PERCENT)
+        pct = admin_pct + channel_pct
     except Exception:
         pct = MAYAR_FEE_PERCENT
     return int(round(amount * pct / 100))
@@ -4359,18 +4421,25 @@ def _mayar_fee_estimate(amount: int) -> int:
 def _calc_order_amounts(harga: int, fee_mode: str) -> dict:
     """Hitung jumlah bayar pelanggan + saldo masuk tenant + platform fee.
 
-    Mode 'customer' (default): pelanggan tanggung fee Mayar.
-        pelanggan_bayar = harga + mayar_fee_estimate
-        saldo_tenant    = harga - platform_fee
-    Mode 'tenant'  : tenant tanggung fee Mayar.
+    Mode 'customer': pelanggan tanggung 100% fee Mayar.
+        pelanggan_bayar = harga + mf
+        saldo_tenant    = harga - pf
+    Mode 'split': fee dibagi rata 50/50 antara pelanggan dan tenant.
+        pelanggan_bayar = harga + mf/2
+        saldo_tenant    = harga - mf/2 - pf
+    Mode 'tenant': tenant tanggung 100% fee Mayar.
         pelanggan_bayar = harga
-        saldo_tenant    = harga - mayar_fee_estimate - platform_fee
+        saldo_tenant    = harga - mf - pf
     """
     pf = _platform_fee_amount(harga)
     mf = _mayar_fee_estimate(harga)
     if fee_mode == "tenant":
         pelanggan_bayar = harga
         saldo_tenant    = max(0, harga - mf - pf)
+    elif fee_mode == "split":
+        mf_half         = int(round(mf / 2))
+        pelanggan_bayar = harga + mf_half
+        saldo_tenant    = max(0, harga - mf_half - pf)
     else:  # customer (default)
         pelanggan_bayar = harga + mf
         saldo_tenant    = max(0, harga - pf)
@@ -4960,6 +5029,27 @@ async def teknisi_hotspot_enable(request: Request, slug: str, pid: str):
     return JSONResponse({"ok": True})
 
 
+@app.get("/beli/{slug}/cek-order/{order_id}", response_class=JSONResponse)
+async def toko_cek_order(request: Request, slug: str, order_id: str):
+    """Polling status order Midtrans — return {status, kode} setelah paid."""
+    isp = db.get_isp_by_slug(slug)
+    if not isp:
+        return JSONResponse({"status": "not_found"})
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    row = con.execute(
+        "SELECT o.status, v.kode FROM hotspot_orders o "
+        "LEFT JOIN voucher_hotspot v ON v.id=o.voucher_id "
+        "WHERE o.id=? AND o.user_id=?", (order_id, isp["id"])
+    ).fetchone()
+    con.close()
+    if not row:
+        return JSONResponse({"status": "not_found"})
+    if row["status"] == "paid":
+        return JSONResponse({"status": "paid", "kode": row["kode"] or ""})
+    return JSONResponse({"status": row["status"]})
+
+
 @app.get("/beli/{slug}/cari", response_class=JSONResponse)
 async def toko_cari_voucher(request: Request, slug: str, nomor: str = ""):
     """Cari voucher yang sudah dibeli berdasarkan nomor HP."""
@@ -5035,7 +5125,20 @@ async def toko_order(
     # Simpan order dengan amount = pelanggan_bayar (yang akan masuk ke Mayar)
     order_id = db.create_order(isp["id"], paket_id, server_id, nomor_hp, bayar)
 
-    # ── 1. Mayar.id (prioritas utama, paling murah & sudah live) ────────────
+    # ── 1. Midtrans QRIS (prioritas utama) ────────────────────────────────────
+    if MIDTRANS_SERVER_KEY:
+        nama_pembeli = f"{nomor_hp} ({isp['nama']})"
+        mdt_result = _midtrans_create_qris_voucher(order_id, bayar, nama_pembeli, nomor_hp)
+        if mdt_result and mdt_result.get("qr_url"):
+            db.set_order_snap_token(order_id, f"midtrans:{order_id}")
+            return JSONResponse({
+                "ok": True,
+                "qr_url": mdt_result["qr_url"],
+                "order_id": order_id,
+                "gateway": "midtrans",
+            })
+
+    # ── 2. Mayar.id (fallback) ─────────────────────────────────────────────────
     if MAYAR_KEY:
         nama_pembeli = f"{nomor_hp} ({isp['nama']})"
         mayar_result = _mayar_create_payment(
@@ -5044,8 +5147,6 @@ async def toko_order(
             f"https://{APP_DOMAIN}/beli/sukses/{order_id}"
         )
         if mayar_result and mayar_result.get("link"):
-            # Webhook Mayar kirim transactionId di data.id, list API pakai paymentLinkId.
-            # Simpan keduanya supaya webhook handler bisa match dengan reliable.
             tok = f"mayar:{mayar_result['id']}:{mayar_result.get('transaction_id','')}"
             db.set_order_snap_token(order_id, tok)
             return JSONResponse({
@@ -5086,7 +5187,7 @@ def _credit_pppoe_saldo(tagihan_id: int):
         _log2.warning(f"[saldo credit pppoe] error #{tagihan_id}: {e}")
 
 
-def _credit_voucher_saldo(order_id: str):
+def _credit_voucher_saldo(order_id: str, sumber: str = "midtrans"):
     """Credit saldo tenant dan fee platform setelah order voucher dikonfirmasi."""
     import logging as _log
     try:
@@ -5101,7 +5202,7 @@ def _credit_voucher_saldo(order_id: str):
         if saldo_in > 0:
             db.topup_saldo(order["user_id"], saldo_in,
                            f"Voucher #{order_id} ({fee_mode}-mode, fee Rp{amts['platform_fee']})",
-                           sumber="mayar")
+                           sumber=sumber)
             con = sqlite3.connect(DB_PATH)
             con.execute(
                 "INSERT OR IGNORE INTO transaksi (id,user_id,ref_id,ref_type,amount,keterangan,created_at) "

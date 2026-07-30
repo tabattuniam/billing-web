@@ -287,7 +287,7 @@
         <span class="text-sm font-medium text-blue-700" id="modal-harga-summary">Rp 0</span>
       </div>
       <div id="modal-breakdown" class="hidden border-t border-blue-200 mt-2 pt-2 text-xs text-blue-600 space-y-0.5">
-        <div class="flex justify-between"><span>Admin gateway (~{{ mayar_fee_percent }}%)</span><span id="bd-fee">Rp 0</span></div>
+        <div class="flex justify-between"><span>Biaya gateway (~{{ mayar_fee_percent }}%)</span><span id="bd-fee">Rp 0</span></div>
         <div class="flex justify-between font-bold text-blue-900 pt-1 border-t border-blue-100"><span>Total bayar</span><span id="bd-total">Rp 0</span></div>
       </div>
     </div>
@@ -313,6 +313,23 @@
         Bayar Sekarang
       </button>
     </form>
+  </div>
+</div>
+
+<!-- ── Modal QR Code Midtrans ── -->
+<div id="modal-qr" class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+  style="background:rgba(0,0,0,0.7);">
+  <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
+    <h3 class="font-bold text-gray-900 text-lg mb-1">Scan QR untuk Bayar</h3>
+    <p class="text-sm text-gray-500 mb-3">Scan dengan aplikasi e-wallet atau m-banking</p>
+    <div class="flex justify-center mb-3">
+      <img id="qr-img" src="" alt="QR Code" class="w-52 h-52 object-contain border rounded-xl"/>
+    </div>
+    <div id="qr-status" class="text-sm text-blue-600 mb-3 flex items-center justify-center gap-2">
+      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+      Menunggu pembayaran...
+    </div>
+    <p class="text-xs text-gray-400">QR berlaku 15 menit. Jangan tutup halaman ini.</p>
   </div>
 </div>
 
@@ -491,7 +508,14 @@ async function submitOrder(e) {
 
     tutupModal();
 
-    if (data.payment_url) {
+    if (data.gateway === 'midtrans' && data.qr_url) {
+      // Tampilkan modal QR dan mulai polling
+      document.getElementById('qr-img').src = data.qr_url;
+      const mq = document.getElementById('modal-qr');
+      mq.classList.remove('hidden');
+      mq.classList.add('flex');
+      _pollOrderStatus(data.order_id, '{{ slug }}');
+    } else if (data.payment_url) {
       window.location.href = data.payment_url;
     } else if (data.kode) {
       document.getElementById('kode-voucher-display').textContent = data.kode;
@@ -506,6 +530,29 @@ async function submitOrder(e) {
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg> Bayar Sekarang';
   }
+}
+
+// ── Polling Status Order Midtrans ─────────────────────────────────────────────
+let _pollTimer = null;
+function _pollOrderStatus(orderId, slug) {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/beli/${slug}/cek-order/${orderId}`);
+      const data = await res.json();
+      if (data.status === 'paid') {
+        clearInterval(_pollTimer);
+        // Tutup modal QR
+        const mq = document.getElementById('modal-qr');
+        mq.classList.replace('flex', 'hidden');
+        // Tampilkan voucher
+        document.getElementById('kode-voucher-display').textContent = data.kode || '—';
+        const mv = document.getElementById('modal-voucher');
+        mv.classList.remove('hidden');
+        mv.classList.add('flex');
+      }
+    } catch(e) { /* jaringan error, coba lagi nanti */ }
+  }, 3000);
 }
 
 // ── Cari Voucher ──────────────────────────────────────────────────────────────
