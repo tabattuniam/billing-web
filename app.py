@@ -37,6 +37,22 @@ MAYAR_KEY      = CFG.get("mayar", {}).get("api_key", "")
 MAYAR_WEBHOOK  = CFG.get("mayar", {}).get("webhook_token", "")
 MAYAR_BASE     = CFG.get("mayar", {}).get("base_url", "https://api.mayar.id")
 
+def _derive_mayar_checkout_base() -> str:
+    """Derive checkout base URL (https://<merchant>.myr.id) from MAYAR_KEY JWT."""
+    try:
+        import base64 as _b64, json as _js
+        payload = MAYAR_KEY.split('.')[1]
+        payload += '=' * (-len(payload) % 4)
+        d = _js.loads(_b64.b64decode(payload))
+        merchant = d.get('link', '')
+        if merchant:
+            return f"https://{merchant}.myr.id"
+    except Exception:
+        pass
+    return ""
+
+MAYAR_CHECKOUT_BASE = _derive_mayar_checkout_base()
+
 # Fee Mayar terdiri dari 2 komponen: admin fee (tergantung paket) + channel fee (QRIS 0.7%)
 # Total fee = MAYAR_ADMIN_FEE_PERCENT + MAYAR_CHANNEL_FEE_PERCENT
 MAYAR_ADMIN_FEE_PERCENT   = 0.0  # admin fee sesuai paket Mayar (dikonfigurasi di platform_config)
@@ -62,7 +78,8 @@ def _restore_wa_webhooks():
             "JOIN addons a ON a.id=ta.addon_id "
             "JOIN users u ON u.id=ta.user_id "
             "JOIN wa_gateway wg ON wg.user_id=u.id "
-            "WHERE a.code='ai_chat' AND ta.status='active' AND u.status='aktif'"
+            "WHERE a.code='ai_chat' AND ta.status='active' AND u.status='aktif' "
+            "AND (ta.expires_at IS NULL OR ta.expires_at >= date('now'))"
         ).fetchall()
         con.close()
         for row in rows:
@@ -368,8 +385,10 @@ def _wa_session_status(token: str) -> dict:
 
 
 def _wa_is_logged_in(status: dict) -> bool:
-    """Cek apakah WA benar-benar login (bukan sekadar session running)."""
-    return bool(status.get("loggedIn") and status.get("jid"))
+    """Cek apakah WA benar-benar login (bukan sekadar session running).
+    jid kadang kosong meski sudah terhubung — cukup cek loggedIn+connected.
+    """
+    return bool(status.get("loggedIn") and status.get("connected"))
 
 
 def _wa_get_qr(token: str) -> str:
@@ -597,6 +616,7 @@ def _run_auto_reminder():
                 keterangan=keterangan, emoji=emoji, isp=isp_nama,
             )
             send_wa(t["telepon"], pesan, token=tok, user_id=user_id, tipe="reminder")
+            time.sleep(4)
 
 
 scheduler.add_job(_run_auto_reminder, CronTrigger(hour=8, minute=0, timezone="Asia/Jakarta"),
@@ -689,6 +709,7 @@ def _run_auto_suspend():
                         nama=r["nama_pelanggan"], isp=isp_nama),
                     token=tok, user_id=r["user_id"], tipe="suspend"
                 )
+                time.sleep(4)
         except Exception as e:
             _log.error(f"[auto_suspend] error username={r.get('username','?')}: {e}")
 
@@ -741,6 +762,7 @@ def _run_auto_saas_billing():
                     f"Total: *Rp {total:,}*\n\n"
                     f"Silakan bayar via menu Tagihan SaaS sebelum tanggal 10.",
                     token=tok)
+                time.sleep(4)
         except Exception:
             pass
     con.commit()
@@ -778,6 +800,7 @@ def _run_auto_saas_suspend():
                     f"sebesar *Rp {r['total']:,}* belum dilunasi.\n\n"
                     f"Silakan lakukan pembayaran untuk mengaktifkan kembali akun.",
                     token=tok)
+                time.sleep(4)
         except Exception:
             pass
     con.commit()
@@ -877,11 +900,19 @@ async def _sync_voucher_status():
             _log.warning(f"[voucher sync] server {sid} tidak bisa diakses: {e}")
             continue
 
+        now_ts = int(time.time())
         for v in vlist:
             kode = v["kode"]
             try:
                 if kode not in mt_users:
-                    # Tidak ada di MT → sudah habis/expired
+                    if v["status"] == "terjual":
+                        # Beri grace period 30 menit sebelum anggap expired —
+                        # bisa jadi MT push baru saja dilakukan / retry belum jalan
+                        created_at = v.get("created_at") or 0
+                        if (now_ts - created_at) < 1800:
+                            _log.info(f"[voucher sync] {kode} belum ada di MT tapi masih dalam grace period, skip")
+                            continue
+                    # Tidak ada di MT dan sudah melewati grace period → expired
                     db.mark_voucher_expired(kode)
                     _log.warning(f"[voucher sync] {kode} tidak ada di MT → expired")
                 else:
@@ -896,6 +927,7 @@ async def _sync_voucher_status():
 
 scheduler.add_job(_sync_voucher_status, "interval", minutes=10,
                   id="voucher_sync_status", replace_existing=True)
+
 
 
 # ── MikroTik helper ───────────────────────────────────────────────────────────
@@ -1740,11 +1772,30 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
     now_date = _dt.date.today().strftime("%Y-%m-%d")
     con2 = sqlite3.connect(DB_PATH)
     con2.row_factory = sqlite3.Row
-    isp_row = con2.execute("SELECT auto_reminder FROM users WHERE id=?", (iid,)).fetchone()
+    isp_row = con2.execute("SELECT auto_reminder, grace_period FROM users WHERE id=?", (iid,)).fetchone()
     con2.close()
-    isp_auto_reminder = (dict(isp_row).get("auto_reminder") if isp_row else 1)
-    if isp_auto_reminder is None:
-        isp_auto_reminder = 1
+    isp_row_dict = dict(isp_row) if isp_row else {}
+    isp_auto_reminder = isp_row_dict.get("auto_reminder") or 1
+    isp_grace = isp_row_dict.get("grace_period") or 10
+
+    # Hitung jatuh tempo aktual bulan ini per pelanggan
+    import calendar as _cal
+    _today = _dt.date.today()
+    _yr, _mo = int(bulan_ini[:4]), int(bulan_ini[5:7])
+    jatuh_tempo_map = {}
+    for _u in users:
+        try:
+            _tgl = min(max(1, int(_u.get("tgl_bayar") or 1)), 28)
+            _grace = _u.get("grace_period") if _u.get("grace_period") is not None else isp_grace
+            _max_day = _cal.monthrange(_yr, _mo)[1]
+            _tgl_actual = min(_tgl, _max_day)
+            _tgl_date = _dt.date(_yr, _mo, _tgl_actual)
+            _jt_date = _tgl_date + _dt.timedelta(days=int(_grace))
+            _days = (_jt_date - _today).days
+            jatuh_tempo_map[_u["id"]] = {"date": _jt_date, "days": _days,
+                                          "label": _jt_date.strftime("%-d %b %Y")}
+        except Exception:
+            jatuh_tempo_map[_u["id"]] = None
 
     tab_counts = {"semua": count_all, "aktif": count_aktif, "online": count_online,
                   "suspended": count_sus, "nonaktif": count_non}
@@ -1774,6 +1825,7 @@ async def pppoe_users(request: Request, server_id: str = "", status: str = "", q
         odp_list=odp_list,
         online_set=online_set, overdue_ids=overdue_ids,
         tagihan_map=tagihan_map, tagihan_amount_map=tagihan_amount_map, bulan_ini=bulan_ini,
+        jatuh_tempo_map=jatuh_tempo_map,
         odp_filter_list=odp_filter_list,
         cache_age=cache_age, push_msg=push_msg,
         now_date=now_date, isp_auto_reminder=isp_auto_reminder,
@@ -2705,6 +2757,8 @@ async def kirim_reminder_pelanggan(request: Request, pid: int):
     from datetime import date
     bulan = date.today().strftime("%Y-%m")
     label = _label_bulan(bulan)
+    # Generate tagihan dulu jika belum ada (misal pelanggan baru)
+    db.generate_tagihan(iid, bulan, tgl_bayar=pu.get("tgl_bayar") or 1)
     tagihan_list = db.list_tagihan(iid, bulan)
     tagihan = next((t for t in tagihan_list if t["pppoe_id"] == pid and t["status"] != "paid"), None)
     if tagihan:
@@ -2720,7 +2774,8 @@ async def kirim_reminder_pelanggan(request: Request, pid: int):
     else:
         pesan = _render_wa_template(iid, "penagihan",
             nama=pu["nama_pelanggan"], nominal="", bulan=label,
-            paket="", tgl_bayar=pu.get("tgl_bayar") or 1, isp=user["nama"])
+            paket=pu.get("paket_nama") or "", tgl_bayar=pu.get("tgl_bayar") or 1,
+            isp=user["nama"], link="")
     ok, msg = send_wa(pu["telepon"], pesan, token=_isp_wa_token(iid),
                       user_id=iid, tipe="link_bayar")
     return JSONResponse({"ok": ok, "msg": msg})
@@ -2779,10 +2834,11 @@ async def tagihan_reminder(request: Request, bulan: str = Form("")):
             continue
         label = _label_bulan(bulan)
         nominal = f"Rp {t['amount']:,}".replace(",", ".")
+        link = f"https://{APP_DOMAIN}/bayar/tagihan/{t['id']}"
         pesan = _render_wa_template(user["id"], "penagihan",
             nama=t["nama_pelanggan"], nominal=nominal, bulan=label,
             paket=t.get("paket_nama") or "", tgl_bayar=t.get("tgl_bayar") or 1,
-            isp=user["nama"])
+            isp=user["nama"], link=link)
         send_wa(t["telepon"], pesan, token=_isp_wa_token(user["id"]),
                 user_id=user["id"], tipe="reminder_manual")
         terkirim += 1
@@ -3373,7 +3429,7 @@ async def teknisi_hapus(request: Request, uid: str):
 # ── Saldo ─────────────────────────────────────────────────────────────────────
 
 @app.get("/saldo", response_class=HTMLResponse)
-async def saldo_page(request: Request, bulan: str = "", tab: str = "mutasi", tipe: str = ""):
+async def saldo_page(request: Request, bulan: str = "", tab: str = "mutasi", tipe: str = "", sumber: str = ""):
     from datetime import date, datetime
     user = require_login(request)
     iid  = _isp_id(user)
@@ -3388,11 +3444,64 @@ async def saldo_page(request: Request, bulan: str = "", tab: str = "mutasi", tip
 
     # ── Tab 1: Mutasi Saldo ──────────────────────────────────────────────────
     logs_all = db.list_saldo_log(user["id"])
-    logs = [l for l in logs_all if _in_bulan(l["created_at"], bulan)]
-    total_kredit = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit")
-    total_debit  = sum(l["jumlah"] for l in logs if l["tipe"] == "debit")
-    kredit_mayar = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "mayar")
-    kredit_qris  = sum(l["jumlah"] for l in logs if l["tipe"] == "kredit" and l.get("sumber") == "qris_statis")
+    logs_bulan = [l for l in logs_all if _in_bulan(l["created_at"], bulan)]
+    # Filter per sumber jika dipilih
+    logs = [l for l in logs_bulan if not sumber or l.get("sumber") == sumber] if sumber else logs_bulan
+    total_kredit = sum(l["jumlah"] for l in logs_bulan if l["tipe"] == "kredit")
+    total_debit  = sum(l["jumlah"] for l in logs_bulan if l["tipe"] == "debit")
+    kredit_mayar = sum(l["jumlah"] for l in logs_bulan if l["tipe"] == "kredit" and l.get("sumber") == "mayar")
+    kredit_qris  = sum(l["jumlah"] for l in logs_bulan if l["tipe"] == "kredit" and l.get("sumber") == "qris_statis")
+
+    # Hitung saldo awal & akhir bulan
+    _yr, _mo = int(bulan[:4]), int(bulan[5:7])
+    _next_yr, _next_mo = (_yr+1, 1) if _mo == 12 else (_yr, _mo+1)
+    _bulan_end_ts = int(datetime(_next_yr, _next_mo, 1).timestamp())
+    _after = [l for l in logs_all if int(l.get("created_at") or 0) >= _bulan_end_ts]
+    _after_kredit = sum(l["jumlah"] for l in _after if l["tipe"] == "kredit")
+    _after_debit  = sum(l["jumlah"] for l in _after if l["tipe"] == "debit")
+    saldo_akhir_bulan = user["saldo"] - _after_kredit + _after_debit
+    saldo_awal_bulan  = saldo_akhir_bulan - total_kredit + total_debit
+
+    # Running balance per baris (dari terbaru ke terlama)
+    _logs_sorted = sorted(logs, key=lambda l: int(l.get("created_at") or 0), reverse=True)
+    _running = saldo_akhir_bulan
+    for _l in _logs_sorted:
+        _l["saldo_setelah"] = _running
+        _running = _running - _l["jumlah"] if _l["tipe"] == "kredit" else _running + _l["jumlah"]
+
+    # Breakdown per sumber
+    _SUMBER_LABEL = {
+        "mayar":       ("💳", "Voucher Online",  "blue"),
+        "midtrans":    ("💰", "Topup Midtrans",  "indigo"),
+        "qris_statis": ("🏦", "Topup QRIS",      "emerald"),
+        "saas":        ("🏷️", "Fee SaaS",         "violet"),
+        "platform":    ("🔧", "Biaya Platform",  "orange"),
+        "manual":      ("✍️", "Topup Manual",    "teal"),
+        "addon":       ("🛒", "Biaya Add-On",    "purple"),
+        "koreksi":     ("⚙️", "Koreksi",          "gray"),
+        "mayar_fee":   ("📊", "Fee Mayar",        "pink"),
+    }
+    _kredit_sumber, _debit_sumber = {}, {}
+    for _l in logs_bulan:
+        _s = _l.get("sumber") or "lainnya"
+        if _l["tipe"] == "kredit":
+            _kredit_sumber[_s] = _kredit_sumber.get(_s, 0) + _l["jumlah"]
+        else:
+            _debit_sumber[_s] = _debit_sumber.get(_s, 0) + _l["jumlah"]
+    breakdown_kredit = [
+        {"sumber": s, "jumlah": v, "label": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[1],
+         "icon": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[0],
+         "color": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[2]}
+        for s, v in sorted(_kredit_sumber.items(), key=lambda x: -x[1])
+    ]
+    breakdown_debit = [
+        {"sumber": s, "jumlah": v, "label": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[1],
+         "icon": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[0],
+         "color": _SUMBER_LABEL.get(s, ("💼", s, "gray"))[2]}
+        for s, v in sorted(_debit_sumber.items(), key=lambda x: -x[1])
+    ]
+    # Daftar sumber unik bulan ini untuk dropdown filter
+    sumber_list = sorted({l.get("sumber") or "lainnya" for l in logs_bulan})
 
     # ── Tab 2: Riwayat Transaksi ─────────────────────────────────────────────
     con = db._conn()
@@ -3471,8 +3580,12 @@ async def saldo_page(request: Request, bulan: str = "", tab: str = "mutasi", tip
     platform_qris = db.get_platform_config("qris_image")
 
     return tpl.TemplateResponse(request, "saldo.html", _ctx(
-        request, user=user, logs=logs, txs=txs, saved_rek=saved_rek,
-        sel_bulan=bulan, sel_tab=tab, sel_tipe=tipe,
+        request, user=user, logs=_logs_sorted, txs=txs, saved_rek=saved_rek,
+        sel_bulan=bulan, sel_tab=tab, sel_tipe=tipe, sel_sumber=sumber,
+        sumber_list=sumber_list,
+        saldo_awal_bulan=saldo_awal_bulan, saldo_akhir_bulan=saldo_akhir_bulan,
+        breakdown_kredit=breakdown_kredit, breakdown_debit=breakdown_debit,
+        SUMBER_LABEL=_SUMBER_LABEL,
         stats={"kredit": total_kredit, "debit": total_debit,
                "kredit_mayar": kredit_mayar, "kredit_qris": kredit_qris,
                "total_log": len(logs), "tarik_pending": tarik_pending},
@@ -4352,7 +4465,7 @@ def _mayar_verify_payment(pay_link_id: str, tx_id: str) -> bool:
                 d = r.json().get("data") or {}
                 status = (d.get("status") or "").lower()
                 _log.warning(f"[Mayar verify] link={pay_link_id} tx={tx_id} status={status}")
-                return status in ("success", "paid", "closed")
+                return status in ("success", "paid")
         # Fallback: cari di list semua payment
         r = requests.get(
             f"{MAYAR_BASE}/hl/v1/payment",
@@ -4364,7 +4477,7 @@ def _mayar_verify_payment(pay_link_id: str, tx_id: str) -> bool:
                 if item.get("id") == pay_link_id or item.get("transactionId") == tx_id:
                     status = (item.get("status") or "").lower()
                     _log.warning(f"[Mayar verify-list] link={pay_link_id} tx={tx_id} status={status}")
-                    return status in ("success", "paid", "closed")
+                    return status in ("success", "paid")
         _log.warning(f"[Mayar verify] tidak ditemukan di API, link={pay_link_id} tx={tx_id}")
         return False
     except Exception as e:
@@ -5122,11 +5235,63 @@ async def toko_order(
     amounts  = _calc_order_amounts(int(paket["harga"]), fee_mode)
     bayar    = amounts["pelanggan_bayar"]
 
+    mdt_aktif   = (db.get_platform_config("gateway_midtrans_aktif") or "0") == "1"
+    mayar_aktif = (db.get_platform_config("gateway_mayar_aktif") or "1") != "0"
+
+    # Cek order pending yang sudah punya link Mayar (dalam 10 menit terakhir) untuk
+    # menghindari duplicate request 429 dari Mayar ketika pelanggan klik berkali-kali
+    if mayar_aktif and MAYAR_KEY and not (MIDTRANS_SERVER_KEY and mdt_aktif):
+        cutoff = int(time.time()) - 600
+        con_chk = sqlite3.connect(DB_PATH)
+        con_chk.row_factory = sqlite3.Row
+        existing = con_chk.execute(
+            "SELECT id, snap_token FROM hotspot_orders "
+            "WHERE nomor_hp=? AND paket_id=? AND server_id=? AND status='pending' "
+            "AND snap_token LIKE 'mayar:%' AND created_at >= ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (nomor_hp, paket_id, server_id, cutoff)
+        ).fetchone()
+        con_chk.close()
+        if existing:
+            parts = existing["snap_token"].split(":")
+            pay_link_id = parts[1] if len(parts) > 1 else ""
+            if pay_link_id:
+                import logging as _log_dup
+                try:
+                    r_chk = requests.get(
+                        f"{MAYAR_BASE}/hl/v1/payment/{pay_link_id}",
+                        headers={"Authorization": f"Bearer {MAYAR_KEY}"},
+                        timeout=8,
+                    )
+                    rjson = r_chk.json() if r_chk.status_code == 200 else {}
+                    d_chk = rjson.get("data") or {}
+                    # Mayar GET API: gunakan linkUrl/linkPayment (full URL) jika ada,
+                    # fallback ke link (slug) lalu reconstruct
+                    link_url = (
+                        d_chk.get("linkUrl") or
+                        d_chk.get("linkPayment") or
+                        d_chk.get("link")
+                    )
+                    if link_url and not link_url.startswith("http") and MAYAR_CHECKOUT_BASE:
+                        link_url = f"{MAYAR_CHECKOUT_BASE}/pl/{link_url.lstrip('/')}"
+                    _log_dup.warning(f"[order reuse link] final={link_url!r}")
+                except Exception as _ex_chk:
+                    _log_dup.warning(f"[order reuse chk error] {_ex_chk}")
+                    link_url = None
+                if link_url:
+                    _log_dup.warning(f"[order reuse] nomor={nomor_hp} paket={paket_id} reuse order={existing['id']}")
+                    return JSONResponse({
+                        "ok": True,
+                        "payment_url": link_url,
+                        "order_id": existing["id"],
+                        "gateway": "mayar",
+                    })
+
     # Simpan order dengan amount = pelanggan_bayar (yang akan masuk ke Mayar)
     order_id = db.create_order(isp["id"], paket_id, server_id, nomor_hp, bayar)
 
     # ── 1. Midtrans QRIS (prioritas utama) ────────────────────────────────────
-    if MIDTRANS_SERVER_KEY:
+    if MIDTRANS_SERVER_KEY and mdt_aktif:
         nama_pembeli = f"{nomor_hp} ({isp['nama']})"
         mdt_result = _midtrans_create_qris_voucher(order_id, bayar, nama_pembeli, nomor_hp)
         if mdt_result and mdt_result.get("qr_url"):
@@ -5139,7 +5304,7 @@ async def toko_order(
             })
 
     # ── 2. Mayar.id (fallback) ─────────────────────────────────────────────────
-    if MAYAR_KEY:
+    if MAYAR_KEY and mayar_aktif:
         nama_pembeli = f"{nomor_hp} ({isp['nama']})"
         mayar_result = _mayar_create_payment(
             order_id, bayar, nama_pembeli, nomor_hp,
@@ -5224,15 +5389,19 @@ def _credit_voucher_saldo(order_id: str, sumber: str = "midtrans"):
 
 
 def _mt_push_voucher(server_id: str, kode: str, paket: dict):
-    """Push voucher baru ke MikroTik hotspot user setelah pembayaran."""
+    """Push voucher baru ke MikroTik hotspot user setelah pembayaran.
+    Raises RuntimeError jika push gagal agar caller tidak set mt_pushed=1.
+    """
     server = db.get_server(server_id)
     if not server:
-        return
+        raise RuntimeError(f"Server {server_id} tidak ditemukan")
     mt = MikroTik(server["vpn_ip"], server["api_port"], server["api_user"], server["api_password"])
     profile      = paket.get("kecepatan") or "default"
     comment      = paket.get("nama", "")
     limit_uptime = paket.get("durasi") or ""
-    mt.add_hotspot_user(kode, kode, profile=profile, comment=comment, limit_uptime=limit_uptime)
+    ok = mt.add_hotspot_user(kode, kode, profile=profile, comment=comment, limit_uptime=limit_uptime)
+    if not ok:
+        raise RuntimeError(f"add_hotspot_user gagal untuk {kode}")
 
 
 
@@ -5384,7 +5553,52 @@ async def toko_mayar_notif(request: Request):
     order = order_for_mt  # sudah di-fetch sebelumnya
 
     # Credit saldo tenant + fee platform
-    _credit_voucher_saldo(order_id)
+    _credit_voucher_saldo(order_id, sumber="mayar")
+
+    # Catat ke kas_log + auto-update mayar_saldo_manual
+    if order and order.get("amount"):
+        _con_kas = None
+        try:
+            import time as _time
+            _amt     = int(order["amount"])
+            _mdr_pct = float(db.get_platform_config("mayar_mdr_persen") or "3.7")
+            _net     = int(_amt * (1 - _mdr_pct / 100))
+            _fee     = _amt - _net
+            _isp     = db.get_user(order["user_id"])
+            _isp_nm  = _isp["nama"] if _isp else order["user_id"]
+            _ket     = f"Voucher {order_id[-10:]} ({_isp_nm})"
+            _now_ts  = int(_time.time())
+            _tgl_str = _time.strftime("%d %b %Y %H:%M")
+            _con_kas = sqlite3.connect(DB_PATH, timeout=15)
+            _cur_saldo = _con_kas.execute(
+                "SELECT value FROM platform_config WHERE key='mayar_saldo_manual'"
+            ).fetchone()
+            _new_saldo = (int(_cur_saldo[0]) if _cur_saldo else 0) + _net
+            _con_kas.execute(
+                "INSERT OR REPLACE INTO platform_config (key,value) VALUES ('mayar_saldo_manual',?)",
+                (str(_new_saldo),)
+            )
+            _con_kas.execute(
+                "INSERT OR REPLACE INTO platform_config (key,value) VALUES ('mayar_saldo_updated_at',?)",
+                (_tgl_str,)
+            )
+            _con_kas.execute(
+                "INSERT INTO kas_log (rekening,tipe,jumlah,saldo_after,keterangan,ref_id,created_at) VALUES (?,?,?,?,?,?,?)",
+                ("mayar", "masuk", _net, _new_saldo, _ket, order_id, _now_ts)
+            )
+            if _fee > 0:
+                _con_kas.execute(
+                    "INSERT INTO kas_log (rekening,tipe,jumlah,saldo_after,keterangan,ref_id,created_at) VALUES (?,?,?,?,?,?,?)",
+                    ("mayar", "biaya", _fee, _new_saldo, f"Fee {_mdr_pct}% Mayar: {order_id[-10:]}", order_id, _now_ts + 1)
+                )
+            _con_kas.commit()
+            _logging.warning(f"[Mayar webhook] kas_log OK: net={_net} fee={_fee} saldo_baru={_new_saldo}")
+        except Exception as _e:
+            _logging.warning(f"[Mayar webhook] kas_log error: {_e}")
+        finally:
+            if _con_kas:
+                _con_kas.close()
+
     if order and order.get("nomor_hp"):
         paket  = db.get_paket_hotspot(order["paket_id"])
         isp    = db.get_user(order["user_id"])
@@ -5634,7 +5848,8 @@ async def wa_chatbot_webhook(request: Request, token: str):
     addon_aktif = con2.execute(
         "SELECT ta.id FROM tenant_addons ta "
         "JOIN addons a ON a.id=ta.addon_id "
-        "WHERE ta.user_id=? AND a.code='ai_chat' AND ta.status='active'", (user_id,)
+        "WHERE ta.user_id=? AND a.code='ai_chat' AND ta.status='active' "
+        "AND (ta.expires_at IS NULL OR ta.expires_at >= date('now'))", (user_id,)
     ).fetchone()
     con2.close()
     if not addon_aktif:
@@ -5709,10 +5924,11 @@ async def addons_page(request: Request, ok: str = "", err: str = ""):
     user = require_login(request)
     con = _addon_db()
     addons = [dict(r) for r in con.execute(
-        "SELECT * FROM addons WHERE is_active=1 AND code IN ('ai_chat','laporan_pro','monitor_online') ORDER BY harga"
+        "SELECT * FROM addons WHERE is_active=1 AND code NOT IN ('ai_chat','monitor_online') ORDER BY harga"
     ).fetchall()]
     aktif = {r["addon_id"]: dict(r) for r in con.execute(
-        "SELECT * FROM tenant_addons WHERE user_id=? AND status='active'", (user["id"],)
+        "SELECT * FROM tenant_addons WHERE user_id=? AND status='active' "
+        "AND (expires_at IS NULL OR expires_at >= date('now'))", (user["id"],)
     ).fetchall()}
     vpn_akun = con.execute("SELECT * FROM vpn_users WHERE user_id=?", (user["id"],)).fetchone()
     vpn_akun = dict(vpn_akun) if vpn_akun else None
@@ -5726,10 +5942,17 @@ async def addons_page(request: Request, ok: str = "", err: str = ""):
     _con_mo = _addon_db()
     _mo_row = _con_mo.execute(
         "SELECT ta.status FROM tenant_addons ta JOIN addons a ON a.id=ta.addon_id "
-        "WHERE ta.user_id=? AND a.code='monitor_online' AND ta.status='active'", (user["id"],)
+        "WHERE ta.user_id=? AND a.code='monitor_online' AND ta.status='active' "
+        "AND (ta.expires_at IS NULL OR ta.expires_at >= date('now'))", (user["id"],)
+    ).fetchone()
+    _ai_row = _con_mo.execute(
+        "SELECT ta.id, ta.expires_at FROM tenant_addons ta JOIN addons a ON a.id=ta.addon_id "
+        "WHERE ta.user_id=? AND a.code='ai_chat' AND ta.status='active' "
+        "AND (ta.expires_at IS NULL OR ta.expires_at >= date('now'))", (user["id"],)
     ).fetchone()
     _con_mo.close()
     monitor_online_aktif = bool(_mo_row)
+    ai_chat_aktif = bool(_ai_row)
     return tpl.TemplateResponse(request, "addons.html", {
         "request": request, "active": "addons", "user": user,
         "addons": addons, "aktif": aktif, "vpn_akun": vpn_akun,
@@ -5737,6 +5960,7 @@ async def addons_page(request: Request, ok: str = "", err: str = ""):
         "monitor_aktif": monitor_aktif, "monitor_addon": monitor_addon,
         "monitor_aktif_sidebar": monitor_aktif,
         "monitor_online_aktif": monitor_online_aktif,
+        "ai_chat_aktif": ai_chat_aktif,
         "ok": ok, "err": err,
         **{k: v for k, v in {"app_name": APP_NAME, "app_domain": APP_DOMAIN, "main_domain": MAIN_DOMAIN}.items()},
     })

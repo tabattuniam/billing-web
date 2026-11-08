@@ -125,6 +125,49 @@
   </div>
 </div>
 
+<!-- ── Card: AI Chat Assistant ── -->
+{% set ac_aktif = ai_chat_aktif %}
+<div style="border-radius:16px;border:2px solid {% if ac_aktif %}#7c3aed{% else %}#e2e8f0{% endif %};background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:{% if ac_aktif %}0 4px 20px rgba(124,58,237,.15){% else %}0 1px 4px rgba(0,0,0,.04){% endif %};">
+  <div style="background:linear-gradient(135deg,#5b21b6,#7c3aed);padding:20px 20px 16px;color:#fff;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-15px;right:-15px;width:80px;height:80px;background:rgba(255,255,255,.1);border-radius:50%;"></div>
+    <div style="font-size:32px;margin-bottom:8px;">🤖</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:3px;">AI Chat Assistant</div>
+    <div style="font-size:11px;opacity:.85;line-height:1.5;">Balas otomatis chat pelanggan via WhatsApp. Cek tagihan, link bayar, dan status koneksi tanpa intervensi manual.</div>
+    {% if ac_aktif %}
+    <div style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.25);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.5px;">● AKTIF</div>
+    {% endif %}
+  </div>
+  <div style="padding:16px;flex:1;display:flex;flex-direction:column;gap:12px;">
+    {% if ac_aktif %}
+    <div style="display:flex;flex-direction:column;gap:6px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px;font-size:12px;">
+      {% for f in ['Balas otomatis pesan pelanggan WA','Cek tagihan & status koneksi via chat','Kirim link pembayaran otomatis','Hanya merespons pelanggan terdaftar'] %}
+      <div style="display:flex;align-items:center;gap:6px;color:#4c1d95;"><span style="color:#7c3aed;font-weight:700;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#64748b;">
+      {% for f in ['Balas otomatis pesan pelanggan WA','Cek tagihan & status koneksi via chat','Kirim link pembayaran otomatis','Hanya merespons pelanggan terdaftar'] %}
+      <div style="display:flex;align-items:center;gap:6px;"><span style="color:#cbd5e1;">✓</span> {{ f }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+      <div>
+        <span style="font-size:20px;font-weight:800;color:#1e293b;">Rp 50.000</span>
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">/bulan</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;font-weight:600;color:{% if ac_aktif %}#7c3aed{% else %}#94a3b8{% endif %};">{{ '● Aktif' if ac_aktif else 'OFF' }}</span>
+        <button onclick="toggleAiChat(this)" id="btn-ac-toggle"
+          style="position:relative;width:52px;height:28px;border-radius:14px;border:none;background:{% if ac_aktif %}#7c3aed{% else %}#d1d5db{% endif %};cursor:pointer;transition:background .2s;"
+          title="{{ 'Nonaktifkan' if ac_aktif else 'Aktifkan' }}">
+          <span style="position:absolute;top:4px;{% if ac_aktif %}right:4px{% else %}left:4px{% endif %};width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s,right .2s;"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Card: Monitor Online PPPoE ── -->
 {% set mo_aktif = monitor_online_aktif %}
 <div style="border-radius:16px;border:2px solid {% if mo_aktif %}#10b981{% else %}#e2e8f0{% endif %};background:#fff;overflow:hidden;display:flex;flex-direction:column;box-shadow:{% if mo_aktif %}0 4px 20px rgba(16,185,129,.15){% else %}0 1px 4px rgba(0,0,0,.04){% endif %};">
@@ -234,6 +277,34 @@ async function toggleMonitorBot(btn) {
       return;
     }
     const r = await fetch('/addon/monitor/nonaktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  }
+}
+
+async function toggleAiChat(btn) {
+  btn.disabled = true;
+  const isAktif = btn.style.background.includes('7c3aed');
+  if (!isAktif) {
+    const r = await fetch('/addons/3/aktifkan', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      location.href = '/addons?ok=' + encodeURIComponent(d.msg);
+    } else {
+      alert('❌ ' + d.msg);
+      btn.disabled = false;
+    }
+  } else {
+    if (!confirm('Nonaktifkan AI Chat Assistant? Bot tidak akan membalas pesan pelanggan.')) {
+      btn.disabled = false;
+      return;
+    }
+    const r = await fetch('/addons/3/nonaktifkan', { method: 'POST' });
     const d = await r.json();
     if (d.ok) {
       location.href = '/addons?ok=' + encodeURIComponent(d.msg);

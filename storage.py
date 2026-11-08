@@ -15,7 +15,7 @@ class Storage:
         self._init()
 
     def _conn(self):
-        con = sqlite3.connect(self.db_path)
+        con = sqlite3.connect(self.db_path, timeout=10)
         con.row_factory = sqlite3.Row
         return con
 
@@ -1336,7 +1336,7 @@ class Storage:
         """Semua voucher aktif (terjual/dipakai, mt_pushed=1) yang perlu disync dengan MikroTik."""
         con = self._conn()
         rows = con.execute("""
-            SELECT v.id, v.kode, v.server_id, v.user_id, v.status,
+            SELECT v.id, v.kode, v.server_id, v.user_id, v.status, v.created_at,
                    s.vpn_ip, s.api_port, s.api_user, s.api_password
             FROM voucher_hotspot v
             JOIN mikrotik_servers s ON s.id = v.server_id

@@ -6,7 +6,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">WA Gateway</h1>
-    <p class="page-sub">Kirim notifikasi & reminder WhatsApp ke pelanggan via Fonnte atau Wablas</p>
+    <p class="page-sub">Kirim notifikasi & reminder WhatsApp ke pelanggan via Wuzapi, Fonnte, atau Wablas</p>
   </div>
 </div>
 
@@ -21,11 +21,22 @@
 
       <div class="mb-4">
         <label class="block text-xs font-semibold text-gray-600 mb-2">Provider WhatsApp Gateway</label>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
+          <label class="cursor-pointer relative">
+            <input type="radio" name="wa_provider" value="wuzapi" class="hidden peer"
+              {% if not gw or gw.wa_provider in ('wuzapi','') or not gw.wa_provider %}checked{% endif %}>
+            <div class="border-2 rounded-xl p-4 text-center transition-all h-full
+              peer-checked:border-violet-500 peer-checked:bg-violet-50 border-gray-200">
+              <div class="text-xl mb-1">🖥️</div>
+              <div class="font-bold text-gray-900 text-sm">Wuzapi</div>
+              <div class="text-xs text-gray-400 mt-0.5">Gratis · Di server ini</div>
+              <div class="mt-1.5 px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-xs font-bold inline-block">⭐ Disarankan</div>
+            </div>
+          </label>
           <label class="cursor-pointer">
             <input type="radio" name="wa_provider" value="fonnte" class="hidden peer"
-              {% if not gw or gw.wa_provider in ('fonnte','wuzapi','') or not gw.wa_provider %}checked{% endif %}>
-            <div class="border-2 rounded-xl p-4 text-center transition-all
+              {% if gw and gw.wa_provider == 'fonnte' %}checked{% endif %}>
+            <div class="border-2 rounded-xl p-4 text-center transition-all h-full
               peer-checked:border-emerald-500 peer-checked:bg-emerald-50 border-gray-200">
               <div class="text-xl mb-1">🟢</div>
               <div class="font-bold text-gray-900 text-sm">Fonnte</div>
@@ -35,7 +46,7 @@
           <label class="cursor-pointer">
             <input type="radio" name="wa_provider" value="wablas" class="hidden peer"
               {% if gw and gw.wa_provider == 'wablas' %}checked{% endif %}>
-            <div class="border-2 rounded-xl p-4 text-center transition-all
+            <div class="border-2 rounded-xl p-4 text-center transition-all h-full
               peer-checked:border-blue-500 peer-checked:bg-blue-50 border-gray-200">
               <div class="text-xl mb-1">🔵</div>
               <div class="font-bold text-gray-900 text-sm">Wablas</div>
@@ -45,11 +56,13 @@
         </div>
         <p id="provider-info" class="text-xs text-gray-400 mt-2">
           {% if gw and gw.wa_provider == 'wablas' %}Daftar di wablas.com — scan QR di dashboard, salin token
-          {% else %}Daftar di fonnte.com — scan QR di dashboard, salin token{% endif %}
+          {% elif gw and gw.wa_provider == 'fonnte' %}Daftar di fonnte.com — scan QR di dashboard, salin token
+          {% else %}Gunakan WA gateway yang sudah ada di server ini — gratis, tidak perlu daftar ke layanan luar{% endif %}
         </p>
       </div>
 
-      <div>
+      <!-- Token input: hanya untuk Fonnte/Wablas -->
+      <div id="section-ext-token" {% if not gw or gw.wa_provider not in ('fonnte','wablas') %}style="display:none"{% endif %}>
         <label class="block text-xs font-semibold text-gray-600 mb-1">Token API *</label>
         <input id="input-ext-token" type="text"
           value="{{ gw.wa_token_ext if gw and gw.wa_token_ext else '' }}"
@@ -63,6 +76,14 @@
             🔍 Cek Status Token
           </button>
           <span id="cek-token-result" class="text-xs font-semibold hidden"></span>
+        </div>
+      </div>
+
+      <!-- Info Wuzapi: tampil saat wuzapi dipilih -->
+      <div id="section-wuzapi-info" {% if gw and gw.wa_provider in ('fonnte','wablas') %}style="display:none"{% endif %}>
+        <div class="p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-800">
+          <strong>Wuzapi sudah aktif di server ini.</strong> Klik <em>Simpan</em> lalu scan QR WhatsApp di panel koneksi.
+          Cocok untuk ISP dengan pelanggan sedikit hingga menengah — tidak ada biaya bulanan.
         </div>
       </div>
     </div>
@@ -101,20 +122,68 @@
     <!-- Status -->
     <div class="card p-5">
       <h3 class="font-bold text-gray-900 text-sm mb-3">📶 Status Koneksi</h3>
-      {% if gw and gw.wa_token_ext and gw.wa_provider in ('fonnte','wablas') %}
-      <div class="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+      {% if gw and gw.wa_provider in ('fonnte','wablas') and gw.wa_token_ext %}
+      <div class="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl mb-3">
         <div class="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-base flex-shrink-0">✅</div>
         <div>
           <div class="font-bold text-emerald-800 text-sm">Aktif</div>
           <div class="text-xs text-emerald-600">{{ gw.wa_provider | capitalize }} · token terkonfigurasi</div>
         </div>
       </div>
+      <button onclick="cekTokenStatus()" id="btn-cek-status"
+        class="w-full py-2.5 rounded-xl font-bold text-sm border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition mb-2">
+        🔍 Cek Status Koneksi
+      </button>
+      <div id="cek-status-result" class="hidden p-3 rounded-xl text-xs font-semibold text-center"></div>
+      {% elif gw and (gw.wa_provider == 'wuzapi' or not gw.wa_provider) and gw.wa_status == 'connected' %}
+      <div class="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl mb-3">
+        <div class="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-base flex-shrink-0">✅</div>
+        <div>
+          <div class="font-bold text-emerald-800 text-sm">Terhubung</div>
+          <div class="text-xs text-emerald-600">Wuzapi · {{ gw.wa_nomor or 'nomor tersambung' }}</div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="disconnectWa()" class="flex-1 py-2 rounded-xl text-xs font-bold border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition">⛔ Putus</button>
+        <button onclick="logoutWa()" class="flex-1 py-2 rounded-xl text-xs font-bold border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition">🔄 Ganti Nomor</button>
+      </div>
       {% else %}
-      <div class="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+      <div class="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl mb-3">
         <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-base flex-shrink-0">⚠️</div>
         <div>
-          <div class="font-bold text-amber-800 text-sm">Belum Aktif</div>
-          <div class="text-xs text-amber-600">Pilih provider & isi token untuk mengaktifkan</div>
+          <div class="font-bold text-amber-800 text-sm">Belum Terhubung</div>
+          <div class="text-xs text-amber-600">
+            {% if gw and gw.wa_provider in ('fonnte','wablas') %}Pilih provider & isi token untuk mengaktifkan
+            {% else %}Klik tombol di bawah lalu scan QR WhatsApp{% endif %}
+          </div>
+        </div>
+      </div>
+      <!-- Tombol cek token — hanya untuk Fonnte/Wablas -->
+      <div id="btn-ext-wrap" {% if not gw or gw.wa_provider not in ('fonnte','wablas') %}style="display:none"{% endif %}>
+        <button onclick="cekTokenStatus()" id="btn-cek-status2"
+          class="w-full py-2.5 rounded-xl font-bold text-sm border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition mb-2">
+          🔍 Cek Status Token
+        </button>
+        <div id="cek-status-result2" class="hidden p-3 rounded-xl text-xs font-semibold text-center"></div>
+      </div>
+
+      <!-- Tombol scan QR — hanya untuk Wuzapi -->
+      <div id="btn-wuzapi-wrap" {% if gw and gw.wa_provider in ('fonnte','wablas') %}style="display:none"{% endif %}>
+        <button onclick="setupWuzapi()" id="btn-setup-wuzapi"
+          class="w-full py-2.5 rounded-xl font-bold text-sm text-white border-none cursor-pointer mb-3"
+          style="background:linear-gradient(135deg,#7c3aed,#a855f7);">
+          📲 Setup & Scan QR WhatsApp
+        </button>
+        <div id="qr-container" class="hidden text-center">
+          <p class="text-xs text-gray-500 mb-2">Scan dengan WhatsApp → Perangkat Tertaut → Tautkan Perangkat</p>
+          <img id="qr-image" src="" alt="QR Code" class="mx-auto rounded-xl border border-gray-200" style="max-width:220px;">
+          <p class="text-xs text-gray-400 mt-2">QR berlaku beberapa menit. Refresh jika kadaluarsa.</p>
+          <button onclick="setupWuzapi()" class="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition">🔄 Refresh QR</button>
+        </div>
+        <div id="qr-connected" class="hidden p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
+          <div class="text-emerald-700 font-bold text-sm">✅ Berhasil terhubung!</div>
+          <div id="qr-nomor" class="text-xs text-emerald-600 mt-0.5"></div>
+          <button onclick="location.reload()" class="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition">Muat Ulang Halaman</button>
         </div>
       </div>
       {% endif %}
@@ -141,9 +210,18 @@
     <!-- Panduan singkat -->
     <div class="card p-5" style="background:linear-gradient(135deg,#0f172a,#1e293b);color:white;">
       <h3 class="font-bold text-white text-sm mb-3">
-        📖 <span id="guide-title">Cara Daftar Fonnte</span>
+        📖 <span id="guide-title">Cara Pakai Wuzapi</span>
       </h3>
-      <div id="guide-fonnte">
+      <div id="guide-wuzapi">
+        <ol class="text-xs space-y-1.5" style="color:#94a3b8;padding-left:16px;">
+          <li>Pilih <span style="color:#a78bfa;font-weight:700;">Wuzapi</span> → klik <strong style="color:#c4b5fd;">Simpan Konfigurasi</strong></li>
+          <li>Di panel kanan atas, klik <strong style="color:#c4b5fd;">Setup & Scan QR</strong></li>
+          <li>Scan QR dengan WhatsApp HP Anda</li>
+          <li>Selesai — gratis, tidak perlu daftar mana pun</li>
+          <li style="color:#6b7280;font-style:italic;">Cocok untuk pelanggan sedikit hingga menengah</li>
+        </ol>
+      </div>
+      <div id="guide-fonnte" class="hidden">
         <ol class="text-xs space-y-1.5" style="color:#94a3b8;padding-left:16px;">
           <li>Buka <span style="color:#10b981;font-weight:700;">fonnte.com</span> → daftar akun</li>
           <li>Add Device → scan QR dengan HP WhatsApp</li>
@@ -271,11 +349,21 @@
 // Provider card style & guide switcher
 document.querySelectorAll('input[name="wa_provider"]').forEach(r => {
   r.addEventListener('change', () => {
-    const info = { fonnte: 'Daftar di fonnte.com — scan QR di dashboard, salin token', wablas: 'Daftar di wablas.com — scan QR di dashboard, salin token' };
+    const info = {
+      wuzapi: 'Gunakan WA gateway yang sudah ada di server ini — gratis, tidak perlu daftar ke layanan luar',
+      fonnte: 'Daftar di fonnte.com — scan QR di dashboard, salin token',
+      wablas: 'Daftar di wablas.com — scan QR di dashboard, salin token'
+    };
+    const titles = { wuzapi: 'Cara Pakai Wuzapi', fonnte: 'Cara Daftar Fonnte', wablas: 'Cara Daftar Wablas' };
     document.getElementById('provider-info').textContent = info[r.value] || '';
+    document.getElementById('guide-wuzapi').classList.toggle('hidden', r.value !== 'wuzapi');
     document.getElementById('guide-fonnte').classList.toggle('hidden', r.value !== 'fonnte');
     document.getElementById('guide-wablas').classList.toggle('hidden', r.value !== 'wablas');
-    document.getElementById('guide-title').textContent = r.value === 'wablas' ? 'Cara Daftar Wablas' : 'Cara Daftar Fonnte';
+    document.getElementById('guide-title').textContent = titles[r.value] || '';
+    // Token input hanya untuk fonnte/wablas
+    const isExt = r.value === 'fonnte' || r.value === 'wablas';
+    document.getElementById('section-ext-token').style.display  = isExt ? '' : 'none';
+    document.getElementById('section-wuzapi-info').style.display = isExt ? 'none' : '';
   });
 });
 
@@ -310,14 +398,14 @@ async function cekToken() {
 }
 
 async function simpanProvider() {
-  const prov  = document.querySelector('input[name="wa_provider"]:checked')?.value || 'fonnte';
+  const prov  = document.querySelector('input[name="wa_provider"]:checked')?.value || 'wuzapi';
   const tok   = document.getElementById('input-ext-token').value.trim();
   const btn   = document.getElementById('btn-simpan');
-  if (!tok) { showToast('Isi token API terlebih dahulu', 'warning'); return; }
+  if (prov !== 'wuzapi' && !tok) { showToast('Isi token API terlebih dahulu', 'warning'); return; }
   btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
   const res = await fetch('/wa-gateway/provider', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({provider: prov, token_ext: tok})
+    body: JSON.stringify({provider: prov, token_ext: prov === 'wuzapi' ? '' : tok})
   });
   const d = await res.json();
   btn.disabled = false; btn.innerHTML = '💾 Simpan Konfigurasi';
@@ -325,13 +413,95 @@ async function simpanProvider() {
   else showToast(d.msg || 'Gagal simpan', 'error');
 }
 
+async function cekTokenStatus() {
+  const prov = document.querySelector('input[name="wa_provider"]:checked')?.value || 'fonnte';
+  const tok  = document.getElementById('input-ext-token')?.value.trim() || '{{ gw.wa_token_ext if gw and gw.wa_token_ext else "" }}';
+  const resultIds = ['cek-status-result', 'cek-status-result2'];
+  const btnIds    = ['btn-cek-status', 'btn-cek-status2'];
+  btnIds.forEach(id => { const b = document.getElementById(id); if(b){ b.disabled=true; b.textContent='⏳ Mengecek...'; }});
+  resultIds.forEach(id => { const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+  try {
+    const r = await fetch('/wa-gateway/check-token', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({provider: prov, token: tok})
+    });
+    const d = await r.json();
+    resultIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.style.background = d.ok ? '#dcfce7' : '#fee2e2';
+      el.style.color      = d.ok ? '#15803d' : '#dc2626';
+      el.textContent      = (d.ok ? '✅ ' : '❌ ') + d.msg;
+    });
+  } catch(e) {
+    resultIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.style.background = '#fee2e2'; el.style.color = '#dc2626';
+      el.textContent = '❌ Error: ' + e.message;
+    });
+  }
+  btnIds.forEach(id => {
+    const b = document.getElementById(id);
+    if(b){ b.disabled=false; b.textContent = prov === 'fonnte' ? '🔍 Cek Status Koneksi' : '🔍 Cek Status Token'; }
+  });
+}
+
+async function setupWuzapi() {
+  const btn = document.getElementById('btn-setup-wuzapi');
+  const qrBox = document.getElementById('qr-container');
+  const qrImg = document.getElementById('qr-image');
+  const connBox = document.getElementById('qr-connected');
+  btn.disabled = true; btn.textContent = '⏳ Menghubungkan...';
+  qrBox.classList.add('hidden'); connBox.classList.add('hidden');
+  try {
+    const r = await fetch('/wa-gateway/setup', { method: 'POST' });
+    const d = await r.json();
+    if (d.connected) {
+      connBox.classList.remove('hidden');
+      document.getElementById('qr-nomor').textContent = d.nomor ? 'Nomor: ' + d.nomor : '';
+    } else if (d.qr) {
+      qrImg.src = d.qr.startsWith('data:') ? d.qr : 'data:image/png;base64,' + d.qr;
+      qrBox.classList.remove('hidden');
+    } else {
+      showToast('Gagal ambil QR, coba lagi', 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = '📲 Setup & Scan QR WhatsApp';
+}
+
+async function disconnectWa() {
+  if (!confirm('Putus koneksi WA?')) return;
+  await fetch('/wa-gateway/disconnect', { method: 'POST' });
+  location.reload();
+}
+
+async function logoutWa() {
+  if (!confirm('Logout dan hapus linked device? Perlu scan QR ulang.')) return;
+  await fetch('/wa-gateway/logout', { method: 'POST' });
+  location.reload();
+}
+
+// Tampil/sembunyikan tombol scan/cek saat provider diganti
+document.querySelectorAll('input[name="wa_provider"]').forEach(r => {
+  r.addEventListener('change', () => {
+    const isExt = r.value === 'fonnte' || r.value === 'wablas';
+    const wuzWrap = document.getElementById('btn-wuzapi-wrap');
+    const extWrap = document.getElementById('btn-ext-wrap');
+    if (wuzWrap) wuzWrap.style.display = isExt ? 'none' : '';
+    if (extWrap) extWrap.style.display = isExt ? '' : 'none';
+  });
+});
+
 async function kirimTest() {
   const nomor = document.getElementById('test-hp').value.trim();
-  const tok   = document.getElementById('input-ext-token').value.trim();
-  const prov  = document.querySelector('input[name="wa_provider"]:checked')?.value || 'fonnte';
+  const prov  = document.querySelector('input[name="wa_provider"]:checked')?.value || 'wuzapi';
+  const tok   = prov === 'wuzapi' ? '' : document.getElementById('input-ext-token').value.trim();
   const btn   = document.getElementById('btn-test');
   const res   = document.getElementById('test-result');
-  if (!tok)   { showToast('Isi token terlebih dahulu', 'warning'); return; }
+  if (prov !== 'wuzapi' && !tok) { showToast('Isi token terlebih dahulu', 'warning'); return; }
   if (!nomor) { showToast('Isi nomor tujuan test', 'warning'); return; }
   btn.disabled = true; btn.textContent = '⏳ Mengirim...';
   res.classList.add('hidden');

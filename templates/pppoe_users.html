@@ -284,41 +284,101 @@
           <span class="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">{{ u.server_nama or u.server_id[:8] }}</span>
         </td>
 
+        {# ── Kolom Jatuh Tempo ── #}
+        {% set jt = jatuh_tempo_map.get(u.id) %}
         <td class="td">
-          <div class="flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          {% if jt %}
+            {% set tx_s = tagihan_map.get(u.id) %}
+            {% if tx_s in ('paid','lunas') %}
+              {# Sudah lunas — tampil hijau tanpa urgensi #}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-semibold text-gray-700">{{ jt.label }}</span>
+              </div>
+              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100">✓ Sudah Lunas</span>
+            {% elif jt.days < 0 %}
+              {# Sudah lewat jatuh tempo #}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-semibold text-red-600">{{ jt.label }}</span>
+              </div>
+              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-100">❗ Lewat {{ (jt.days * -1) }} hari</span>
+            {% elif jt.days == 0 %}
+              {# Hari ini jatuh tempo #}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-semibold text-red-600">{{ jt.label }}</span>
+              </div>
+              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-100 animate-pulse">🔴 Hari Ini!</span>
+            {% elif jt.days <= 3 %}
+              {# Mepet — H-3 atau kurang #}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-semibold text-amber-700">{{ jt.label }}</span>
+              </div>
+              <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200">⏰ {{ jt.days }} hari lagi</span>
+            {% else %}
+              {# Masih aman #}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span class="text-sm font-semibold text-gray-700">{{ jt.label }}</span>
+              </div>
+              <span class="text-xs text-gray-400 mt-0.5 block">{{ jt.days }} hari lagi</span>
+            {% endif %}
+          {% else %}
             <span class="text-sm font-semibold text-gray-700">Tgl {{ u.tgl_bayar }}</span>
-          </div>
-          <p class="text-xs text-gray-400 mt-0.5 ml-5">tiap bulan</p>
-          {% if u.tgl_mulai %}
-          <p class="text-xs text-blue-500 mt-1 ml-5">Pasang: {{ u.tgl_mulai | datetimeformat('%d %b %Y') }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">tiap bulan</p>
           {% endif %}
-          {% if u.first_tagihan_date %}
-          <p class="text-xs text-violet-500 font-semibold mt-0.5 ml-5">
-            ⚡ Tagihan: {{ u.first_tagihan_date.strftime('%d %b %Y') }}
-          </p>
+          {% if u.tgl_mulai %}
+          <p class="text-xs text-blue-400 mt-1">Pasang: {{ u.tgl_mulai | datetimeformat('%d %b %Y') }}</p>
           {% endif %}
         </td>
 
+        {# ── Kolom Tagihan ── #}
         <td class="td">
           {% set tx_status = tagihan_map.get(u.id) %}
+          {% set tx_amount = tagihan_amount_map.get(u.id) %}
           {% if tx_status in ('paid', 'lunas') %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            Lunas
-          </span>
+          <div class="flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 self-start">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Lunas
+            </span>
+            {% if tx_amount %}<span class="text-xs text-gray-500 font-medium">{{ tx_amount | rp }}</span>{% endif %}
+          </div>
           {% elif tx_status == 'overdue' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Terlambat
-          </span>
+          <div class="flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200 self-start">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Terlambat
+            </span>
+            {% if tx_amount %}<span class="text-xs font-bold text-red-500">{{ tx_amount | rp }}</span>{% endif %}
+          </div>
+          {% elif tx_status == 'unpaid' %}
+          <div class="flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200 self-start">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Belum Bayar
+            </span>
+            {% if tx_amount %}<span class="text-xs font-bold text-amber-600">{{ tx_amount | rp }}</span>{% endif %}
+          </div>
           {% elif tx_status == 'pending' %}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-600 border border-yellow-200">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Pending
-          </span>
+          <div class="flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-600 border border-yellow-200 self-start">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Menunggu
+            </span>
+            {% if tx_amount %}<span class="text-xs text-gray-500">{{ tx_amount | rp }}</span>{% endif %}
+          </div>
           {% else %}
-          <span class="text-xs text-gray-300">— Belum Ada</span>
+          <div class="flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs text-gray-400 border border-dashed border-gray-200 self-start">
+              — Belum Ditagih
+            </span>
+            {% if u.first_tagihan_date %}
+            <span class="text-xs text-violet-500 font-medium">Mulai {{ u.first_tagihan_date.strftime('%-d %b %Y') }}</span>
+            {% endif %}
+          </div>
           {% endif %}
         </td>
 
