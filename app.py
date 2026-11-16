@@ -948,6 +948,50 @@ def get_mt(server_id: str) -> MikroTik | None:
             pass
     return MikroTik(vpn_ip, api_port, s["api_user"], s["api_password"])
 
+
+# ── Kepemilikan data antar-tenant ────────────────────────────────────────────
+# Semua tenant ISP ber-role "admin", jadi cek role saja TIDAK cukup.
+# Setiap ID yang datang dari URL/form wajib dicek pemiliknya dengan helper ini.
+
+def _own_server(owner_id: str, server_id: str) -> dict | None:
+    """Return server jika milik owner_id (ID ISP), selain itu None."""
+    if not server_id:
+        return None
+    s = db.get_server(server_id)
+    return s if s and s["user_id"] == owner_id else None
+
+
+def _get_mt_owned(owner_id: str, server_id: str) -> MikroTik | None:
+    """get_mt() yang hanya mau konek ke router milik owner_id."""
+    return get_mt(server_id) if _own_server(owner_id, server_id) else None
+
+
+def _own_row(table: str, row_id, owner_id: str) -> bool:
+    """True jika baris table.id milik owner_id. table hanya dari daftar internal."""
+    if table not in ("odc", "odp", "pppoe_users", "paket_pppoe", "paket_hotspot"):
+        raise ValueError(table)
+    con = db._conn()
+    row = con.execute(f"SELECT user_id FROM {table} WHERE id=?", (row_id,)).fetchone()
+    con.close()
+    return bool(row) and row[0] == owner_id
+
+
+def _owned_child_user(isp_id: str, uid: str, roles: tuple[str, ...]) -> dict | None:
+    """Return user target jika berada di bawah ISP ini (agen/teknisi langsung,
+    atau sub_agen dari agen ISP ini) dan role-nya termasuk `roles`."""
+    target = db.get_user(uid)
+    if not target or target["id"] == isp_id or target.get("role") not in roles:
+        return None
+    parent = target.get("parent_id") or ""
+    if parent == isp_id:
+        return target
+    if target["role"] == "sub_agen" and parent:
+        p = db.get_user(parent)
+        if p and p.get("role") == "agen" and p.get("parent_id") == isp_id:
+            return target
+    return None
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
@@ -1421,8 +1465,7 @@ async def server_edit(
     api_password: str = Form(""), lokasi: str = Form(""),
 ):
     user = require_login(request)
-    s = db.get_server(sid)
-    if s and (s["user_id"] == user["id"] or user["role"] == "admin"):
+    if _own_server(user["id"], sid):
         db.update_server(sid, nama, vpn_ip, api_port, api_user, api_password, lokasi)
     return RedirectResponse("/servers", status_code=302)
 
@@ -1430,16 +1473,15 @@ async def server_edit(
 @app.post("/servers/hapus/{sid}")
 async def server_hapus(request: Request, sid: str):
     user = require_login(request)
-    s = db.get_server(sid)
-    if s and (s["user_id"] == user["id"] or user["role"] == "admin"):
+    if _own_server(user["id"], sid):
         db.delete_server(sid)
     return RedirectResponse("/servers", status_code=302)
 
 
 @app.get("/servers/ping/{sid}")
 async def server_ping(request: Request, sid: str):
-    require_login(request)
-    mt = get_mt(sid)
+    user = require_login(request)
+    mt = _get_mt_owned(_isp_id(user), sid)
     if mt and mt.ping():
         db.update_server_ping(sid)
         return JSONResponse({"ok": True, "identity": mt.get_identity()})
@@ -1553,6 +1595,8 @@ async def odc_tambah(request: Request, server_id: str = Form(...), nama: str = F
                      lat: str = Form(""), lng: str = Form("")):
     user = require_login(request)
     iid = _isp_id(user)
+    if not _own_server(iid, server_id):
+        return RedirectResponse("/odp", status_code=303)
     db.create_odc(iid, server_id, nama.strip(), lokasi.strip(), tipe_splitter,
                   float(daya_masuk_dbm or -3),
                   float(lat) if lat.strip() else None,
@@ -1565,6 +1609,9 @@ async def odc_edit(request: Request, odc_id: int, server_id: str = Form(...),
                    tipe_splitter: str = Form("1:4"), daya_masuk_dbm: str = Form("-3"),
                    lat: str = Form(""), lng: str = Form("")):
     user = require_login(request)
+    iid = _isp_id(user)
+    if not _own_row("odc", odc_id, iid) or not _own_server(iid, server_id):
+        return RedirectResponse("/odp", status_code=303)
     db.update_odc(odc_id, server_id, nama.strip(), lokasi.strip(), tipe_splitter,
                   float(daya_masuk_dbm or -3),
                   float(lat) if lat.strip() else None,
@@ -1574,7 +1621,8 @@ async def odc_edit(request: Request, odc_id: int, server_id: str = Form(...),
 @app.post("/odc/hapus/{odc_id}")
 async def odc_hapus(request: Request, odc_id: int):
     user = require_login(request)
-    db.delete_odc(odc_id)
+    if _own_row("odc", odc_id, _isp_id(user)):
+        db.delete_odc(odc_id)
     return RedirectResponse("/odp", status_code=303)
 
 @app.post("/odp/tambah")
@@ -1587,6 +1635,8 @@ async def odp_tambah(request: Request, server_id: str = Form(...), nama: str = F
     _lat = float(lat) if lat.strip() else None
     _lng = float(lng) if lng.strip() else None
     _odc = int(odc_id) if odc_id.strip() else None
+    if not _own_server(iid, server_id) or (_odc is not None and not _own_row("odc", _odc, iid)):
+        return RedirectResponse("/odp", status_code=303)
     db.create_odp(iid, server_id, nama.strip(), lokasi.strip(), kapasitas, _lat, _lng, _odc, tap_tipe)
     return RedirectResponse("/odp", status_code=303)
 
@@ -1596,9 +1646,13 @@ async def odp_edit(request: Request, odp_id: int, server_id: str = Form(...),
                    lat: str = Form(""), lng: str = Form(""),
                    odc_id: str = Form(""), tap_tipe: str = Form("")):
     user = require_login(request)
+    iid = _isp_id(user)
     _lat = float(lat) if lat.strip() else None
     _lng = float(lng) if lng.strip() else None
     _odc = int(odc_id) if odc_id.strip() else None
+    if (not _own_row("odp", odp_id, iid) or not _own_server(iid, server_id)
+            or (_odc is not None and not _own_row("odc", _odc, iid))):
+        return RedirectResponse("/odp", status_code=303)
     db.update_odp(odp_id, server_id, nama.strip(), lokasi.strip(), kapasitas, _lat, _lng, _odc, tap_tipe)
     return RedirectResponse("/odp", status_code=303)
 
@@ -1613,14 +1667,18 @@ async def odp_ports(request: Request, odp_id: int):
 @app.post("/odp/hapus/{odp_id}")
 async def odp_hapus(request: Request, odp_id: int):
     user = require_login(request)
-    db.delete_odp(odp_id)
+    if _own_row("odp", odp_id, _isp_id(user)):
+        db.delete_odp(odp_id)
     return RedirectResponse("/odp", status_code=303)
 
 @app.post("/odp/assign/{pppoe_id}")
 async def odp_assign(request: Request, pppoe_id: int, odp_id: str = Form(""), odp_port: str = Form("")):
     user = require_login(request)
+    iid = _isp_id(user)
     _odp_id = int(odp_id) if odp_id else None
     _odp_port = int(odp_port) if odp_port else None
+    if not _own_row("pppoe_users", pppoe_id, iid) or (_odp_id is not None and not _own_row("odp", _odp_id, iid)):
+        return RedirectResponse("/pppoe/users", status_code=303)
     db.assign_odp(pppoe_id, _odp_id, _odp_port)
     return RedirectResponse("/pppoe/users", status_code=303)
 
@@ -1856,6 +1914,9 @@ async def pppoe_user_tambah(
     iid = _isp_id(user)
     isp = db.get_user(iid)
     paket = db.get_paket_pppoe(paket_id)
+    if (not _own_server(iid, server_id) or not paket or paket["user_id"] != iid
+            or (odp_id.strip() and not _own_row("odp", int(odp_id), iid))):
+        return RedirectResponse("/pppoe/users?error=data_tidak_valid", status_code=302)
     import datetime as _dt
     tgl_mulai_ts = None
     if tgl_mulai.strip():
@@ -2981,6 +3042,8 @@ async def hotspot_paket_tambah(
 ):
     user = require_login(request)
     profile = kecepatan or rate_limit
+    if server_id and not _own_server(user["id"], server_id):
+        return RedirectResponse("/hotspot/paket", status_code=302)
     db.create_paket_hotspot(user["id"], nama, durasi, profile, harga, server_id)
     return RedirectResponse("/hotspot/paket", status_code=302)
 
@@ -2994,6 +3057,8 @@ async def hotspot_paket_edit(
 ):
     user = require_login(request)
     profile = kecepatan or rate_limit
+    if server_id and not _own_server(user["id"], server_id):
+        return RedirectResponse("/hotspot/paket", status_code=302)
     db.update_paket_hotspot(pid, user["id"], nama, durasi, profile, harga, server_id)
     return RedirectResponse("/hotspot/paket", status_code=302)
 
@@ -3050,6 +3115,8 @@ async def voucher_generate(
 ):
     user = require_login(request)
     jumlah = min(jumlah, 500)
+    if not _own_server(user["id"], server_id) or not _own_row("paket_hotspot", paket_id, user["id"]):
+        return RedirectResponse("/hotspot/voucher?error=data_tidak_valid", status_code=302)
     kodes = db.create_vouchers(user["id"], server_id, paket_id, jumlah, comment.strip())
 
     push_ok = 0
@@ -3092,7 +3159,7 @@ async def mt_users_list(request: Request, server_id: str = "", profile: str = ""
     user = require_login(request)
     if not server_id:
         return JSONResponse({"ok": False, "msg": "Pilih router dulu", "data": [], "total": 0})
-    mt = get_mt(server_id)
+    mt = _get_mt_owned(_isp_id(user), server_id)
     if not mt:
         return JSONResponse({"ok": False, "msg": "Server tidak bisa dihubungi", "data": [], "total": 0})
     try:
@@ -3105,7 +3172,7 @@ async def mt_users_list(request: Request, server_id: str = "", profile: str = ""
 @app.post("/hotspot/voucher/mt-delete", response_class=JSONResponse)
 async def mt_user_delete(request: Request, server_id: str = Form(...), mt_id: str = Form(...), kode: str = Form("")):
     user = require_login(request)
-    mt = get_mt(server_id)
+    mt = _get_mt_owned(_isp_id(user), server_id)
     if not mt:
         return JSONResponse({"ok": False, "msg": "Server tidak bisa dihubungi"})
     ok = mt.remove_hotspot_user_by_id(mt_id)
@@ -3121,7 +3188,7 @@ async def mt_user_edit(request: Request, server_id: str = Form(...), mt_id: str 
                        profile: str = Form(""), comment: str = Form(""),
                        password: str = Form(""), limit_uptime: str = Form("")):
     user = require_login(request)
-    mt = get_mt(server_id)
+    mt = _get_mt_owned(_isp_id(user), server_id)
     if not mt:
         return JSONResponse({"ok": False, "msg": "Server tidak bisa dihubungi"})
     ok = mt.edit_hotspot_user(mt_id, profile, comment, password, limit_uptime)
@@ -3136,6 +3203,8 @@ async def voucher_tambah(
     comment: str = Form("")
 ):
     user = require_login(request)
+    if not _own_server(user["id"], server_id) or not _own_row("paket_hotspot", paket_id, user["id"]):
+        return JSONResponse({"ok": False, "msg": "Router atau paket tidak ditemukan."}, status_code=404)
     import random, string as _str
     kode = kode.strip().upper()
     if not kode:
@@ -3334,8 +3403,10 @@ async def agen_tambah(
 
 @app.post("/agen/status/{uid}")
 async def agen_status(request: Request, uid: str, status: str = Form(...)):
-    require_login(request)
-    db.update_user_status(uid, status)
+    user = require_login(request)
+    if user["role"] == "admin" and status in ("aktif", "nonaktif") \
+            and _owned_child_user(user["id"], uid, ("agen", "sub_agen")):
+        db.update_user_status(uid, status)
     return RedirectResponse("/agen", status_code=302)
 
 
@@ -3343,8 +3414,7 @@ async def agen_status(request: Request, uid: str, status: str = Form(...)):
 async def agen_edit(request: Request, uid: str, nama: str = Form(...), nomor_wa: str = Form(""),
                     komisi_persen: int = Form(0)):
     user = require_login(request)
-    target = db.get_user(uid)
-    if target and (user["role"] == "admin" or target.get("parent_id") == user["id"]):
+    if user["role"] == "admin" and _owned_child_user(user["id"], uid, ("agen", "sub_agen")):
         db.update_user(uid, nama, nomor_wa)
         db.set_komisi(uid, komisi_persen)
     return RedirectResponse("/agen", status_code=302)
@@ -3353,8 +3423,7 @@ async def agen_edit(request: Request, uid: str, nama: str = Form(...), nomor_wa:
 @app.post("/agen/reset-password/{uid}")
 async def agen_reset_password(request: Request, uid: str, password: str = Form(...)):
     user = require_login(request)
-    target = db.get_user(uid)
-    if target and (user["role"] == "admin" or target.get("parent_id") == user["id"]):
+    if user["role"] == "admin" and _owned_child_user(user["id"], uid, ("agen", "sub_agen")):
         db.reset_password(uid, password)
     return RedirectResponse("/agen", status_code=302)
 
@@ -3362,8 +3431,8 @@ async def agen_reset_password(request: Request, uid: str, password: str = Form(.
 @app.post("/agen/hapus/{uid}")
 async def agen_hapus(request: Request, uid: str):
     user = require_login(request)
-    target = db.get_user(uid)
-    if target and (user["role"] == "admin" or target.get("parent_id") == user["id"]):
+    target = _owned_child_user(user["id"], uid, ("agen", "sub_agen", "teknisi")) if user["role"] == "admin" else None
+    if target:
         db.delete_user(uid)
         _log(request, user, f"Hapus {target.get('role','').title()}", f"{target['nama']} ({target['username']})")
     return RedirectResponse("/agen", status_code=302)
@@ -3395,7 +3464,8 @@ async def teknisi_edit(request: Request, uid: str, nama: str = Form(...), nomor_
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/dashboard", status_code=302)
-    db.update_user(uid, nama, nomor_wa)
+    if _owned_child_user(user["id"], uid, ("teknisi",)):
+        db.update_user(uid, nama, nomor_wa)
     return RedirectResponse("/teknisi-admin", status_code=302)
 
 
@@ -3404,7 +3474,8 @@ async def teknisi_reset_pw(request: Request, uid: str, password: str = Form(...)
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/dashboard", status_code=302)
-    db.reset_password(uid, password)
+    if _owned_child_user(user["id"], uid, ("teknisi",)):
+        db.reset_password(uid, password)
     return RedirectResponse("/teknisi-admin", status_code=302)
 
 
@@ -3413,7 +3484,8 @@ async def teknisi_toggle_status(request: Request, uid: str, status: str = Form(.
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/dashboard", status_code=302)
-    db.update_user_status(uid, status)
+    if status in ("aktif", "nonaktif") and _owned_child_user(user["id"], uid, ("teknisi",)):
+        db.update_user_status(uid, status)
     return RedirectResponse("/teknisi-admin", status_code=302)
 
 
@@ -3422,7 +3494,8 @@ async def teknisi_hapus(request: Request, uid: str):
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/dashboard", status_code=302)
-    db.delete_user(uid)
+    if _owned_child_user(user["id"], uid, ("teknisi",)):
+        db.delete_user(uid)
     return RedirectResponse("/teknisi-admin", status_code=302)
 
 
@@ -3688,6 +3761,9 @@ async def saldo_topup(request: Request, uid: str, jumlah: int = Form(...), keter
     user = require_login(request)
     if user["role"] != "admin":
         return RedirectResponse("/saldo", status_code=302)
+    # Hanya untuk agen milik ISP ini, dan tidak boleh untuk diri sendiri
+    if jumlah <= 0 or not _owned_child_user(user["id"], uid, ("agen", "sub_agen")):
+        return RedirectResponse("/agen", status_code=302)
     db.topup_saldo(uid, jumlah, keterangan, sumber="qris_statis")
     return RedirectResponse("/agen", status_code=302)
 
@@ -3955,7 +4031,7 @@ async def hotspot_bulanan_tambah(
     _require_fitur_hb(user)
     iid = _isp_id(user)
     # Buat akun di MikroTik
-    mt = get_mt(server_id)
+    mt = _get_mt_owned(iid, server_id)
     if not mt:
         return JSONResponse({"ok": False, "msg": "Server tidak dapat dihubungi"})
     ok = mt.add_hotspot_user(username, password, profile)
@@ -4904,6 +4980,8 @@ async def teknisi_tambah_pppoe(
     user, isp = _require_teknisi(request, slug)
     if not user:
         return RedirectResponse(f"/teknisi/{slug}", status_code=302)
+    if not _own_server(isp["id"], server_id) or (paket_id and not _own_row("paket_pppoe", paket_id, isp["id"])):
+        return RedirectResponse(f"/teknisi/{slug}/panel?error=data_tidak_valid", status_code=302)
     # Simpan ke DB
     db.create_pppoe_user(isp["id"], server_id, nama_pelanggan, username, password, paket_id or None, telepon, alamat)
     # Push ke MikroTik
@@ -5045,7 +5123,7 @@ async def teknisi_hotspot_tambah(
     if not user or not (isp or {}).get("fitur_hotspot_bulanan"):
         return JSONResponse({"ok": False, "msg": "Akses ditolak"})
     iid = isp["id"]
-    mt = get_mt(server_id)
+    mt = _get_mt_owned(iid, server_id)
     if not mt:
         return JSONResponse({"ok": False, "msg": "Server tidak dapat dihubungi"})
     ok = mt.add_hotspot_user(username, password, profile)
